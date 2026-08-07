@@ -17,7 +17,7 @@
 - [x] AutoCAD Plugin `IExtensionApplication` 스켈레톤 (로드/언로드 로깅) — 실제 CWA 명령/Named Pipe는 Milestone 1
 - [x] 빌드/테스트/실행 검증 (스크린샷으로 UI 렌더링 확인)
 - [x] CI solution filter (`CADWorkAssistant.CI.slnf`) + GitHub Actions 워크플로
-- [ ] Git 초기화 + 첫 커밋
+- [x] Git 초기화 + 첫 커밋
 
 **완료 기준**: `CADWorkAssistant.exe`가 오류 없이 실행되고, 좌측 Navigation이 보이는 화면이 뜬다. → 충족 확인됨 (더미 데이터 기반 풀 Shell).
 
