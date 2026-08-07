@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\CADWorkAssistant.Core\CADWorkAssistant.Core.csproj" />
+    <ProjectReference Include="..\CADWorkAssistant.Infrastructure\CADWorkAssistant.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,80 @@
+{
+  "version": 1,
+  "project": {
+    "name": "CAD Work Assistant",
+    "productType": "professional desktop CAD automation tool",
+    "stack": ["WPF", ".NET", "AutoCAD automation"]
+  },
+  "sources": {
+    "tokens": ["src/CADWorkAssistant.Desktop/Themes/DesignTokens.xaml"],
+    "components": ["src/CADWorkAssistant.Desktop/MainWindow.xaml"],
+    "assets": [],
+    "instructions": ["design-system/MASTER.md"]
+  },
+  "design": {
+    "colorMode": "light",
+    "colors": {
+      "background": "#F3F5F7",
+      "surface": "#FFFFFF",
+      "surfaceMuted": "#EEF2F5",
+      "border": "#CAD3DC",
+      "text": "#17212B",
+      "mutedText": "#526170",
+      "accent": "#1D6F8F",
+      "success": "#1E7A47",
+      "warning": "#946200",
+      "error": "#B42318",
+      "focus": "#0B83A5"
+    },
+    "typography": {
+      "sans": "Segoe UI",
+      "numeric": "Cascadia Mono, Consolas"
+    },
+    "spacing": {
+      "unit": 4,
+      "compact": [4, 8, 12, 16],
+      "workspace": [12, 14, 18, 24]
+    },
+    "radius": {
+      "small": 3,
+      "medium": 6
+    },
+    "shadows": {},
+    "motion": {
+      "durationFastMs": 120,
+      "durationBaseMs": 160,
+      "reducedMotion": "Respect SystemParameters.ClientAreaAnimation"
+    },
+    "density": "dense"
+  },
+  "components": {
+    "installed": [],
+    "preferredPrimitives": ["Grid", "Docked navigation", "DataGrid", "Property inspector", "Status bar", "Command palette"],
+    "patterns": ["sidebar navigation", "data table", "property inspector", "status bar", "command palette", "activity log"]
+  },
+  "constraints": {
+    "must": [
+      "Use native WPF controls and MVVM bindings",
+      "Prioritize dense repeated CAD workflows",
+      "Keep keyboard access and visible focus states",
+      "Use semantic design tokens"
+    ],
+    "avoid": [
+      "Marketing hero layout",
+      "Purple AI gradients",
+      "Neon glow",
+      "Decorative glassmorphism",
+      "React-only dependencies"
+    ]
+  },
+  "decisions": [
+    "Use WPF instead of React because the project skeleton is a native desktop CAD assistant.",
+    "Use calm engineering colors instead of the neon palette recommended by the generic dashboard search.",
+    "Do not install Motion because no React project exists."
+  ],
+  "evidence": [
+    "UI UX Pro Max query: engineering desktop software CAD application data dense interface",
+    "21st CLI search requires login/token; use accessible CLI context and documented patterns until authenticated."
+  ],
+  "generatedAt": "2026-08-08T04:20:00+09:00"
+}

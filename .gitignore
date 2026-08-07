@@ -1,0 +1,19 @@
+bin/
+obj/
+.vs/
+.idea/
+*.user
+*.suo
+*.log
+.env
+
+# AutoCAD temp/lock files
+*.dwl
+*.dwl2
+*.sv$
+
+# Local-only config
+appsettings.local.json
+
+# Sample DWGs shouldn't be committed
+samples/**/*.dwg

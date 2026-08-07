@@ -1,0 +1,30 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    # CADWorkAssistant.AutoCAD는 로컬 AutoCAD 설치가 있어야 빌드되므로
+    # CI에서는 CADWorkAssistant.CI.slnf (AutoCAD/Integration.Tests 제외)만 빌드한다.
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore
+        run: dotnet restore CADWorkAssistant.CI.slnf
+
+      - name: Build
+        run: dotnet build CADWorkAssistant.CI.slnf --no-restore --configuration Release
+
+      - name: Test
+        run: dotnet test CADWorkAssistant.CI.slnf --no-build --configuration Release

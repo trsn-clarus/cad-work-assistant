@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="AutoCAD.props" />
+
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <RootNamespace>CADWorkAssistant.AutoCAD</RootNamespace>
+    <AssemblyName>CADWorkAssistant.AutoCAD</AssemblyName>
+    <!-- AutoCAD 2024 Managed API는 .NET Framework 4.8 기반이다 (docs/AUTOCAD_INTEGRATION.md §1). -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- net48 대상 빌드에는 Reference Assemblies가 필요하지만 이 머신에는 VS/Dev Pack이 없으므로 NuGet 패키지로 대체한다. -->
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- AutoCAD가 런타임에 이미 제공하는 어셈블리이므로 재배포하지 않는다 (Private=false). -->
+    <Reference Include="accoremgd">
+      <HintPath>$(AutoCADInstallDir)accoremgd.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="acdbmgd">
+      <HintPath>$(AutoCADInstallDir)acdbmgd.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="acmgd">
+      <HintPath>$(AutoCADInstallDir)acmgd.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CADWorkAssistant.Core\CADWorkAssistant.Core.csproj" />
+    <ProjectReference Include="..\CADWorkAssistant.Infrastructure\CADWorkAssistant.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

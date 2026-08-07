@@ -1,0 +1,24 @@
+<Project>
+
+  <!--
+    설치된 AutoCAD 경로를 자동 탐지한다. 우선순위:
+      1) 환경변수 AUTOCAD_INSTALL_DIR
+      2) MSBuild 속성 -p:AutoCADInstallDir=...
+      3) 잘 알려진 설치 경로 (최신 버전부터 순서대로 존재 여부 확인)
+    docs/AUTOCAD_INTEGRATION.md §2 참조. 특정 버전 경로를 강제하지 않는다.
+  -->
+  <PropertyGroup>
+    <AutoCADInstallDir Condition="'$(AutoCADInstallDir)' == ''">$(AUTOCAD_INSTALL_DIR)</AutoCADInstallDir>
+    <AutoCADInstallDir Condition="'$(AutoCADInstallDir)' == '' AND Exists('C:\Program Files\Autodesk\AutoCAD 2026\')">C:\Program Files\Autodesk\AutoCAD 2026\</AutoCADInstallDir>
+    <AutoCADInstallDir Condition="'$(AutoCADInstallDir)' == '' AND Exists('C:\Program Files\Autodesk\AutoCAD 2025\')">C:\Program Files\Autodesk\AutoCAD 2025\</AutoCADInstallDir>
+    <AutoCADInstallDir Condition="'$(AutoCADInstallDir)' == '' AND Exists('C:\Program Files\Autodesk\AutoCAD 2024\')">C:\Program Files\Autodesk\AutoCAD 2024\</AutoCADInstallDir>
+    <AutoCADInstallDir Condition="'$(AutoCADInstallDir)' == '' AND Exists('C:\Program Files\Autodesk\AutoCAD 2023\')">C:\Program Files\Autodesk\AutoCAD 2023\</AutoCADInstallDir>
+  </PropertyGroup>
+
+  <Target Name="EnsureAutoCADInstallDirFound" BeforeTargets="BeforeBuild;CoreCompile">
+    <Error
+      Condition="'$(AutoCADInstallDir)' == '' AND '$(SkipAutoCADReferenceCheck)' != 'true'"
+      Text="AutoCAD 설치 경로를 찾지 못했습니다. 환경변수 AUTOCAD_INSTALL_DIR을 설정하거나 -p:AutoCADInstallDir=&quot;C:\Path\To\AutoCAD&quot; 를 지정하세요." />
+  </Target>
+
+</Project>

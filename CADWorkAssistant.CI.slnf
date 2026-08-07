@@ -1,0 +1,12 @@
+{
+  "solution": {
+    "path": "CADWorkAssistant.sln",
+    "projects": [
+      "src\\CADWorkAssistant.Core\\CADWorkAssistant.Core.csproj",
+      "src\\CADWorkAssistant.Infrastructure\\CADWorkAssistant.Infrastructure.csproj",
+      "src\\CADWorkAssistant.Documents\\CADWorkAssistant.Documents.csproj",
+      "src\\CADWorkAssistant.Desktop\\CADWorkAssistant.Desktop.csproj",
+      "tests\\CADWorkAssistant.Core.Tests\\CADWorkAssistant.Core.Tests.csproj"
+    ]
+  }
+}
