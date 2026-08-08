@@ -27,6 +27,7 @@ public sealed class LengthWorkflowViewModel : ObservableObject
     private LengthWorkflowState _state = LengthWorkflowState.Idle;
     private string _statusText = "Ready";
     private LengthMeasurementResult? _result;
+    private LengthMeasurementResult? _lastSuccessfulResult;
 
     public LengthWorkflowViewModel(IAutoCadConnectionManager connectionManager)
     {
@@ -85,6 +86,12 @@ public sealed class LengthWorkflowViewModel : ObservableObject
     public bool IsErrorState => _state == LengthWorkflowState.Error;
 
     public string? TotalDisplay => _result?.DisplayValueMeters is { } meters ? LengthFormatter.FormatMetersWithUnit(meters) : null;
+
+    /// <summary>가장 최근에 "성공"한 길이 측정 결과 - Vertical Area/Parapet이 "최근 측정값 사용"으로
+    /// 재사용한다 (Milestone 4 §17, §50). 화면에 지금 보이는 값(_result, EmptySelection이면 null로
+    /// 비워진다)과는 다른 변수다 - 사용자가 이후에 빈 선택/취소를 겪어도 재사용 가능한 값은 남아있어야
+    /// 한다.</summary>
+    public LengthMeasurementResult? LastResult => _lastSuccessfulResult;
 
     public string? ExcludedSummary => _result is { ExcludedCount: > 0 } result
         ? $"선택한 객체 중 {result.ExcludedCount}개는 길이 계산을 지원하지 않아 제외했습니다 ({string.Join(", ", result.ExcludedObjectTypeNames)})."
@@ -150,8 +157,10 @@ public sealed class LengthWorkflowViewModel : ObservableObject
             var result = LengthAggregationService.Aggregate(selection, drawingName, System.DateTimeOffset.Now);
 
             _result = result;
+            _lastSuccessfulResult = result;
             RebuildRows(result);
             NotifyResultChanged();
+            OnPropertyChanged(nameof(LastResult));
 
             State = LengthWorkflowState.Success;
             StatusText = result.DisplayValueMeters is not null
