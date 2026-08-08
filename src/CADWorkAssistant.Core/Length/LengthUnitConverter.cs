@@ -11,7 +11,7 @@ public static class LengthUnitConverter
 {
     public static bool TryConvertToMeters(double rawValue, DrawingUnit unit, out double meters)
     {
-        var factor = MetersPerUnit(unit);
+        var factor = DrawingUnitConversion.MetersPerUnit(unit);
         if (factor is null)
         {
             meters = 0;
@@ -21,19 +21,4 @@ public static class LengthUnitConverter
         meters = rawValue * factor.Value;
         return true;
     }
-
-    /// <summary>Unitless/Other이면 null - "미터로 환산할 수 없다"는 뜻이지 0이 아니다.</summary>
-    private static double? MetersPerUnit(DrawingUnit unit) => unit switch
-    {
-        DrawingUnit.Millimeters => 0.001,
-        DrawingUnit.Centimeters => 0.01,
-        DrawingUnit.Decimeters => 0.1,
-        DrawingUnit.Meters => 1.0,
-        DrawingUnit.Kilometers => 1000.0,
-        DrawingUnit.Inches => 0.0254,
-        DrawingUnit.Feet => 0.3048,
-        DrawingUnit.Yards => 0.9144,
-        DrawingUnit.Miles => 1609.344,
-        _ => null
-    };
 }
