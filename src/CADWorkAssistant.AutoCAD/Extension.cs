@@ -29,7 +29,8 @@ public class Extension : IExtensionApplication
             new PingHandler(),
             new GetApplicationInfoHandler(dispatcher),
             new GetDrawingContextHandler(dispatcher),
-            new SelectLengthObjectsHandler(dispatcher)
+            new SelectLengthObjectsHandler(dispatcher),
+            new SelectAreaObjectsHandler(dispatcher)
         };
 
         _pipeServer = new AutoCadPipeServer(new IpcRequestDispatcher(handlers), Process.GetCurrentProcess().Id);

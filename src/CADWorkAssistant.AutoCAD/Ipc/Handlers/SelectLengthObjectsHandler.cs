@@ -45,12 +45,12 @@ internal sealed class SelectLengthObjectsHandler : IIpcRequestHandler
 
     // AutoCAD Command Context 안에서만 실행된다 (AutoCadDispatcher를 통해 호출됨). Editor.GetSelection이
     // 사용자가 선택을 마칠 때까지 여기서 블로킹되는 것은 의도된 동작이다.
-    private static SelectionOutcome RunSelection()
+    private static SelectionOutcome<LengthSelectionResponse> RunSelection()
     {
         var document = Application.DocumentManager.MdiActiveDocument;
         if (document is null)
         {
-            return SelectionOutcome.NoActiveDocument();
+            return SelectionOutcome<LengthSelectionResponse>.NoActiveDocument();
         }
 
         using var documentLock = document.LockDocument();
@@ -64,12 +64,12 @@ internal sealed class SelectLengthObjectsHandler : IIpcRequestHandler
 
         if (selectionResult.Status == PromptStatus.Cancel)
         {
-            return SelectionOutcome.Cancelled();
+            return SelectionOutcome<LengthSelectionResponse>.Cancelled();
         }
 
         if (selectionResult.Status != PromptStatus.OK)
         {
-            return SelectionOutcome.Error($"AutoCAD selection failed with status {selectionResult.Status}.");
+            return SelectionOutcome<LengthSelectionResponse>.Error($"AutoCAD selection failed with status {selectionResult.Status}.");
         }
 
         var objects = new List<CadLengthObjectDto>();
@@ -101,6 +101,6 @@ internal sealed class SelectLengthObjectsHandler : IIpcRequestHandler
         var unit = CadUnitMapper.ToDrawingUnit(document.Database.Insunits);
         var response = new LengthSelectionResponse(objects, excludedTypeNames.Distinct().ToList(), unit);
 
-        return SelectionOutcome.Selected(response);
+        return SelectionOutcome<LengthSelectionResponse>.Selected(response);
     }
 }
