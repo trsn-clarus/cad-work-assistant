@@ -258,6 +258,16 @@
                           Grid.RowSpan="4"
                           DataContext="{Binding Area}"
                           Visibility="{Binding DataContext.IsAreaToolSelected, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVisibility}}" />
+
+        <views:VerticalAreaPanel Grid.Row="0"
+                                  Grid.RowSpan="4"
+                                  DataContext="{Binding VerticalArea}"
+                                  Visibility="{Binding DataContext.IsVerticalAreaToolSelected, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVisibility}}" />
+
+        <views:ParapetPanel Grid.Row="0"
+                             Grid.RowSpan="4"
+                             DataContext="{Binding Parapet}"
+                             Visibility="{Binding DataContext.IsParapetToolSelected, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVisibility}}" />
       </Grid>
 
       <Border x:Name="InspectorPanel"
