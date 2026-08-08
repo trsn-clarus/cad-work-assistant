@@ -6,7 +6,9 @@
       "src\\CADWorkAssistant.Infrastructure\\CADWorkAssistant.Infrastructure.csproj",
       "src\\CADWorkAssistant.Documents\\CADWorkAssistant.Documents.csproj",
       "src\\CADWorkAssistant.Desktop\\CADWorkAssistant.Desktop.csproj",
-      "tests\\CADWorkAssistant.Core.Tests\\CADWorkAssistant.Core.Tests.csproj"
+      "tools\\CADWorkAssistant.FakeAutoCad\\CADWorkAssistant.FakeAutoCad.csproj",
+      "tests\\CADWorkAssistant.Core.Tests\\CADWorkAssistant.Core.Tests.csproj",
+      "tests\\CADWorkAssistant.Integration.Tests\\CADWorkAssistant.Integration.Tests.csproj"
     ]
   }
 }

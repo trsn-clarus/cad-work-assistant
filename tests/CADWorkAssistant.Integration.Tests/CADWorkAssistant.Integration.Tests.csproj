@@ -23,6 +23,9 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\CADWorkAssistant.Core\CADWorkAssistant.Core.csproj" />
     <ProjectReference Include="..\..\src\CADWorkAssistant.Infrastructure\CADWorkAssistant.Infrastructure.csproj" />
+    <!-- FakeAutoCad.Program 타입 참조로 실제 dll 경로를 안정적으로 찾기 위함 (§9) - 코드는 쓰지 않고
+         빌드 순서 보장 + 어셈블리 위치 조회 용도로만 참조한다. -->
+    <ProjectReference Include="..\..\tools\CADWorkAssistant.FakeAutoCad\CADWorkAssistant.FakeAutoCad.csproj" />
   </ItemGroup>
 
 </Project>

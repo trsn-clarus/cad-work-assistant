@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>CADWorkAssistant.FakeAutoCad</RootNamespace>
+    <AssemblyName>CADWorkAssistant.FakeAutoCad</AssemblyName>
+    <!--
+      실제 AutoCAD 없이 개발/테스트하기 위한 Headless Simulation Host다 (docs/TESTING_WITHOUT_AUTOCAD.md).
+      실제 AutoCAD Plugin과 동일한 IPC Protocol(Core.Ipc)과 Pipe 서버(Infrastructure.Ipc.AutoCadPipeServer)를
+      그대로 재사용한다 - Fake 전용 프로토콜을 만들지 않는다. 설치 프로그램에는 포함하지 않는다.
+    -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Serilog" Version="4.0.2" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\CADWorkAssistant.Core\CADWorkAssistant.Core.csproj" />
+    <ProjectReference Include="..\..\src\CADWorkAssistant.Infrastructure\CADWorkAssistant.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>
