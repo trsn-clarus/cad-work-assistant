@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using CADWorkAssistant.Core.Area;
 using CADWorkAssistant.Core.Cad;
+using CADWorkAssistant.Core.Drawing;
 using CADWorkAssistant.Core.Length;
 
 namespace CADWorkAssistant.FakeAutoCad.Scenarios;
@@ -63,4 +64,17 @@ public sealed class SimulationScenario
     public IReadOnlyList<CadAreaObjectDto> AreaObjects { get; init; } = System.Array.Empty<CadAreaObjectDto>();
 
     public IReadOnlyList<string> AreaExcludedObjectTypeNames { get; init; } = System.Array.Empty<string>();
+
+    // --- Drawing Navigation (Milestone 5) ---
+
+    /// <summary>SelectDrawingObjects의 Window/Crossing 선택 결과 - GetDrawingOverview/ZoomExtents가
+    /// 계산하는 "전체 도면"도 이 목록을 ModelSpace 전체라고 취급한다.</summary>
+    public IReadOnlyList<CadSelectedObjectDto> DrawingObjects { get; init; } = System.Array.Empty<CadSelectedObjectDto>();
+
+    public SelectionBehavior DrawingSelectionBehavior { get; init; } = SelectionBehavior.ReturnObjects;
+
+    public IReadOnlyList<CadLayerDto> Layers { get; init; } = System.Array.Empty<CadLayerDto>();
+
+    /// <summary>ExportSelection이 AutoCAD 내부 오류로 실패한 것처럼 흉내낸다 (§68 ExportSelectionError).</summary>
+    public bool ExportShouldFail { get; init; }
 }

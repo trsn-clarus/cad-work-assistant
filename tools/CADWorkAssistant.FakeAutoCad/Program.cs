@@ -32,13 +32,23 @@ public static class Program
         }
 
         var processId = Environment.ProcessId;
+        var drawingState = new FakeDrawingState(scenario);
         var handlers = new IIpcRequestHandler[]
         {
             new FakePingHandler(),
             new FakeGetApplicationInfoHandler(processId, scenario),
             new FakeGetDrawingContextHandler(scenario),
             new FakeSelectLengthObjectsHandler(scenario),
-            new FakeSelectAreaObjectsHandler(scenario)
+            new FakeSelectAreaObjectsHandler(scenario),
+            new FakeGetDrawingOverviewHandler(scenario, drawingState),
+            new FakeZoomExtentsHandler(),
+            new FakeZoomToBoundsHandler(),
+            new FakeSelectDrawingObjectsHandler(scenario),
+            new FakeIsolateObjectsHandler(drawingState),
+            new FakeGetLayersHandler(drawingState),
+            new FakeSetLayerVisibilityHandler(drawingState),
+            new FakeRestoreVisibilityHandler(drawingState),
+            new FakeExportSelectionHandler(scenario)
         };
 
         var server = new AutoCadPipeServer(new IpcRequestDispatcher(handlers), processId);

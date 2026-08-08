@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using CADWorkAssistant.Core.Area;
 using CADWorkAssistant.Core.Cad;
+using CADWorkAssistant.Core.Drawing;
 using CADWorkAssistant.Core.Length;
 
 namespace CADWorkAssistant.FakeAutoCad.Scenarios;
@@ -233,6 +234,79 @@ public static class ScenarioCatalog
             AreaObjects = Enumerable.Range(1, 1000)
                 .Select(i => new CadAreaObjectDto(i.ToString("X4"), SupportedAreaGeometryType.Polyline, "A-FLOOR", 1000 + i, isClosed: true))
                 .ToArray()
+        };
+
+        // --- Drawing Navigation / Selection / Isolation / Layer / Export (Milestone 5) ---
+        // §134-135 예시 그대로: "실내마감표" 영역을 Crossing으로 선택하면 127개... 대신 헤드리스
+        // 검증에 적당한 규모로 축소해서 타입/Layer 조합이 다양하게 섞이도록 구성했다.
+        var normalLayers = new[]
+        {
+            new CadLayerDto("A-WALL", isOn: true, isFrozen: false, isLocked: false, isPlottable: true, colorIndex: 1, isCurrent: true),
+            new CadLayerDto("A-FLOOR", isOn: true, isFrozen: false, isLocked: false, isPlottable: true, colorIndex: 3, isCurrent: false),
+            new CadLayerDto("A-TEXT", isOn: true, isFrozen: false, isLocked: false, isPlottable: true, colorIndex: 7, isCurrent: false),
+            new CadLayerDto("A-DOOR", isOn: false, isFrozen: false, isLocked: false, isPlottable: true, colorIndex: 2, isCurrent: false),
+            new CadLayerDto("DEFPOINTS", isOn: true, isFrozen: false, isLocked: true, isPlottable: false, colorIndex: 7, isCurrent: false),
+        };
+
+        var normalDrawingObjects = new[]
+        {
+            new CadSelectedObjectDto("2A7F", "Polyline", "A-WALL", new CadBoundsDto(0, 0, 0, 12500, 8400, 0)),
+            new CadSelectedObjectDto("2A80", "Polyline", "A-WALL", new CadBoundsDto(0, 0, 0, 15320, 12200, 0)),
+            new CadSelectedObjectDto("2A81", "Line", "A-WALL", new CadBoundsDto(2000, 500, 0, 2000, 8000, 0)),
+            new CadSelectedObjectDto("2B10", "MText", "A-TEXT", new CadBoundsDto(3000, 1000, 0, 4200, 1400, 0)),
+            new CadSelectedObjectDto("2B11", "MText", "A-TEXT", new CadBoundsDto(3000, 2000, 0, 4200, 2400, 0)),
+            new CadSelectedObjectDto("2C01", "BlockReference", "A-DOOR", new CadBoundsDto(5000, 0, 0, 5900, 100, 0)),
+        };
+
+        yield return new SimulationScenario
+        {
+            Name = "DrawingNavigationNormal",
+            DrawingObjects = normalDrawingObjects,
+            Layers = normalLayers
+        };
+
+        yield return new SimulationScenario { Name = "DrawingEmptySelection", DrawingObjects = Array.Empty<CadSelectedObjectDto>(), Layers = normalLayers };
+
+        yield return new SimulationScenario { Name = "DrawingSelectionCancelled", DrawingSelectionBehavior = SelectionBehavior.Cancelled, Layers = normalLayers };
+        yield return new SimulationScenario { Name = "DrawingConnectionLost", DrawingSelectionBehavior = SelectionBehavior.DisconnectBeforeResponding, Layers = normalLayers };
+        yield return new SimulationScenario { Name = "DrawingRequestTimeout", DrawingSelectionBehavior = SelectionBehavior.HangForever, Layers = normalLayers };
+        yield return new SimulationScenario { Name = "DrawingAutoCadError", DrawingSelectionBehavior = SelectionBehavior.ReturnError, Layers = normalLayers };
+
+        yield return new SimulationScenario
+        {
+            Name = "LargeSelectionNavigation",
+            Layers = normalLayers,
+            DrawingObjects = Enumerable.Range(1, 1000)
+                .Select(i => new CadSelectedObjectDto(
+                    i.ToString("X4"),
+                    i % 3 == 0 ? "Line" : "Polyline",
+                    i % 2 == 0 ? "A-WALL" : "A-FLOOR",
+                    new CadBoundsDto(i, i, 0, i + 100, i + 100, 0)))
+                .ToArray()
+        };
+
+        yield return new SimulationScenario
+        {
+            Name = "LayerListNormal",
+            DrawingObjects = normalDrawingObjects,
+            Layers = Enumerable.Range(1, 60)
+                .Select(i => new CadLayerDto($"LAYER-{i:D2}", isOn: i % 4 != 0, isFrozen: false, isLocked: false, isPlottable: true, colorIndex: (short)(i % 255), isCurrent: i == 1))
+                .ToArray()
+        };
+
+        yield return new SimulationScenario
+        {
+            Name = "ExportSelectionSuccess",
+            DrawingObjects = normalDrawingObjects,
+            Layers = normalLayers
+        };
+
+        yield return new SimulationScenario
+        {
+            Name = "ExportSelectionError",
+            DrawingObjects = normalDrawingObjects,
+            Layers = normalLayers,
+            ExportShouldFail = true
         };
     }
 }
