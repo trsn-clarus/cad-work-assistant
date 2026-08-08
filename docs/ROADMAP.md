@@ -112,6 +112,74 @@
 **Headless Simulation + Simulation Mode 수동 검증으로 완전히 충족**. 실제 DWG/AutoCAD 기준 최종
 확인만 남았다.
 
+## Milestone 4.5 — Production UI/UX System + Professional Desktop Workspace Refinement
+
+**상태: 완료 (2026-08-08)**
+
+Milestone 0-4에서 기능은 실사용 가능한 수준까지 갖췄지만 UI는 여전히 Milestone 0 초기 Shell의
+장식/가짜 데이터를 그대로 이고 있었다. 새 기능을 추가하지 않고 기존 4개 측정 도구(Length/Area/
+Vertical Area/Parapet)와 App Shell(Dashboard/Inspector/Navigation/Connection)을 실제로 매일 쓸 수
+있는 "Precision Engineering Workspace"로 재정비했다.
+
+- [x] Simulation Mode 실제 렌더링 시각 검증(스크린샷 기반)으로 두 가지 실재 버그 발견/확인:
+      (1) `PrimaryButton`이 중립 `Button` 스타일의 hover 트리거를 공유해 hover 시 거의 흰색
+      배경 위에 흰 글자가 겹쳐 완전히 안 보이는 문제, (2) `_selectedTool` 기본값과 `Navigation`
+      컬렉션의 `IsSelected` 초기값이 서로 달라 Dashboard가 선택된 것처럼 보이면서 실제로는 Length
+      패널이 렌더링되는 문제
+- [x] `DesignTokens.xaml` 개편 — `PrimaryButton`(Accent 채움, hover/press에서도 흰 글자 유지)/
+      `SecondaryButton`(Accent 외곽선)/`QuietButton`(테두리 없음) 3단 버튼 계층을 각각 독립된
+      `ControlTemplate`으로 분리해 hover 버그를 근본적으로 제거 — 모든 버튼을 Accent Filled로
+      만들지 않는다는 원칙을 코드로 강제
+- [x] 연결 상태 전용 시맨틱 브러시 별칭(`BrushConnected`/`BrushConnecting`/`BrushDisconnected`/
+      `BrushConnectionError`) + Divider/TextDisabled/AccentHover/AccentPressed 토큰, Spacing
+      Scale(`Space1`-`Space6`), `InlineMessageBorder`/`InlineMessageText`(경고/안내 배너 공통
+      스타일), `InspectorLabel`/`InspectorValue`/`InspectorNumericValue`(Property Inspector용) 추가
+- [x] 숫자+단위 Typography 분리 — Length/Area/Vertical Area/Parapet 총계 표시를 값(`NumericText`,
+      큰 폰트)과 단위(`NumericUnitText`, 작고 흐린 폰트)로 나눈 두 개의 `TextBlock`으로 분리
+      (`TotalValueDisplay` ViewModel 프로퍼티 + `StringNotEmptyToVisibilityConverter` 신규 추가)
+- [x] Connection State를 색상만이 아니라 별도 기호로 구분(`ConnectionStatusGlyph`: ●=연결됨/
+      ◐=진행 중/◇=감지됨/△=Plugin 없음/✕=끊김/!=오류/○=미실행) — 사이드바 AutoCAD 카드와 하단
+      상태 바 양쪽에 적용
+- [x] Navigation: 실제 화면이 있는 5개 항목(Dashboard/Length/Area/Vertical Area/Parapet)만
+      활성화, 나머지 10개는 `NavItem.IsImplemented=false`로 비활성 표시(완전히 숨기지 않고 자리는
+      예약) + Tooltip "(곧 제공됩니다)"
+- [x] Dashboard 재정의 — 가짜 Metric 카드 4개, 아무 동작도 하지 않던 "Extract Length"/"Copy"
+      버튼, 아무것도 필터링하지 않던 가짜 "Filter results" 텍스트박스, 세션 시작부터 채워져 있던
+      가짜 산출내역/Activity Log 샘플 데이터를 모두 제거. `QuantityRecords`/`Activity`는 이제
+      세션에서 실제로 발생한 이벤트로만 채워지며, 비어 있을 때는 행동 지향적 Empty State 문구를
+      보여준다
+- [x] Property Inspector를 실제 도구로 구현 — 활성 QUANTITY 도구에 따라 `MainWindowViewModel.
+      InspectorRows`가 해당 ViewModel(Length/Area의 Rows+TotalDisplay, Vertical Area/Parapet의
+      LengthSourceSelector+입력값)을 실시간으로 반영하고, Dashboard에서는 연결 상태/활성 도면/
+      산출내역 건수/최근 활동을 보여준다. 기존의 "Calculation Mode/Rounding"(아무것도 하지 않는
+      가짜 드롭다운)과 "Open Drawings"(하드코딩된 가짜 도면 3개) 섹션은 삭제(`DrawingFile`/
+      `MetricItem` 모델도 함께 제거)
+- [x] Accessibility 점검 — Command Palette의 "Toggle property inspector" 항목에 빠져 있던
+      `AutomationProperties.Name` 추가, 라벨만 있고 실제로 동작하지 않던 `Alt+I` 단축키를
+      `Window.InputBindings`에 실제로 등록, 4개 측정 패널의 모든 상호작용 컨트롤(Button/TextBox/
+      ComboBox/RadioButton/CheckBox)이 `AutomationProperties.Name`을 갖고 있는지 전수 확인
+- [x] Simulation Mode 전체 화면 재검증 중 실제 버그 1건 추가 발견/수정 — `ParapetWorkflowViewModel.
+      FaceMode` setter가 `IsSingleFace`/`IsBothFaces` 계산 프로퍼티의 `PropertyChanged`를 raise하지
+      않아 "양면" 선택 시 안내 배너("양면 계산은 동일한 기준 길이를 두 면에 적용합니다")가 표시되지
+      않던 문제 — `LastResult` PropertyChanged 누락(Milestone 4)과 같은 유형의 버그, `docs/
+      ROADMAP.md`/`design-system`에 반복 패턴으로 기록
+- [x] 스크린샷 기반 시각 검증 도구화 — `SetProcessDPIAware()`를 호출하지 않은 PowerShell 스크린샷
+      스크립트가 200% DPI 환경에서 창의 좌상단 1/4만 캡처하는 문제를 발견/수정 (스크래치패드
+      스크립트, 프로젝트 코드 아님 — 재발 방지를 위해 여기 기록)
+- [x] 기존 146개 테스트(Core.Tests 107 + Integration.Tests 39) 전부 통과 유지, `CADWorkAssistant.
+      CI.slnf`/`CADWorkAssistant.sln` 양쪽 0 경고 0 오류
+- [x] `design-system/MASTER.md`, `design-system/pages/workspace.md`,
+      `design-system/pages/measurement-workspace.md` 갱신
+
+**의도적으로 하지 않은 것**: 새 CAD 기능/계산 로직 추가, Dark Mode, CommunityToolkit.Mvvm 등 새
+MVVM 패키지 도입, 개별 측정 패널 DataGrid의 행 단위 Empty State(제목 없음 배지 등 — Dashboard의
+Empty State만 이번 범위), 전체 Nav 항목에 대한 실제 키보드 단축키 배선(Alt+I만 이번에 실제로
+연결) — 이런 항목들은 각자 필요해지는 시점(다음 Milestone 또는 별도 세션)까지 미룬다.
+
+**완료 기준**: 4개 측정 도구와 App Shell이 Simulation Mode에서 가짜 데이터/버튼 없이 전부 실제
+바인딩으로 동작하고, hover 상태에서도 모든 버튼 텍스트가 legible하며, 연결 상태가 색상 없이도
+구분 가능하다. → **Simulation Mode 시각 재검증(스크린샷 + UI Automation)으로 완전히 충족**.
+
 ## Milestone 5 — Quantity Sheet Persistence
 
 - [ ] SQLite 스키마 설계 (Project, QuantityItem, CalculationHistory)

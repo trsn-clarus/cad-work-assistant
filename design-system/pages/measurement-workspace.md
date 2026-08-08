@@ -87,3 +87,42 @@ Vertical Area and Parapet share verbatim - acquiring a base length via CAD selec
 reuse, or manual entry is identical logic in both, and Parapet was built as the second consumer within
 the same milestone, which is exactly the point this file's "not yet a clear enough pattern" caveat
 (for the *view* layer) stops applying (for the *view-model* layer).
+
+## Milestone 4.5 consistency pass
+
+All four panels got the same three changes, applied identically rather than per-tool judgment calls:
+
+1. **Button hierarchy** - the header's CAD-selection button is `PrimaryButton`; `산출내역 추가` moved
+   from `PrimaryButton` to `SecondaryButton` (it's a completion action next to the real primary
+   action, not a second primary); `값 복사` moved to `QuietButton`. See `MASTER.md` "Button hierarchy"
+   for why each of these is now its own `ControlTemplate` instead of a shared one.
+2. **Numeric value/unit split** - each panel's one grand total (`TotalDisplay`) gained a sibling
+   value-only property (`TotalValueDisplay`) so the footer can show the value in `NumericText` and the
+   unit in `NumericUnitText` as two `TextBlock`s instead of one combined string. `TotalDisplay` itself
+   is kept (unchanged) because clipboard copy and `QuantityRecord.CalculationExpression` still need
+   the combined "value + unit" string. The unit `TextBlock`'s `Visibility` is bound through
+   `StringNotEmptyToVisibilityConverter` against the same value-only property, so there's never a
+   floating "m²" with no number in front of it before a result exists.
+3. **Inline message styling** - any banner that isn't the excluded-summary case (which already used
+   `PanelBorder`) moved to the shared `InlineMessageBorder`/`InlineMessageText` styles. Parapet's
+   "양면 계산은 동일한 기준 길이를 두 면에 적용합니다" notice is the second consumer of this pattern
+   after Length/Area's excluded-summary banner.
+
+### A repeat of the `LastResult`-shaped bug, in Parapet this time
+
+Milestone 4 already hit one instance of "a computed bool/property never raises `PropertyChanged`, so
+a binding elsewhere silently goes stale" (`LengthWorkflowViewModel.LastResult`). Milestone 4.5's
+Simulation Mode re-verification found the same shape of bug again: `ParapetWorkflowViewModel.FaceMode`
+raises `PropertyChanged` for itself via `SetProperty`, but never for `IsSingleFace`/`IsBothFaces` -
+the two bool properties computed from it that the "한 면"/"양면" `RadioButton`s and the new inline
+banner's `Visibility` actually bind to. The `RadioButton`s still looked correct after clicking "양면"
+in a screenshot, because `RadioButton` `GroupName` handles mutual exclusion at the control level
+independent of the ViewModel notifying anyone - but the banner, which only had the `PropertyChanged`
+event to go on, never appeared. Fixed by raising `OnPropertyChanged(nameof(IsSingleFace))` and
+`OnPropertyChanged(nameof(IsBothFaces))` inside the `FaceMode` setter. **Pattern to watch for**: any
+computed bool/string property derived from another observable property needs its own explicit
+`OnPropertyChanged` in that property's setter - `SetProperty` only notifies for the property it was
+called on, never for anything computed from it. A `RadioButton` bound to such a property can look
+correct in a screenshot purely from `GroupName` behavior even when the underlying notification is
+missing, so this class of bug needs a binding that *isn't* part of the same control group (like this
+banner) to actually surface it.
