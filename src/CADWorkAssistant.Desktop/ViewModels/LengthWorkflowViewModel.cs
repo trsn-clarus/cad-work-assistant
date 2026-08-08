@@ -87,6 +87,9 @@ public sealed class LengthWorkflowViewModel : ObservableObject
 
     public string? TotalDisplay => _result?.DisplayValueMeters is { } meters ? LengthFormatter.FormatMetersWithUnit(meters) : null;
 
+    /// <summary>단위 없이 값만 - Numeric Typography에서 값과 단위를 다른 hierarchy로 보여줄 때 쓴다 (Milestone 4.5 §16-17).</summary>
+    public string? TotalValueDisplay => _result?.DisplayValueMeters is { } meters ? LengthFormatter.FormatMeters(meters) : null;
+
     /// <summary>가장 최근에 "성공"한 길이 측정 결과 - Vertical Area/Parapet이 "최근 측정값 사용"으로
     /// 재사용한다 (Milestone 4 §17, §50). 화면에 지금 보이는 값(_result, EmptySelection이면 null로
     /// 비워진다)과는 다른 변수다 - 사용자가 이후에 빈 선택/취소를 겪어도 재사용 가능한 값은 남아있어야
@@ -203,6 +206,7 @@ public sealed class LengthWorkflowViewModel : ObservableObject
     private void NotifyResultChanged()
     {
         OnPropertyChanged(nameof(TotalDisplay));
+        OnPropertyChanged(nameof(TotalValueDisplay));
         OnPropertyChanged(nameof(ExcludedSummary));
         OnPropertyChanged(nameof(HasExcludedSummary));
     }

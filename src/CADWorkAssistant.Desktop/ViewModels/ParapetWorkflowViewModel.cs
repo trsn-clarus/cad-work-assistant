@@ -187,6 +187,11 @@ public sealed class ParapetWorkflowViewModel : ObservableObject
         ? AreaFormatter.FormatSquareMetersWithUnit(result.TotalAreaSquareMeters, decimalPlaces: 3)
         : null;
 
+    /// <summary>단위 없이 값만 - Numeric Typography에서 값과 단위를 다른 hierarchy로 보여줄 때 쓴다 (Milestone 4.5 §16-17).</summary>
+    public string? TotalValueDisplay => _result is { } result
+        ? AreaFormatter.FormatSquareMeters(result.TotalAreaSquareMeters, decimalPlaces: 3)
+        : null;
+
     private bool CanAddToQuantitySheet() => _result is not null;
 
     private void Recalculate()
@@ -266,6 +271,7 @@ public sealed class ParapetWorkflowViewModel : ObservableObject
         OnPropertyChanged(nameof(TopAreaDisplay));
         OnPropertyChanged(nameof(TopFormulaDisplay));
         OnPropertyChanged(nameof(TotalDisplay));
+        OnPropertyChanged(nameof(TotalValueDisplay));
         OnPropertyChanged(nameof(IsReady));
         OnPropertyChanged(nameof(IsInvalidInput));
         OnPropertyChanged(nameof(StatusBrush));

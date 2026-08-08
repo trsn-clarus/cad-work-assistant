@@ -4,10 +4,12 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="clr-namespace:CADWorkAssistant.Desktop.ViewModels"
+             xmlns:conv="clr-namespace:CADWorkAssistant.Desktop.Converters"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=vm:AreaWorkflowViewModel}">
   <UserControl.Resources>
     <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+    <conv:StringNotEmptyToVisibilityConverter x:Key="StringToVisibility" />
   </UserControl.Resources>
   <Grid>
     <Grid.RowDefinitions>
@@ -37,11 +39,10 @@
     </Grid>
 
     <Border Grid.Row="1"
-            Style="{StaticResource PanelBorder}"
-            Padding="12"
+            Style="{StaticResource InlineMessageBorder}"
             Margin="0,0,0,12"
             Visibility="{Binding HasExcludedSummary, Converter={StaticResource BoolToVisibility}}">
-      <TextBlock Text="{Binding ExcludedSummary}" Style="{StaticResource CaptionText}" TextWrapping="Wrap" />
+      <TextBlock Text="{Binding ExcludedSummary}" Style="{StaticResource InlineMessageText}" />
     </Border>
 
     <Border Grid.Row="2" Style="{StaticResource PanelBorder}" Padding="12">
@@ -78,17 +79,23 @@
         </Grid.ColumnDefinitions>
         <StackPanel>
           <TextBlock Text="총 면적" Style="{StaticResource CaptionText}" />
-          <TextBlock Text="{Binding TotalDisplay}"
-                     Style="{StaticResource NumericText}"
-                     FontSize="24"
-                     Margin="0,2,0,0" />
+          <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+            <TextBlock Text="{Binding TotalValueDisplay}" Style="{StaticResource NumericText}" FontSize="26" />
+            <TextBlock Text="m²"
+                       Style="{StaticResource NumericUnitText}"
+                       FontSize="15"
+                       Margin="5,0,0,3"
+                       VerticalAlignment="Bottom"
+                       Visibility="{Binding TotalValueDisplay, Converter={StaticResource StringToVisibility}}" />
+          </StackPanel>
         </StackPanel>
         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Bottom">
-          <Button Command="{Binding CopyResultCommand}"
+          <Button Style="{StaticResource QuietButton}"
+                  Command="{Binding CopyResultCommand}"
                   AutomationProperties.Name="결과 값 복사"
                   Margin="0,0,6,0"
                   Content="값 복사" />
-          <Button Style="{StaticResource PrimaryButton}"
+          <Button Style="{StaticResource SecondaryButton}"
                   Command="{Binding AddToQuantitySheetCommand}"
                   AutomationProperties.Name="산출내역에 추가"
                   Content="산출내역 추가" />

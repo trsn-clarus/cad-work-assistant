@@ -88,6 +88,11 @@ public sealed class AreaWorkflowViewModel : ObservableObject
         ? AreaFormatter.FormatSquareMetersWithUnit(squareMeters)
         : null;
 
+    /// <summary>단위 없이 값만 - Numeric Typography에서 값과 단위를 다른 hierarchy로 보여줄 때 쓴다 (Milestone 4.5 §16-17).</summary>
+    public string? TotalValueDisplay => _result?.DisplayValueSquareMeters is { } squareMeters
+        ? AreaFormatter.FormatSquareMeters(squareMeters)
+        : null;
+
     /// <summary>열림/미지원/비정상형상으로 제외된 항목을 하나의 문장으로 요약한다 - 배너를 여러 개 쌓지 않는다 (§65).</summary>
     public string? ExcludedSummary
     {
@@ -253,6 +258,7 @@ public sealed class AreaWorkflowViewModel : ObservableObject
     private void NotifyResultChanged()
     {
         OnPropertyChanged(nameof(TotalDisplay));
+        OnPropertyChanged(nameof(TotalValueDisplay));
         OnPropertyChanged(nameof(ExcludedSummary));
         OnPropertyChanged(nameof(HasExcludedSummary));
     }

@@ -97,6 +97,11 @@ public sealed class VerticalAreaWorkflowViewModel : ObservableObject
         ? AreaFormatter.FormatSquareMetersWithUnit(result.AreaSquareMeters, decimalPlaces: 3)
         : null;
 
+    /// <summary>단위 없이 값만 - Numeric Typography에서 값과 단위를 다른 hierarchy로 보여줄 때 쓴다 (Milestone 4.5 §16-17).</summary>
+    public string? TotalValueDisplay => _result is { } result
+        ? AreaFormatter.FormatSquareMeters(result.AreaSquareMeters, decimalPlaces: 3)
+        : null;
+
     /// <summary>"255.941 m × 0.100 m" - 산식을 사용자가 확인할 수 있게 한다 (§76-77).</summary>
     public string? FormulaDisplay => _result is { } result
         ? $"{LengthFormatter.FormatMeters(result.SourceLengthMeters)} m × {LengthFormatter.FormatMeters(result.HeightMeters)} m"
@@ -154,6 +159,7 @@ public sealed class VerticalAreaWorkflowViewModel : ObservableObject
     private void NotifyResultChanged()
     {
         OnPropertyChanged(nameof(TotalDisplay));
+        OnPropertyChanged(nameof(TotalValueDisplay));
         OnPropertyChanged(nameof(FormulaDisplay));
         OnPropertyChanged(nameof(IsReady));
         OnPropertyChanged(nameof(IsInvalidHeight));
