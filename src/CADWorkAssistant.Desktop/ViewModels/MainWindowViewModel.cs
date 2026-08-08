@@ -7,6 +7,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using CADWorkAssistant.Core.Cad;
 using CADWorkAssistant.Core.Models;
+using CADWorkAssistant.Core.Verification;
 using CADWorkAssistant.Desktop.Common;
 using CADWorkAssistant.Desktop.Services;
 using Serilog;
@@ -17,6 +18,7 @@ public sealed class MainWindowViewModel : ObservableObject
 {
     private readonly IAutoCadConnectionManager _connectionManager;
     private readonly IProjectContextService _projectContext;
+    private readonly IQuantityVerificationCoordinator _verificationCoordinator;
 
     private bool _isCommandPaletteOpen;
     private bool _isInspectorOpen = true;
@@ -27,10 +29,14 @@ public sealed class MainWindowViewModel : ObservableObject
     private string _selectedTool = "Dashboard";
     private string _statusMessage = "Ready";
 
-    public MainWindowViewModel(IAutoCadConnectionManager connectionManager, IProjectContextService projectContext)
+    public MainWindowViewModel(
+        IAutoCadConnectionManager connectionManager,
+        IProjectContextService projectContext,
+        IQuantityVerificationCoordinator verificationCoordinator)
     {
         _connectionManager = connectionManager;
         _projectContext = projectContext;
+        _verificationCoordinator = verificationCoordinator;
         _connectionManager.PropertyChanged += OnConnectionManagerPropertyChanged;
 
         Length = new LengthWorkflowViewModel(connectionManager);
@@ -38,6 +44,7 @@ public sealed class MainWindowViewModel : ObservableObject
         VerticalArea = new VerticalAreaWorkflowViewModel(connectionManager, Length);
         Parapet = new ParapetWorkflowViewModel(connectionManager, Length);
         Drawing = new DrawingWorkflowViewModel(connectionManager);
+        History = new QuantityHistoryViewModel(projectContext, verificationCoordinator);
 
         // 실제로 화면이 있는 항목만 isImplemented: true - 나머지는 자리만 예약해두고 비활성화한다
         // (§23 "미구현 기능을 버튼으로 과도하게 노출하지 않는다" - 완전히 숨기면 향후 기능이 붙을 자리를
@@ -55,7 +62,7 @@ public sealed class MainWindowViewModel : ObservableObject
             new("QUANTITY", "Area", "Ctrl+A"),
             new("QUANTITY", "Vertical Area", "Ctrl+V"),
             new("QUANTITY", "Parapet", "Ctrl+R"),
-            new("QUANTITY", "History", "Ctrl+H", isImplemented: false),
+            new("QUANTITY", "History", "Ctrl+H", isImplemented: true),
             new("OUTPUT", "Plot", "Ctrl+P", true, isImplemented: false),
             new("OUTPUT", "PDF", "Ctrl+Shift+P", isImplemented: false),
             new("OUTPUT", "Excel", "Ctrl+E", isImplemented: false),
@@ -99,6 +106,19 @@ public sealed class MainWindowViewModel : ObservableObject
             {
                 Log.Error(ex, "AddQuantityRecordAsync failed");
                 StatusMessage = "산출내역을 저장하지 못했습니다. 잠시 후 다시 시도해주세요.";
+                return;
+            }
+
+            // §48: 새 산출내역을 추가하면 빠른 결정적 검산을 자동 실행한다 - 측정 도구는 여전히
+            // Verification을 전혀 모른다(Project를 모르는 것과 같은 이유), 여기서만 조립한다.
+            try
+            {
+                var allRecords = _projectContext.QuantityRecords.ToList();
+                await _verificationCoordinator.VerifyAsync(record, allRecords);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Automatic verification after AddQuantityRecordAsync failed");
             }
         }
 
@@ -134,6 +154,7 @@ public sealed class MainWindowViewModel : ObservableObject
         Parapet.Source.PropertyChanged += (_, _) => RefreshInspector();
         Drawing.PropertyChanged += (_, _) => RefreshInspector();
         Drawing.Rows.CollectionChanged += (_, _) => RefreshInspector();
+        History.PropertyChanged += (_, _) => RefreshInspector();
 
         OpenCommandPaletteCommand = new RelayCommand(() => IsCommandPaletteOpen = true);
         CloseCommandPaletteCommand = new RelayCommand(() => IsCommandPaletteOpen = false);
@@ -162,11 +183,16 @@ public sealed class MainWindowViewModel : ObservableObject
 
     public bool HasCurrentProject => _projectContext.CurrentProject is not null;
 
+    /// <summary>Dashboard 요약용 - 검산 결과가 "확인 필요"인 산출내역 건수(§105-106). 거대한 KPI
+    /// 카드로 되돌아가지 않는다 - Inspector의 한 줄로 충분하다.</summary>
+    public int ReviewNeededCount => History.Rows.Count(r => r.Verification?.OverallSeverity == VerificationSeverity.Review);
+
     public LengthWorkflowViewModel Length { get; }
     public AreaWorkflowViewModel Area { get; }
     public VerticalAreaWorkflowViewModel VerticalArea { get; }
     public ParapetWorkflowViewModel Parapet { get; }
     public DrawingWorkflowViewModel Drawing { get; }
+    public QuantityHistoryViewModel History { get; }
 
     public ICommand OpenCommandPaletteCommand { get; }
     public ICommand CloseCommandPaletteCommand { get; }
@@ -208,6 +234,7 @@ public sealed class MainWindowViewModel : ObservableObject
                 OnPropertyChanged(nameof(IsVerticalAreaToolSelected));
                 OnPropertyChanged(nameof(IsParapetToolSelected));
                 OnPropertyChanged(nameof(IsDrawingToolSelected));
+                OnPropertyChanged(nameof(IsHistoryToolSelected));
                 OnPropertyChanged(nameof(IsDashboardContentVisible));
                 RefreshInspector();
             }
@@ -226,8 +253,11 @@ public sealed class MainWindowViewModel : ObservableObject
 
     public bool IsDrawingToolSelected => _selectedTool == "Drawing";
 
+    public bool IsHistoryToolSelected => _selectedTool == "History";
+
     public bool IsDashboardContentVisible =>
-        !IsLengthToolSelected && !IsAreaToolSelected && !IsVerticalAreaToolSelected && !IsParapetToolSelected && !IsDrawingToolSelected;
+        !IsLengthToolSelected && !IsAreaToolSelected && !IsVerticalAreaToolSelected && !IsParapetToolSelected
+        && !IsDrawingToolSelected && !IsHistoryToolSelected;
 
     public string InspectorTitle => _selectedTool switch
     {
@@ -236,6 +266,7 @@ public sealed class MainWindowViewModel : ObservableObject
         "Vertical Area" => "Vertical Area",
         "Parapet" => "Parapet",
         "Drawing" => "Drawing Navigation",
+        "History" => "Quantity History",
         _ => "Session"
     };
 
@@ -377,6 +408,10 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             Drawing.OnActivated();
         }
+        else if (selected.Label == "History")
+        {
+            History.OnActivated();
+        }
     }
 
     private void RefreshInspector()
@@ -424,11 +459,20 @@ public sealed class MainWindowViewModel : ObservableObject
                 InspectorRows.Add(new InspectorRow("격리 상태", Drawing.IsIsolationActive ? "격리됨" : "정상"));
                 break;
 
+            case "History":
+                InspectorRows.Add(new InspectorRow("요약", History.SummaryText));
+                InspectorRows.Add(new InspectorRow("선택된 기록", History.SelectedRow is { } row
+                    ? $"{row.Type} · {row.Value:N3} {row.Unit}"
+                    : "없음"));
+                InspectorRows.Add(new InspectorRow("검토 상태", History.SelectedRow?.ReviewLabel ?? "—"));
+                break;
+
             default:
                 InspectorRows.Add(new InspectorRow("프로젝트", CurrentProjectName));
                 InspectorRows.Add(new InspectorRow("연결 상태", ConnectionLabel));
                 InspectorRows.Add(new InspectorRow("활성 도면", ActiveDrawing));
                 InspectorRows.Add(new InspectorRow("산출내역", $"{QuantityRecords.Count}건"));
+                InspectorRows.Add(new InspectorRow("확인 필요", $"{ReviewNeededCount}건"));
                 InspectorRows.Add(new InspectorRow("최근 활동", Activity.Count > 0 ? Activity[0].Title : "없음"));
                 break;
         }

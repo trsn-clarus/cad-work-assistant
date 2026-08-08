@@ -35,8 +35,9 @@ public partial class App : Application
         var database = new CadWorkAssistantDatabase();
         var projectDataService = new ProjectDataService(database);
         var projectContext = new ProjectContextService(projectDataService);
+        var verificationCoordinator = new QuantityVerificationCoordinator(projectDataService);
 
-        var mainWindowViewModel = new MainWindowViewModel(_connectionManager, projectContext);
+        var mainWindowViewModel = new MainWindowViewModel(_connectionManager, projectContext, verificationCoordinator);
         var mainWindow = new MainWindow(mainWindowViewModel, projectContext);
         mainWindow.Show();
     }

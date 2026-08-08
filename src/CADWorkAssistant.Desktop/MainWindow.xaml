@@ -288,6 +288,11 @@
                              Grid.RowSpan="4"
                              DataContext="{Binding Drawing}"
                              Visibility="{Binding DataContext.IsDrawingToolSelected, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVisibility}}" />
+
+        <views:HistoryPanel Grid.Row="0"
+                             Grid.RowSpan="4"
+                             DataContext="{Binding History}"
+                             Visibility="{Binding DataContext.IsHistoryToolSelected, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVisibility}}" />
       </Grid>
 
       <Border x:Name="InspectorPanel"
