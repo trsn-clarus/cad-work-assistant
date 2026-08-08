@@ -1,0 +1,107 @@
+<Window x:Class="CADWorkAssistant.Desktop.ProjectDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:conv="clr-namespace:CADWorkAssistant.Desktop.Converters"
+        Title="프로젝트"
+        Width="480"
+        Height="620"
+        MinWidth="420"
+        MinHeight="480"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResizeWithGrip"
+        Background="{StaticResource BrushBackground}"
+        AutomationProperties.Name="프로젝트 생성/전환">
+  <Window.Resources>
+    <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+    <conv:InverseBooleanToVisibilityConverter x:Key="InverseBoolToVisibility" />
+    <conv:StringNotEmptyToVisibilityConverter x:Key="StringNotEmptyToVisibility" />
+  </Window.Resources>
+
+  <Grid Margin="18">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+    </Grid.RowDefinitions>
+
+    <TextBlock Grid.Row="0" Text="새 프로젝트" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,10" />
+
+    <Border Grid.Row="1" Style="{StaticResource PanelBorder}" Padding="12">
+      <StackPanel>
+        <TextBlock Text="프로젝트 이름 *" Style="{StaticResource CaptionText}" Margin="0,0,0,4" />
+        <TextBox Text="{Binding NewProjectName, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="프로젝트 이름 입력" />
+
+        <TextBlock Text="발주처" Style="{StaticResource CaptionText}" Margin="0,10,0,4" />
+        <TextBox Text="{Binding NewProjectClient, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="발주처 입력" />
+
+        <TextBlock Text="현장" Style="{StaticResource CaptionText}" Margin="0,10,0,4" />
+        <TextBox Text="{Binding NewProjectSite, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="현장 입력" />
+
+        <TextBlock Text="설명" Style="{StaticResource CaptionText}" Margin="0,10,0,4" />
+        <TextBox Text="{Binding NewProjectDescription, UpdateSourceTrigger=PropertyChanged}"
+                 AutomationProperties.Name="설명 입력"
+                 AcceptsReturn="True"
+                 TextWrapping="Wrap"
+                 Height="52" />
+
+        <Button Content="프로젝트 만들기"
+                Style="{StaticResource PrimaryButton}"
+                Command="{Binding CreateProjectCommand}"
+                HorizontalAlignment="Right"
+                Margin="0,14,0,0" />
+      </StackPanel>
+    </Border>
+
+    <Border Grid.Row="2"
+            Style="{StaticResource InlineMessageBorder}"
+            Margin="0,10,0,0"
+            Visibility="{Binding StatusText, Converter={StaticResource StringNotEmptyToVisibility}}">
+      <TextBlock Text="{Binding StatusText}"
+                 Style="{StaticResource InlineMessageText}"
+                 TextWrapping="Wrap" />
+    </Border>
+
+    <Grid Grid.Row="3" Margin="0,16,0,0">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="*" />
+      </Grid.RowDefinitions>
+
+      <TextBlock Grid.Row="0" Text="최근 프로젝트" Style="{StaticResource SectionTitle}" Margin="0,0,0,8" />
+
+      <ScrollViewer Grid.Row="1"
+                    VerticalScrollBarVisibility="Auto"
+                    Visibility="{Binding HasRecentProjects, Converter={StaticResource BoolToVisibility}}">
+        <ItemsControl ItemsSource="{Binding RecentProjects}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Button Style="{StaticResource SecondaryButton}"
+                      Command="{Binding DataContext.OpenProjectCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                      CommandParameter="{Binding}"
+                      AutomationProperties.Name="{Binding Name, StringFormat='프로젝트 열기: {0}'}"
+                      HorizontalContentAlignment="Stretch"
+                      Margin="0,0,0,6">
+                <StackPanel HorizontalAlignment="Stretch">
+                  <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                  <TextBlock Style="{StaticResource CaptionText}">
+                    <Run Text="{Binding Client, TargetNullValue=''}" />
+                    <Run Text=" · " />
+                    <Run Text="{Binding LastOpenedAt, StringFormat=yyyy-MM-dd HH:mm}" />
+                  </TextBlock>
+                </StackPanel>
+              </Button>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+
+      <TextBlock Grid.Row="1"
+                 Text="최근 프로젝트가 없습니다. 위에서 새 프로젝트를 만들어보세요."
+                 Style="{StaticResource CaptionText}"
+                 HorizontalAlignment="Center"
+                 VerticalAlignment="Center"
+                 Visibility="{Binding HasRecentProjects, Converter={StaticResource InverseBoolToVisibility}}" />
+    </Grid>
+  </Grid>
+</Window>

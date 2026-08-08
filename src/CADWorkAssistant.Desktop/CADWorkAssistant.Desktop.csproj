@@ -8,5 +8,6 @@
   <ItemGroup>
     <ProjectReference Include="..\CADWorkAssistant.Core\CADWorkAssistant.Core.csproj" />
     <ProjectReference Include="..\CADWorkAssistant.Infrastructure\CADWorkAssistant.Infrastructure.csproj" />
+    <ProjectReference Include="..\CADWorkAssistant.Persistence\CADWorkAssistant.Persistence.csproj" />
   </ItemGroup>
 </Project>
