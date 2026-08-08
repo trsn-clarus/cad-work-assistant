@@ -1,3 +1,5 @@
+using CADWorkAssistant.Desktop.Common;
+
 namespace CADWorkAssistant.Desktop.ViewModels;
 
 public sealed class NavItem : ObservableObject

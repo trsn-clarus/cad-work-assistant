@@ -1,7 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
-namespace CADWorkAssistant.Desktop.ViewModels;
+namespace CADWorkAssistant.Desktop.Common;
 
 public abstract class ObservableObject : INotifyPropertyChanged
 {
