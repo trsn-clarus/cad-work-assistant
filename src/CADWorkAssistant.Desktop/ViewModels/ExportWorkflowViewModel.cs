@@ -43,6 +43,10 @@ public sealed class ExportWorkflowViewModel : ObservableObject
 
     public ICommand OpenFolderCommand => _openFolderCommand;
 
+    /// <summary>MainWindowViewModel이 구독해서 Export 이력을 프로젝트에 남긴다 - 소유권을 갖지 않는다
+    /// (RecordAdded와 같은 패턴, Milestone 6 §39).</summary>
+    public event System.EventHandler<ExportCompletedEventArgs>? ExportCompleted;
+
     public string Description
     {
         get => _description;
@@ -146,7 +150,9 @@ public sealed class ExportWorkflowViewModel : ObservableObject
             _lastExportedFolder = Path.GetDirectoryName(dialog.FileName);
             _openFolderCommand.RaiseCanExecuteChanged();
 
-            StatusText = $"저장 완료 - {Path.GetFileName(dialog.FileName)} ({result?.ObjectCount ?? session.ObjectCount}개 객체)";
+            var objectCount = result?.ObjectCount ?? session.ObjectCount;
+            StatusText = $"저장 완료 - {Path.GetFileName(dialog.FileName)} ({objectCount}개 객체)";
+            ExportCompleted?.Invoke(this, new ExportCompletedEventArgs(session.DrawingName, dialog.FileName, objectCount, Description));
         }
         catch (Exception ex)
         {
@@ -170,3 +176,5 @@ public sealed class ExportWorkflowViewModel : ObservableObject
         Process.Start(new ProcessStartInfo { FileName = _lastExportedFolder, UseShellExecute = true });
     }
 }
+
+public sealed record ExportCompletedEventArgs(string? SourceDrawing, string TargetFile, int ObjectCount, string? Description);

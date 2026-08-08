@@ -2,6 +2,7 @@ using System.Windows;
 using CADWorkAssistant.Desktop.Services;
 using CADWorkAssistant.Desktop.ViewModels;
 using CADWorkAssistant.Infrastructure.Logging;
+using CADWorkAssistant.Persistence;
 using Serilog;
 
 namespace CADWorkAssistant.Desktop;
@@ -28,7 +29,15 @@ public partial class App : Application
         var discoveryService = new AutoCadDiscoveryService();
         _connectionManager = new AutoCadConnectionManager(discoveryService);
 
-        var mainWindow = new MainWindow(new MainWindowViewModel(_connectionManager));
+        // DB 경로 결정(CWA_DATABASE_PATH override/Simulation Mode 분리)과 마이그레이션은
+        // CadWorkAssistantDatabase.OpenConnection()이 처음 호출될 때(ProjectContextService.
+        // InitializeAsync) 알아서 처리한다.
+        var database = new CadWorkAssistantDatabase();
+        var projectDataService = new ProjectDataService(database);
+        var projectContext = new ProjectContextService(projectDataService);
+
+        var mainWindowViewModel = new MainWindowViewModel(_connectionManager, projectContext);
+        var mainWindow = new MainWindow(mainWindowViewModel, projectContext);
         mainWindow.Show();
     }
 

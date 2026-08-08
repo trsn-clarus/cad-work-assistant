@@ -1,16 +1,21 @@
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using CADWorkAssistant.Desktop.Services;
 using CADWorkAssistant.Desktop.ViewModels;
 
 namespace CADWorkAssistant.Desktop;
 
 public partial class MainWindow : Window
 {
-    public MainWindow(MainWindowViewModel viewModel)
+    private readonly IProjectContextService _projectContext;
+
+    public MainWindow(MainWindowViewModel viewModel, IProjectContextService projectContext)
     {
         InitializeComponent();
+        _projectContext = projectContext;
         viewModel.PropertyChanged += OnViewModelPropertyChanged;
+        viewModel.RequestOpenProjectDialog += (_, _) => OpenProjectDialog();
         DataContext = viewModel;
         Loaded += (_, _) =>
         {
@@ -19,6 +24,12 @@ public partial class MainWindow : Window
                 AnimateElement(InspectorPanel, 0, 1, 8, 0);
             }
         };
+    }
+
+    private void OpenProjectDialog()
+    {
+        var dialog = new ProjectDialog(new ProjectDialogViewModel(_projectContext)) { Owner = this };
+        dialog.ShowDialog();
     }
 
     private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)

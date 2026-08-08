@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
@@ -8,12 +9,14 @@ using CADWorkAssistant.Core.Cad;
 using CADWorkAssistant.Core.Models;
 using CADWorkAssistant.Desktop.Common;
 using CADWorkAssistant.Desktop.Services;
+using Serilog;
 
 namespace CADWorkAssistant.Desktop.ViewModels;
 
 public sealed class MainWindowViewModel : ObservableObject
 {
     private readonly IAutoCadConnectionManager _connectionManager;
+    private readonly IProjectContextService _projectContext;
 
     private bool _isCommandPaletteOpen;
     private bool _isInspectorOpen = true;
@@ -24,9 +27,10 @@ public sealed class MainWindowViewModel : ObservableObject
     private string _selectedTool = "Dashboard";
     private string _statusMessage = "Ready";
 
-    public MainWindowViewModel(IAutoCadConnectionManager connectionManager)
+    public MainWindowViewModel(IAutoCadConnectionManager connectionManager, IProjectContextService projectContext)
     {
         _connectionManager = connectionManager;
+        _projectContext = projectContext;
         _connectionManager.PropertyChanged += OnConnectionManagerPropertyChanged;
 
         Length = new LengthWorkflowViewModel(connectionManager);
@@ -58,37 +62,64 @@ public sealed class MainWindowViewModel : ObservableObject
             new("SETTINGS", "Preferences", "Ctrl+,", true, isImplemented: false)
         };
 
-        // 세션에서 실제로 추가한 산출내역/활동만 보여준다 - 이전에는 화면을 채우려고 가짜 샘플 행을
-        // 미리 넣어뒀는데, 실제 측정값과 섞이면 사용자가 가짜 행을 진짜로 오인할 위험이 있다
-        // (Milestone 4.5 §44-45, "Dashboard는 진짜 Control Center여야 한다"). 비어 있을 때는
-        // XAML의 Empty State 문구가 대신 안내한다.
-        QuantityRecords = new ObservableCollection<QuantityRecord>();
-        QuantityRecords.CollectionChanged += (_, _) =>
+        // 산출내역/활동은 더 이상 이 ViewModel이 직접 소유하지 않는다 - IProjectContextService가
+        // 프로젝트별로 관리하고(Milestone 6), 여기서는 그 컬렉션을 그대로 노출한다(QuantityRecords/
+        // Activity 프로퍼티). 세션에서 실제로 추가한 값만 보인다는 원칙은 그대로다 - 가짜 샘플 행을
+        // 미리 채우지 않는다(Milestone 4.5 §44-45). 비어 있을 때는 XAML의 Empty State 문구가 안내한다.
+        _projectContext.QuantityRecords.CollectionChanged += (_, _) =>
         {
             OnPropertyChanged(nameof(HasQuantityRecords));
             RefreshInspector();
         };
 
-        Activity = new ObservableCollection<OperationLogEntry>();
-        Activity.CollectionChanged += (_, _) =>
+        _projectContext.Activity.CollectionChanged += (_, _) =>
         {
             OnPropertyChanged(nameof(HasActivity));
             RefreshInspector();
         };
 
+        _projectContext.CurrentProjectChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(CurrentProjectName));
+            OnPropertyChanged(nameof(HasCurrentProject));
+        };
+
         InspectorRows = new ObservableCollection<InspectorRow>();
 
-        void OnRecordAdded(object? sender, QuantityRecord record)
+        async void OnRecordAdded(object? sender, QuantityRecord record)
         {
-            QuantityRecords.Insert(0, record);
-            Activity.Insert(0, new OperationLogEntry(record.CreatedAt, "Success", $"{record.Type} 산출내역 추가",
-                $"{record.Layer} · {record.ObjectCount}개 객체 · {record.Value:N3} {record.Unit}"));
+            try
+            {
+                await _projectContext.AddQuantityRecordAsync(
+                    record,
+                    $"{record.Type} 산출내역 추가",
+                    $"{record.Layer} · {record.ObjectCount}개 객체 · {record.Value:N3} {record.Unit}");
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "AddQuantityRecordAsync failed");
+                StatusMessage = "산출내역을 저장하지 못했습니다. 잠시 후 다시 시도해주세요.";
+            }
         }
 
         Length.RecordAdded += OnRecordAdded;
         Area.RecordAdded += OnRecordAdded;
         VerticalArea.RecordAdded += OnRecordAdded;
         Parapet.RecordAdded += OnRecordAdded;
+
+        async void OnExportCompleted(object? sender, ExportCompletedEventArgs e)
+        {
+            try
+            {
+                await _projectContext.AddExportRecordAsync(e.SourceDrawing, e.TargetFile, e.ObjectCount, e.Description);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "AddExportRecordAsync failed");
+            }
+        }
+
+        Drawing.Export.ExportCompleted += OnExportCompleted;
 
         // Property Inspector는 지금 활성화된 도구의 실제 상태를 그대로 비춘다 (Milestone 4.5 §9,
         // "실제 도구로 구현 - 활성 도구별 동적 바인딩"). 각 Workflow VM/그 Rows 컬렉션/기준 길이를
@@ -108,19 +139,28 @@ public sealed class MainWindowViewModel : ObservableObject
         CloseCommandPaletteCommand = new RelayCommand(() => IsCommandPaletteOpen = false);
         ToggleInspectorCommand = new RelayCommand(() => IsInspectorOpen = !IsInspectorOpen);
         SelectNavigationCommand = new RelayCommand(SelectNavigation);
+        OpenProjectDialogCommand = new RelayCommand(OpenProjectDialog);
 
         RefreshInspector();
         _connectionManager.Start();
+
+        InitializeProjectContext();
     }
 
     public ObservableCollection<NavItem> Navigation { get; }
-    public ObservableCollection<QuantityRecord> QuantityRecords { get; }
-    public ObservableCollection<OperationLogEntry> Activity { get; }
+    public ObservableCollection<QuantityRecord> QuantityRecords => _projectContext.QuantityRecords;
+    public ObservableCollection<ActivityRecord> Activity => _projectContext.Activity;
     public ObservableCollection<InspectorRow> InspectorRows { get; }
 
     public bool HasQuantityRecords => QuantityRecords.Count > 0;
 
     public bool HasActivity => Activity.Count > 0;
+
+    /// <summary>Project가 열려 있지 않으면 "빠른 세션"이다 (§21) - 사이드바가 이 값으로 안내 문구를
+    /// 바꾼다.</summary>
+    public string CurrentProjectName => _projectContext.CurrentProject?.Name ?? "빠른 세션 (프로젝트 없음)";
+
+    public bool HasCurrentProject => _projectContext.CurrentProject is not null;
 
     public LengthWorkflowViewModel Length { get; }
     public AreaWorkflowViewModel Area { get; }
@@ -132,6 +172,11 @@ public sealed class MainWindowViewModel : ObservableObject
     public ICommand CloseCommandPaletteCommand { get; }
     public ICommand ToggleInspectorCommand { get; }
     public ICommand SelectNavigationCommand { get; }
+    public ICommand OpenProjectDialogCommand { get; }
+
+    /// <summary>ViewModel은 Window를 직접 만들지 않는다 - MainWindow.xaml.cs가 구독해서 대화상자를
+    /// 띄운다 (ProjectDialogViewModel.RequestClose와 같은 패턴).</summary>
+    public event EventHandler? RequestOpenProjectDialog;
 
     public bool IsCommandPaletteOpen
     {
@@ -265,6 +310,52 @@ public sealed class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(ConnectionStatusBrush));
         OnPropertyChanged(nameof(ConnectionStatusGlyph));
         RefreshInspector();
+        TryRegisterActiveDrawing();
+    }
+
+    private string? _lastRegisteredDrawingPath;
+
+    /// <summary>AutoCAD가 도면을 열 때마다 자동으로 프로젝트에 참조를 남긴다 (§34-37) - 파일을
+    /// 복사하지 않고 경로만 기억한다. 같은 경로를 매 PropertyChanged마다 다시 등록하지 않도록
+    /// 마지막으로 등록한 경로와 비교한다(연결 상태만 바뀌어도 이 핸들러가 자주 불린다).</summary>
+    private async void TryRegisterActiveDrawing()
+    {
+        if (_connectionManager.Drawing?.FullPath is not { } fullPath || fullPath == _lastRegisteredDrawingPath)
+        {
+            return;
+        }
+
+        _lastRegisteredDrawingPath = fullPath;
+
+        try
+        {
+            await _projectContext.RegisterDrawingFileAsync(
+                fullPath,
+                System.IO.Path.GetFileName(fullPath),
+                DrawingUnitDisplay.Abbreviation(_connectionManager.Drawing.Units));
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "RegisterDrawingFileAsync failed");
+        }
+    }
+
+    private async void InitializeProjectContext()
+    {
+        try
+        {
+            await _projectContext.InitializeAsync();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "ProjectContextService.InitializeAsync failed");
+            StatusMessage = "프로젝트 데이터를 불러오지 못했습니다. 빠른 세션으로 계속합니다.";
+        }
+    }
+
+    private void OpenProjectDialog()
+    {
+        RequestOpenProjectDialog?.Invoke(this, EventArgs.Empty);
     }
 
     private void SelectNavigation(object? parameter)
@@ -334,10 +425,11 @@ public sealed class MainWindowViewModel : ObservableObject
                 break;
 
             default:
+                InspectorRows.Add(new InspectorRow("프로젝트", CurrentProjectName));
                 InspectorRows.Add(new InspectorRow("연결 상태", ConnectionLabel));
                 InspectorRows.Add(new InspectorRow("활성 도면", ActiveDrawing));
                 InspectorRows.Add(new InspectorRow("산출내역", $"{QuantityRecords.Count}건"));
-                InspectorRows.Add(new InspectorRow("최근 활동", Activity.Count > 0 ? Activity[0].Message : "없음"));
+                InspectorRows.Add(new InspectorRow("최근 활동", Activity.Count > 0 ? Activity[0].Title : "없음"));
                 break;
         }
 

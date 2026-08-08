@@ -42,6 +42,7 @@
           <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
           </Grid.RowDefinitions>
@@ -52,6 +53,25 @@
           </StackPanel>
 
           <Button Grid.Row="1"
+                  Command="{Binding OpenProjectDialogCommand}"
+                  AutomationProperties.Name="{Binding CurrentProjectName}"
+                  ToolTip="프로젝트 생성/전환"
+                  HorizontalContentAlignment="Stretch"
+                  Margin="0,0,0,10">
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+              </Grid.ColumnDefinitions>
+              <Path Width="13" Height="13" Stretch="Uniform" Fill="{StaticResource BrushTextMuted}" Data="M2,3 H6 L7,5 H12 V11 H2 Z" />
+              <TextBlock Grid.Column="1"
+                         Text="{Binding CurrentProjectName}"
+                         Margin="8,0"
+                         TextTrimming="CharacterEllipsis" />
+            </Grid>
+          </Button>
+
+          <Button Grid.Row="2"
                   Command="{Binding OpenCommandPaletteCommand}"
                   AutomationProperties.Name="Open command palette"
                   HorizontalContentAlignment="Stretch"
@@ -68,7 +88,7 @@
             </Grid>
           </Button>
 
-          <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+          <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto">
             <ItemsControl ItemsSource="{Binding Navigation}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate>
@@ -105,7 +125,7 @@
             </ItemsControl>
           </ScrollViewer>
 
-          <Border Grid.Row="3"
+          <Border Grid.Row="4"
                   Style="{StaticResource PanelBorder}"
                   Padding="10"
                   Margin="0,10,0,0">
@@ -224,11 +244,11 @@
                         <ColumnDefinition Width="86" />
                         <ColumnDefinition Width="*" />
                       </Grid.ColumnDefinitions>
-                      <TextBlock Text="{Binding Timestamp, StringFormat=HH:mm:ss}" Style="{StaticResource CaptionText}" />
-                      <TextBlock Grid.Column="1" Text="{Binding Level}" FontWeight="SemiBold" />
+                      <TextBlock Text="{Binding CreatedAt, StringFormat=HH:mm:ss}" Style="{StaticResource CaptionText}" />
+                      <TextBlock Grid.Column="1" Text="{Binding ActivityType}" FontWeight="SemiBold" />
                       <StackPanel Grid.Column="2">
-                        <TextBlock Text="{Binding Message}" />
-                        <TextBlock Text="{Binding Detail}" Style="{StaticResource CaptionText}" />
+                        <TextBlock Text="{Binding Title}" />
+                        <TextBlock Text="{Binding Description}" Style="{StaticResource CaptionText}" />
                       </StackPanel>
                     </Grid>
                   </DataTemplate>
