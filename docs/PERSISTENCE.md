@@ -1,9 +1,11 @@
-# Persistence (Milestone 6)
+# Persistence (Milestone 6, Milestone 7에서 확장)
 
 Milestone 0-5까지 "CAD Work Assistant"는 세션 기반 도구였다 - 프로그램을 닫으면 산출내역/활동
 이력이 전부 사라졌다. Milestone 6은 Project/QuantityRecord/ActivityRecord/DrawingFile/
 ExportRecord/RecentMeasurement를 로컬 SQLite DB에 저장해 "닫았다 다시 열어도 작업이 남아 있는"
-업무용 프로그램으로 바꾼다.
+업무용 프로그램으로 바꾼다. Milestone 7은 여기에 `QuantityVerificationSnapshot`/`QuantityReview`
+2개 테이블을 Migration002로 추가했다 - 스키마/트랜잭션 세부사항은 이 문서, 검산 자체의 철학/규칙은
+[`QUANTITY_VERIFICATION.md`](./QUANTITY_VERIFICATION.md)를 참고한다.
 
 핵심 원칙(마스터 프롬프트 §0 그대로): **사용자가 CAD Work Assistant에 맡긴 업무 기록을 잃지
 않는 것**이 편의보다 우선한다 - 데이터 정합성 > 편의, 마이그레이션 안전성 > 빠른 개발,
@@ -29,15 +31,16 @@ CADWorkAssistant.Persistence/  (net8.0)
   ProjectDataService.cs              교차 테이블 트랜잭션 조립 지점 (QuantityRecord+ActivityRecord 등)
   Migrations/
     IMigration.cs                    스키마 변경 한 단계의 인터페이스
-    Migration001InitialSchema.cs     v1 - 6개 테이블 전체 CREATE
+    Migration001InitialSchema.cs     v1 - 6개 테이블 전체 CREATE (Milestone 6)
+    Migration002AddVerificationAndReview.cs  v2 - QuantityVerificationSnapshot/QuantityReview 추가 (Milestone 7)
     DatabaseMigrator.cs              PRAGMA user_version 비교 → 미적용 마이그레이션만 트랜잭션 적용
   Repositories/
-    I*Repository.cs / Sqlite*Repository.cs   Project/QuantityRecord/Activity/DrawingFile/ExportRecord/RecentMeasurement 6쌍
+    I*Repository.cs / Sqlite*Repository.cs   Project/QuantityRecord/Activity/DrawingFile/ExportRecord/RecentMeasurement/QuantityVerification/QuantityReview 8쌍
 ```
 
 ## 2. 왜 EF Core가 아니라 raw ADO.NET(`Microsoft.Data.Sqlite`)인가
 
-테이블 6개, 대부분 단순 CRUD + "프로젝트별 최근 N개 정렬"뿐이다. EF Core의 마이그레이션
+테이블 8개(Milestone 7에서 6개→8개), 대부분 단순 CRUD + "프로젝트별 최근 N개 정렬"뿐이다. EF Core의 마이그레이션
 도구/Change Tracking 오버헤드가 이 규모에서는 이득보다 비용이 크다고 판단했다 - 이 프로젝트는
 지금까지 CommunityToolkit.Mvvm, Redux/MediatR/EventBus를 전부 "이 규모에 과하다"는 이유로
 거절해온 일관된 판단 기준을 그대로 적용한 것이다(`docs/ARCHITECTURE.md` §11 의사결정 로그).
@@ -149,8 +152,10 @@ git에 커밋하지 않는다.
 - **다중 프로젝트 격리**(`MultiProjectIsolationTests`) - 두 프로젝트에 같은 종류 데이터를 넣고
   서로 섞이지 않는지, `RecentMeasurement`의 upsert 키가 프로젝트별로 분리되는지
 
-`tests/CADWorkAssistant.Persistence.Tests` 25개, 전부 통과. 기존 Core.Tests(130개)/
-Integration.Tests(54개)는 이번 변경으로 회귀 없음.
+`tests/CADWorkAssistant.Persistence.Tests` 35개(Milestone 6 25개 + Milestone 7
+QuantityVerificationSnapshot/QuantityReview Repository·재시작·격리 10개), 전부 통과. Core.Tests
+160개(Milestone 7의 Core.Verification 30개 포함)/Integration.Tests 54개까지 합쳐 총 249개,
+회귀 없음.
 
 ## 9. Simulation Mode 실제 렌더링 검증 중 발견/수정한 버그 2건
 

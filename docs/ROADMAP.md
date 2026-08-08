@@ -307,10 +307,84 @@ Criteria 밖), "최근 측정값 사용"의 재시작 후 DB 기반 자동 복�
 Simulation Mode 실제 재시작 검증으로 완전히 충족**. AutoCAD Managed API를 새로 쓰지 않는
 Milestone이라 Real AutoCAD 전용 검증 대상은 없다.
 
-## Milestone 7 — Quantity History & 검산
+## Milestone 7 — Quantity History + Verification Engine + Review Workflow
 
-- [ ] 계산 이력 화면 (AutoCAD Handle 저장 → 원본 객체 재탐색)
-- [ ] 수량 검산 경고 (Area/Perimeter/Compactness 기반, 단순 임계값 아님)
+**상태: 코드/자동 테스트/Simulation Mode 종단간 검증 완료 (2026-08-09)**
+
+Milestone 6이 산출내역을 "저장"하는 것까지 만들었다면, 이 Milestone은 저장된 산출내역이 실제로
+믿을 수 있는지 확인하는 절차를 만든다. 목표는 AI가 이상한 수량을 대신 찾아주는 것이 아니라,
+프로그램이 이미 알고 있는 수학적 사실(단위 변환 계수, 저장된 산식 입력값)과 CAD provenance로
+확실한 오류와 단순한 이상 가능성을 구분해, 사용자가 근거를 보고 더 빠르게 판단하도록 돕는 것이다.
+자세한 설계는 `docs/QUANTITY_VERIFICATION.md`, 호출 구조는 `docs/ARCHITECTURE.md` §8.7 참고.
+
+- [x] `Core.Verification` 신규 - `VerificationSeverity`(Pass/Info/Review/Error)와
+      `QuantityReviewStatus`(Unreviewed/Verified/NeedsReview)를 분리된 두 축으로 설계(자동 검산
+      결과와 사용자 검토 상태는 서로 다른 개념). `QuantityVerificationService`가 Rule 9종을
+      명확한 C# 메서드로 구현(범용 Rule Engine/DSL 없음) - Finite Value, Positive Quantity, Unit
+      Consistency, Raw/Converted Consistency(Length/Area), Formula Recompute(Vertical Area/
+      Parapet - 실제 Calculator를 재호출해 재계산), Provenance Completeness, Duplicate Source
+      Handles, Prior Record Comparison, Area/Perimeter Shape Sanity(Compactness)
+- [x] Heuristic Check(중복/비교/형상)는 최대 Review까지만 쓰고 Error를 선언하지 않는다 - 면적이
+      작은데 둘레가 더 긴 형상도(회귀 테스트: Area 3,100m²/Perimeter 255m vs Area 2,800m²/
+      Perimeter 295m) 수학적으로 가능하므로 Error/Review가 아니라 Info로만 참고 정보를 준다
+- [x] `QuantityVerificationContext`가 배치 검산 시 중복/비교/형상쌍 후보를 O(n)에 한 번만 색인해
+      레코드마다 O(n²) 전체 비교를 하지 않는다
+- [x] Vertical Area/Parapet의 `CalculationMetadataJson`(Milestone 6에서 컬럼만 있고 아무도 채우지
+      않던 필드)을 이번에 실제로 채우기 시작 - `VerticalAreaCalculationMetadata`/
+      `ParapetCalculationMetadata`(Core, 구조화 입력값)를 저장해 검산 시 `VerticalAreaCalculator`/
+      `ParapetCalculator`를 그대로 재호출해서 다시 계산한다(문자열 산식을 파싱하지 않는다).
+      구조화 데이터가 없는 과거 기록은 Crash 없이 "검산 불가"(Info, 산식 텍스트라도 있으면) 또는
+      "계산 근거 없음"(Review, 산식마저 없으면)으로 처리
+- [x] Core.Tests 30개 신규(160개 전체 통과) - 회귀값(255940.660mm→255.940660m,
+      3,102,430,000mm²→3,102.43m², 32.118×1×2+32.118×0.15→69.0537m²)과 shape-sanity 두 케이스가
+      전부 Error가 되지 않는지 확인
+- [x] Persistence: Migration002(v1→v2, 기존 QuantityRecord/Project 등은 건드리지 않음) -
+      `QuantityVerificationSnapshot`/`QuantityReview` 2개 테이블, 둘 다 QuantityRecord당 최신
+      상태 하나만 남기는 upsert-latest-only(RecentMeasurement와 같은 패턴, 검산 이력 자체는
+      쌓지 않기로 범위를 좁혔다 - `docs/QUANTITY_VERIFICATION.md` 참고), `ProjectDataService.
+      SaveVerificationBatchAsync`(배치 전체를 하나의 트랜잭션으로), `SaveReviewAsync`(검토 상태
+      변경 + Activity 기록을 사용자 행동일 때만 묶음, 자동 재검산에는 Activity를 남기지 않음)
+- [x] Persistence.Tests 10개 신규(35개 전체 통과) - 새 Repository 2종, 트랜잭션 원자성, 앱 재시작
+      후 검산/검토 복원, 다중 프로젝트 격리, QuantityRecord 삭제 시 FK CASCADE
+- [x] Desktop: `QuantityVerificationCoordinator` - 배치 검산(취소 가능, `CancellationToken`),
+      레코드 하나의 검산 실패가 배치 전체를 죽이지 않음, "산출내역 추가" 직후 자동으로 빠른 검산
+      1건 실행(측정 도구는 여전히 Verification을 전혀 모른다 - `MainWindowViewModel`에서만 조립)
+- [x] Desktop: `QuantityHistoryViewModel` + `HistoryPanel.xaml` - Sheet(Dashboard의 Quantity
+      Results, "공식 산출내역")와 역할을 분리한 새 화면(§56, 페이지 수를 늘리는 게 목표가 아니라
+      역할이 명확히 다르다). 검색/유형/검산상태/검토상태 필터, Inspector(RESULT/SOURCE/
+      CALCULATION/VERIFICATION/REVIEW), 배치 검산 진행률, 체크박스 기반 다중 선택(§116, WPF
+      DataGrid 멀티 선택 바인딩 대신), 2건 비교(단위 호환 시에만, 저장하지 않는 읽기 전용 분석)
+- [x] Dashboard Property Inspector에 "확인 필요 N건" 한 줄 요약 추가(§105-106) - 거대한 KPI
+      카드로 되돌아가지 않는다
+- [x] Simulation Mode(FakeAutoCad + 실제 SQLite 파일)로 전체 흐름 실제 검증 - 프로젝트 생성 →
+      Length 측정("255.941 m") → 자동 검산(5개 Check 전부 Pass) → History에서 Inspector 확인 →
+      검토 메모 작성 + "검토 완료" 표시 → 앱 강제 종료 후 재시작 → 검산/검토 상태 정확히 복원 →
+      동일 CAD 객체로 두 번째 측정 추가 → 중복 경고("!" Review, "동일한 CAD 객체를 사용한 유사한
+      수량 기록이 이미 있습니다") 자동 표시 → 두 기록 체크 후 비교("차이: +0 m (+0%)") 확인
+- [x] 이 과정에서 실제 버그 4건 발견/수정 - (1) Inspector의 숫자+단위 표시에 `TextBlock` 전용
+      스타일(`NumericText`)을 `Run` 요소에 적용해 시작하자마자 XamlParseException으로 앱이
+      죽던 문제, (2) `InverseBooleanToVisibilityConverter`에 nullable 참조형(`Verification`)을
+      직접 바인딩해 "값이 있어도 항상 true가 아니므로 항상 Visible"이 되던 문제(bool 프로퍼티
+      `HasVerification`을 추가해 해결), (3) "검토 완료" 버튼이 방금 입력한 메모
+      (`ReviewNoteDraft`)가 아니라 마지막 저장본(`row.ReviewNote`)을 저장해 메모가 조용히
+      사라지던 문제, (4) `DataGridCheckBoxColumn`의 TwoWay 바인딩이 이 화면의 DataGrid 설정
+      조합에서 커밋되지 않아 체크해도 소스가 갱신되지 않던 문제(로그에 setter 호출 자체가 찍히지
+      않는 것으로 확인 - `DataGridTemplateColumn` 안에 일반 `CheckBox`를 두는 방식으로 교체해
+      해결, DataGrid 셀 편집 생명주기를 타지 않아 더 안정적이다) - 전부 `docs/
+      QUANTITY_VERIFICATION.md` §9에 상세 기록
+- [x] 기존 209개 테스트 + 신규 40개(Core 30 + Persistence 10) = 249개 전체 통과 유지,
+      `CADWorkAssistant.CI.slnf`/`CADWorkAssistant.sln` 양쪽 0 경고 0 오류
+
+**의도적으로 하지 않은 것**: AI/LLM 기반 판단(§152-153, 근거 없는 "이상해 보입니다" 금지),
+자동 도면 리비전 비교, 사용자 정의 검산 프로필/임계값 설정 화면, 개구부 공제 검증, 비용/단가
+검증, 검산 결과 이력 누적 보관(최신 1건만 upsert), Project 삭제(Milestone 6과 동일하게 범위 밖),
+검산 규칙에 threshold가 필요한 곳(Compactness)도 절대적 Error 판정에는 쓰지 않음.
+
+**완료 기준**: 저장된 산출내역이 결정적으로 잘못된 경우(단위 불일치, 원본값-저장값 불일치, 산식
+재계산 불일치)를 Error로, 확인이 필요한 이상 가능성(중복 의심, 큰 폭 변화, 긴 둘레)을 Review로
+구분해서 보여주고, 사용자가 검토 상태와 메모를 남길 수 있으며, 그 모든 상태가 재시작 후에도
+남아 있다. → **Core.Tests + Persistence.Tests + Simulation Mode 실제 재시작 검증으로 완전히
+충족**. 이 Milestone은 새 AutoCAD API를 쓰지 않아 Real AutoCAD 전용 검증 대상이 없다.
 
 ## Milestone 8 — Excel Export
 

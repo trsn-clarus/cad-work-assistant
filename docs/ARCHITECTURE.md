@@ -52,10 +52,10 @@
 
 | 프로젝트 | TFM | 책임 | AutoCAD/WPF 의존성 |
 |---|---|---|---|
-| `CADWorkAssistant.Core` | netstandard2.0 | 단위 변환, 길이 계산(`Core/Length`), 면적 계산(`Core/Area`), 수직면적/파라펫 수량 조합(`Core/VerticalArea`, `Core/Parapet`), 도메인 모델, IPC 프로토콜(`Core/Ipc`)과 상태머신(`Core/Cad`). **AutoCAD 타입을 절대 참조하지 않는다** → AutoCAD 없이 유닛 테스트 가능 (§32) | 없음 |
+| `CADWorkAssistant.Core` | netstandard2.0 | 단위 변환, 길이 계산(`Core/Length`), 면적 계산(`Core/Area`), 수직면적/파라펫 수량 조합(`Core/VerticalArea`, `Core/Parapet`), **수량 검산(`Core/Verification`, Milestone 7)**, 도메인 모델, IPC 프로토콜(`Core/Ipc`)과 상태머신(`Core/Cad`). **AutoCAD 타입을 절대 참조하지 않는다** → AutoCAD 없이 유닛 테스트 가능 (§32) | 없음 |
 | `CADWorkAssistant.Infrastructure` | **net48;net8.0** (멀티타겟) | 구조화 로깅(Serilog), 설정 저장(JSON), Named Pipe 전송 계층 전체(`Ipc/PipeMessageFramer`, `AutoCadPipeClient`, `AutoCadPipeServer`) | 없음 |
 | `CADWorkAssistant.Documents` | netstandard2.0 | Excel/PDF/CSV 내보내기 (Milestone: Excel Export 단계에서 실제 구현) | 없음 |
-| `CADWorkAssistant.Persistence` | **net8.0만** (Infrastructure와 달리 net48 없음) | Project/QuantityRecord/ActivityRecord/DrawingFile/ExportRecord/RecentMeasurement SQLite 영속화 (`Microsoft.Data.Sqlite`, raw ADO.NET). Migrations/(스키마 버전 관리), Repositories/(6쌍), `ProjectDataService`(교차 테이블 트랜잭션) | 없음 (Desktop만 참조, AutoCAD Plugin은 참조하지 않음 — §8.6) |
+| `CADWorkAssistant.Persistence` | **net8.0만** (Infrastructure와 달리 net48 없음) | Project/QuantityRecord/ActivityRecord/DrawingFile/ExportRecord/RecentMeasurement/**QuantityVerificationSnapshot/QuantityReview(Milestone 7)** SQLite 영속화 (`Microsoft.Data.Sqlite`, raw ADO.NET). Migrations/(스키마 버전 관리), Repositories/(8쌍), `ProjectDataService`(교차 테이블 트랜잭션) | 없음 (Desktop만 참조, AutoCAD Plugin은 참조하지 않음 — §8.6) |
 | `CADWorkAssistant.Desktop` | net8.0-windows | WPF UI, MVVM, `Services/`(Discovery/ConnectionManager/LengthSelectionCoordinator/ProjectContextService), `ViewModels/`(LengthWorkflowViewModel, AreaWorkflowViewModel, VerticalAreaWorkflowViewModel, ParapetWorkflowViewModel, LengthSourceSelector, ProjectDialogViewModel 등) | WPF |
 | `CADWorkAssistant.AutoCAD` | net48 | AutoCAD Managed API 연동, IPC Handler(Ping/GetApplicationInfo/GetDrawingContext/SelectLengthObjects/SelectAreaObjects), 원본 DWG 보호/Undo 그룹 처리 | AutoCAD 2024 Managed API |
 | `CADWorkAssistant.FakeAutoCad` (`tools/`) | net8.0 | AutoCAD 없이 개발/테스트하기 위한 Headless Simulation Host. `AutoCAD.Ipc.Handlers`와 **똑같은 IPC 프로토콜/서버 코드**를 재사용, Handler만 Scenario 기반 canned data로 교체. 설치 프로그램에 포함 안 함 (§73) | 없음 |
@@ -309,6 +309,39 @@ Microsoft.Data.Sqlite → cadworkassistant.db (WAL)
 DB가 아니라 실제 파일 기반이어야 의미가 있었다(`PERSISTENCE.md` §8) - 다른 Milestone들의
 FakeAutoCad Headless E2E와 같은 위치를 실제 파일 SQLite가 대신한다.
 
+## 8.7 Verification Architecture (Milestone 7)
+
+저장된 QuantityRecord가 실제로 믿을 수 있는지 확인하는 계층. 자세한 규칙 9종/철학/발견한 버그는
+[`QUANTITY_VERIFICATION.md`](./QUANTITY_VERIFICATION.md) 참고, 여기서는 호출 구조만 요약한다:
+
+```text
+Desktop.ViewModels.MainWindowViewModel
+  │ QuantityRecord 저장 성공 직후 자동으로 빠른 검산 1건 실행(측정 도구는 여전히 Verification을
+  │ 전혀 모른다 - Project를 모르는 것과 같은 원칙)
+  ▼
+Desktop.Services.QuantityVerificationCoordinator (IQuantityVerificationCoordinator)
+  │ Core.Verification 실행 + Persistence 저장을 조립 - ProjectContextService와 같은 역할 분담
+  ▼
+CADWorkAssistant.Core.Verification (AutoCAD·DB 비의존, 순수 계산 - Length/Area/VerticalArea/
+  Parapet과 같은 위치)
+  - QuantityVerificationService: Rule 9종을 이름 있는 private 메서드로 구현(범용 Rule Engine 아님)
+  - QuantityVerificationContext: 배치 검산 시 중복/비교/형상쌍 후보를 O(n)에 한 번만 색인
+  - VerticalAreaCalculationMetadata/ParapetCalculationMetadata: 구조화 입력값을 JSON으로 보존해
+    Rule 5(Formula Recompute)가 실제 Calculator를 다시 호출할 수 있게 한다
+  ▼
+CADWorkAssistant.Persistence.Repositories.SqliteQuantityVerificationRepository/
+  SqliteQuantityReviewRepository (QuantityRecordId당 최신 상태만 upsert)
+  ▼
+Desktop.ViewModels.QuantityHistoryViewModel + Views.HistoryPanel
+  └ QuantityHistoryRow - QuantityRecord + 최신 Verification + 최신 Review를 한 행에 묶는다
+```
+
+**다른 Milestone과 다른 점**: 이번에도 새 AutoCAD Managed API가 없다(Milestone 6과 같다) - 대신
+"기존 계산 로직을 다시 신뢰할 수 있게 검증한다"는 책임이 핵심이라, 계산 재현의 정확성(Rule
+4/5가 원본 계산부와 완전히 같은 부동소수점 연산 순서를 재현하는지)이 실제 AutoCAD 연동보다 더
+중요한 검증 대상이었다. `VerificationSeverity`(자동 판정)와 `QuantityReviewStatus`(사용자 판단)를
+분리된 두 축으로 설계한 것이 이 Milestone의 핵심 아키텍처 결정이다(§4).
+
 ## 9. Desktop App 구조 (MVVM)
 
 - `*.xaml` — 뷰 (구조/레이아웃/스타일), `Themes/DesignTokens.xaml`에 색상·타이포·spacing 토큰 정의
@@ -362,6 +395,12 @@ FakeAutoCad Headless E2E와 같은 위치를 실제 파일 SQLite가 대신한�
 | Project 삭제는 이번 Milestone에 구현하지 않음(스키마는 FK CASCADE로 대비) | QuantityRecord처럼 바로 구현 | 마스터 프롬프트 §170 필수 Acceptance Criteria 목록에 없다("필요할 때 구현한다" 원칙, CLAUDE.md 절대 원칙 6). QuantityRecord 삭제는 명시적으로 요구되어 구현했다 |
 | "최근 측정값 사용"의 앱 재시작 후 DB 기반 자동 복구는 연결하지 않음(테이블/저장은 실제로 동작) | `LengthSourceSelector` 초기화 시 DB에서 자동 로드 | 마스터 프롬프트 §92 자체가 "구현한다면"이라는 조건부 표현이었다 - 확실히 요구된 범위가 아니다 |
 | `DateTimeStyles.RoundtripKind`만 사용(AssumeUniversal 제거) | `RoundtripKind \| AssumeUniversal` 조합 | 실제로 조합해서 써봤더니 항상 `ArgumentException`(상호 배타적) - `ToDbText`가 이미 UTC Kind로 "O" 포맷을 쓰므로 문자열에 'Z'가 항상 붙어 RoundtripKind 하나로 충분했다. Persistence 단위 테스트를 실제로 돌려서 발견했다 |
+| `VerificationSeverity`(자동 판정)와 `QuantityReviewStatus`(사용자 판단)를 완전히 분리된 두 축으로 설계 | 자동 검산 결과를 그대로 검토 상태로 취급(하나의 enum) | 사용자가 도면을 확인한 뒤 자동 Warning을 지우지 않고 "확인 완료" 메모만 남기고 싶어 할 수 있다(§8, §66) - 둘을 합치면 "왜 경고가 여전히 뜨는지" 사용자가 혼란스러워진다 |
+| Heuristic Check(중복/비교/형상)는 최대 Review까지만, Error를 절대 선언하지 않음 | 중복이 확실해 보이면 Error로 승격 | 면적이 작은데 둘레가 더 긴 형상도 수학적으로 가능하다(§39-44) - 통계적/형상적 판단은 확정적 오류가 아니다. 자동으로 틀렸다고 단정하면 실제로는 정상인 복잡한 도형을 오류로 오인시킨다 |
+| Vertical Area/Parapet 검산(Rule 5)은 문자열 `CalculationExpression`을 파싱하지 않고, 새 구조화 JSON 필드(`CalculationMetadataJson`)를 채워 실제 Calculator를 재호출 | 산식 문자열을 정규식으로 파싱해서 재계산 | 문자열은 사람이 읽기 위한 것이지 기계가 다시 계산하기 위한 것이 아니다(§25) - 파싱 로직 자체가 새로운 버그 표면이 된다. 이미 Milestone 6에 있었지만 아무도 채우지 않던 컬럼을 이번에 실제로 쓰기 시작했다 |
+| `QuantityVerificationSnapshot`/`QuantityReview`는 upsert-latest-only(이력 없음) | 재검산/재검토마다 새 행을 append(감사 이력) | 10,000건 규모 프로젝트에서 반복 재검산 시 저장 공간이 무한정 늘어날 위험(§89) - "당시 검산 결과"의 실제 필요는 "마지막으로 확인했을 때"였다(§50 Stale 판정에만 쓰인다). RecentMeasurement/DrawingFile(Milestone 6)과 같은 패턴 |
+| `QuantityVerificationContext`로 배치 검산 시 중복/비교/형상쌍 후보를 O(n) 한 번만 색인 | 레코드마다 전체 목록을 순회하며 비교(O(n²)) | 대규모 프로젝트(§89)에서 배치 검산이 느려지는 것을 피하기 위해 처음부터 이 구조로 설계했다 - "필요할 때 최적화한다"는 원칙의 예외는 성능 문제가 설계 초기부터 명백할 때다 |
+| `DataGridCheckBoxColumn` 대신 `DataGridTemplateColumn` 안에 일반 `CheckBox` | `DataGridCheckBoxColumn` 유지, 다른 우회책 시도 | 실제로 UI Automation 클릭 검증 중 `DataGridCheckBoxColumn`의 TwoWay 바인딩이 이 화면의 DataGrid 설정 조합에서 커밋되지 않는 것을 발견했다(로그에 setter 호출 자체가 안 찍힘) - 일반 `CheckBox`는 DataGrid의 셀 편집 생명주기를 타지 않고 자기 Click에서 즉시 커밋해 더 안정적이다 |
 
 ## 12. 아직 결정하지 않은 것 (의도적으로 보류)
 
