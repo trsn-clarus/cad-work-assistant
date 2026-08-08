@@ -253,6 +253,11 @@
                             Grid.RowSpan="4"
                             DataContext="{Binding Length}"
                             Visibility="{Binding DataContext.IsLengthToolSelected, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVisibility}}" />
+
+        <views:AreaPanel Grid.Row="0"
+                          Grid.RowSpan="4"
+                          DataContext="{Binding Area}"
+                          Visibility="{Binding DataContext.IsAreaToolSelected, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVisibility}}" />
       </Grid>
 
       <Border x:Name="InspectorPanel"
