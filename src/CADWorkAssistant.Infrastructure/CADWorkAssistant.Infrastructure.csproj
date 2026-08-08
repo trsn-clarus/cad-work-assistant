@@ -1,13 +1,25 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netstandard2.0</TargetFramework>
+    <!--
+      net48(AutoCAD Plugin이 참조)과 net8.0(Desktop/FakeAutoCAD가 참조) 둘 다 타겟한다.
+      원래는 netstandard2.0 하나였지만, 이 프로젝트의 AutoCadPipeServer가 Named Pipe에 현재
+      사용자 전용 ACL을 걸 때(§40) netstandard2.0의 API 표면이 "생성 후 SetAccessControl"만
+      허용하는데 이건 실제로 UnauthorizedAccessException을 낸다(직접 확인함). 두 런타임 각각의
+      정식 API(net48의 8-인자 생성자, net8.0의 NamedPipeServerStreamAcl.Create)를 쓰기 위해
+      멀티타겟으로 바꿨다 - docs/ARCHITECTURE.md 의사결정 로그 참고.
+    -->
+    <TargetFrameworks>net48;net8.0</TargetFrameworks>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Serilog" Version="4.0.2" />
     <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
     <PackageReference Include="System.Text.Json" Version="8.0.5" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>

@@ -80,8 +80,11 @@ internal sealed class FakeAutoCadServer : IAsyncDisposable
             {
                 await _loopTask.ConfigureAwait(false);
             }
-            catch (OperationCanceledException)
+            catch (Exception)
             {
+                // 정리(Dispose)는 절대 실패하면 안 된다 - responder가 테스트에서 일부러 던진 예외를
+                // 포함해, accept loop가 어떻게 끝났든 여기서 삼킨다. 실제 실패는 테스트 본문의
+                // Assert가 이미 보고했을 것이다.
             }
         }
 

@@ -2,20 +2,23 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Pipes;
+#if !NET8_0_OR_GREATER
 using System.Security.AccessControl;
 using System.Security.Principal;
+#endif
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using CADWorkAssistant.Core.Ipc;
-using CADWorkAssistant.Infrastructure.Ipc;
 using Serilog;
 
-namespace CADWorkAssistant.AutoCAD.Ipc;
+namespace CADWorkAssistant.Infrastructure.Ipc;
 
 /// <summary>
-/// 이 AutoCAD 프로세스 전용 Named Pipe 서버. 한 번에 클라이언트 하나를 받고, 연결이 끊기면
-/// 다시 새 연결을 기다린다 (Desktop 재시작 후 재연결 지원, §28). Pipe는 현재 Windows 사용자만
+/// AutoCAD 프로토콜을 말하는 프로세스(실제 AutoCAD Plugin 또는 FakeAutoCAD) 하나를 위한 Named Pipe 서버.
+/// AutoCAD 타입을 전혀 참조하지 않으므로 Infrastructure에 두고 두 프로세스가 그대로 재사용한다
+/// (Milestone 2 §5 "Fake 전용 Protocol을 만들지 않는다"). 한 번에 클라이언트 하나를 받고, 연결이
+/// 끊기면 다시 새 연결을 기다린다 (Desktop 재시작 후 재연결 지원, §28). Pipe는 현재 Windows 사용자만
 /// 접근 가능하도록 제한한다 (§40).
 /// </summary>
 public sealed class AutoCadPipeServer
@@ -81,12 +84,28 @@ public sealed class AutoCadPipeServer
             try
             {
                 pipe = CreatePipe(_pipeName);
-                await pipe.WaitForConnectionAsync(cancellationToken).ConfigureAwait(false);
+
+                // WaitForConnectionAsync는 아직 아무도 연결하지 않은 상태에서 CancellationToken이
+                // 취소돼도 실제로는 대기를 풀어주지 않는 경우가 있다(.NET의 알려진 동작 - 실제로 겪음).
+                // Pipe 자체를 Dispose해서 강제로 대기를 깨운다.
+                using (cancellationToken.Register(static state => ((NamedPipeServerStream)state!).Dispose(), pipe))
+                {
+                    await pipe.WaitForConnectionAsync(cancellationToken).ConfigureAwait(false);
+                }
+
                 await HandleConnectionAsync(pipe, cancellationToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
                 // 서버 종료 중 - 루프를 빠져나간다.
+            }
+            catch (ObjectDisposedException) when (cancellationToken.IsCancellationRequested)
+            {
+                // 위 Dispose 워크어라운드로 인한 정상 종료 경로.
+            }
+            catch (IOException) when (cancellationToken.IsCancellationRequested)
+            {
+                // 일부 런타임에서는 대기 중 Dispose가 IOException으로 나타난다 - 역시 정상 종료 경로.
             }
             catch (Exception ex)
             {
@@ -177,6 +196,21 @@ public sealed class AutoCadPipeServer
 
     private static NamedPipeServerStream CreatePipe(string pipeName)
     {
+#if NET8_0_OR_GREATER
+        // CurrentUserOnly: OS가 현재 Windows 사용자로만 Pipe 접근을 제한해준다 - PipeSecurity를
+        // 직접 조립할 필요가 없다 (.NET Core 전용 플래그, net48에는 없음).
+        // 참고: 커스텀 PipeSecurity + NamedPipeServerStreamAcl.Create 조합은 실제로 시도했을 때
+        // IOException("매개 변수가 틀렸습니다")을 냈다 - 그래서 더 단순한 이 방식을 쓴다 (§40).
+        return new NamedPipeServerStream(
+            pipeName,
+            PipeDirection.InOut,
+            maxNumberOfServerInstances: 1,
+            PipeTransmissionMode.Byte,
+            PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly,
+            inBufferSize: 65536,
+            outBufferSize: 65536);
+#else
+        // .NET Framework 4.8에는 CurrentUserOnly가 없다 - PipeSecurity를 직접 구성한다.
         var pipeSecurity = new PipeSecurity();
         var currentUser = WindowsIdentity.GetCurrent().User;
         if (currentUser is not null)
@@ -193,5 +227,6 @@ public sealed class AutoCadPipeServer
             inBufferSize: 65536,
             outBufferSize: 65536,
             pipeSecurity);
+#endif
     }
 }
