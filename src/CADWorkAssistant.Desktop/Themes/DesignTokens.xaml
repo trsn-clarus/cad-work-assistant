@@ -1,14 +1,26 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=mscorlib">
+  <!--
+    Precision Engineering Workspace 토큰 (Milestone 4.5). 브랜드 방향: professional/technical/calm/
+    precise/dense/trustworthy/desktop-native - 웹 SaaS 느낌을 피한다. 낮은 radius, 얇은 border,
+    최소한의 elevation(그림자 없음)이 원칙이다. 색상 계열은 이미 Milestone 0의 UI UX Pro Max 조사
+    (design-system/MASTER.md)와 Milestone 4.5 재검토(§118) 양쪽에서 "B2B/Developer Tool" 계열
+    네이비-슬레이트+블루 accent 팔레트로 수렴해 큰 폭의 재염색 없이 토큰만 세분화했다.
+  -->
   <Color x:Key="ColorBackground">#F3F5F7</Color>
   <Color x:Key="ColorSurface">#FFFFFF</Color>
   <Color x:Key="ColorSurfaceMuted">#EEF2F5</Color>
   <Color x:Key="ColorSurfaceRaised">#FAFBFC</Color>
   <Color x:Key="ColorBorder">#CAD3DC</Color>
   <Color x:Key="ColorBorderStrong">#9AA8B6</Color>
+  <Color x:Key="ColorDivider">#DCE3E9</Color>
   <Color x:Key="ColorText">#17212B</Color>
   <Color x:Key="ColorTextMuted">#526170</Color>
+  <Color x:Key="ColorTextDisabled">#94A3AF</Color>
   <Color x:Key="ColorAccent">#1D6F8F</Color>
+  <Color x:Key="ColorAccentHover">#175A73</Color>
+  <Color x:Key="ColorAccentPressed">#124657</Color>
   <Color x:Key="ColorAccentSoft">#D8ECF3</Color>
   <Color x:Key="ColorSuccess">#1E7A47</Color>
   <Color x:Key="ColorWarning">#946200</Color>
@@ -22,9 +34,13 @@
   <SolidColorBrush x:Key="BrushSurfaceRaised" Color="{StaticResource ColorSurfaceRaised}" />
   <SolidColorBrush x:Key="BrushBorder" Color="{StaticResource ColorBorder}" />
   <SolidColorBrush x:Key="BrushBorderStrong" Color="{StaticResource ColorBorderStrong}" />
+  <SolidColorBrush x:Key="BrushDivider" Color="{StaticResource ColorDivider}" />
   <SolidColorBrush x:Key="BrushText" Color="{StaticResource ColorText}" />
   <SolidColorBrush x:Key="BrushTextMuted" Color="{StaticResource ColorTextMuted}" />
+  <SolidColorBrush x:Key="BrushTextDisabled" Color="{StaticResource ColorTextDisabled}" />
   <SolidColorBrush x:Key="BrushAccent" Color="{StaticResource ColorAccent}" />
+  <SolidColorBrush x:Key="BrushAccentHover" Color="{StaticResource ColorAccentHover}" />
+  <SolidColorBrush x:Key="BrushAccentPressed" Color="{StaticResource ColorAccentPressed}" />
   <SolidColorBrush x:Key="BrushAccentSoft" Color="{StaticResource ColorAccentSoft}" />
   <SolidColorBrush x:Key="BrushSuccess" Color="{StaticResource ColorSuccess}" />
   <SolidColorBrush x:Key="BrushWarning" Color="{StaticResource ColorWarning}" />
@@ -33,8 +49,26 @@
   <SolidColorBrush x:Key="BrushFocus" Color="{StaticResource ColorFocus}" />
   <SolidColorBrush x:Key="BrushTransparent" Color="Transparent" />
 
+  <!--
+    연결 상태 전용 별칭(§14: Accent/Status 색을 섞지 않는다 - Connected는 "성공"이 아니라 "연결"이다).
+    지금은 Success/Warning/TextMuted/Error와 같은 값이지만, 나중에 연결 상태의 색만 따로 바꿔야 할 때
+    Success 등 무관한 용도의 사용처를 찾아 헤매지 않도록 이름을 분리해둔다.
+  -->
+  <SolidColorBrush x:Key="BrushConnected" Color="{StaticResource ColorSuccess}" />
+  <SolidColorBrush x:Key="BrushConnecting" Color="{StaticResource ColorWarning}" />
+  <SolidColorBrush x:Key="BrushDisconnected" Color="{StaticResource ColorTextMuted}" />
+  <SolidColorBrush x:Key="BrushConnectionError" Color="{StaticResource ColorError}" />
+
   <FontFamily x:Key="FontSans">Segoe UI</FontFamily>
   <FontFamily x:Key="FontMono">Cascadia Mono, Consolas</FontFamily>
+
+  <!-- Spacing scale: 4/8/12/16/24/32 - 컴포넌트 내부는 4-16, 워크스페이스 영역 사이는 12-32. -->
+  <sys:Double x:Key="Space1">4</sys:Double>
+  <sys:Double x:Key="Space2">8</sys:Double>
+  <sys:Double x:Key="Space3">12</sys:Double>
+  <sys:Double x:Key="Space4">16</sys:Double>
+  <sys:Double x:Key="Space5">24</sys:Double>
+  <sys:Double x:Key="Space6">32</sys:Double>
 
   <CornerRadius x:Key="RadiusSm">3</CornerRadius>
   <CornerRadius x:Key="RadiusMd">6</CornerRadius>
@@ -73,6 +107,31 @@
     <Setter Property="FontWeight" Value="SemiBold" />
   </Style>
 
+  <!-- 숫자 결과의 unit 부분 전용 - 값보다 한 단계 낮은 hierarchy (§16-17). -->
+  <Style x:Key="NumericUnitText" TargetType="{x:Type TextBlock}" BasedOn="{StaticResource NumericText}">
+    <Setter Property="FontWeight" Value="Normal" />
+    <Setter Property="Foreground" Value="{StaticResource BrushTextMuted}" />
+  </Style>
+
+  <!-- Inspector의 label/value 한 쌍 - Property Grid 스타일. -->
+  <Style x:Key="InspectorLabel" TargetType="{x:Type TextBlock}" BasedOn="{StaticResource CaptionText}" />
+
+  <Style x:Key="InspectorValue" TargetType="{x:Type TextBlock}">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="TextWrapping" Value="NoWrap" />
+    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+  </Style>
+
+  <Style x:Key="InspectorNumericValue" TargetType="{x:Type TextBlock}" BasedOn="{StaticResource NumericText}">
+    <Setter Property="FontSize" Value="12" />
+  </Style>
+
+  <!--
+    기본 Button - Secondary/Quiet 계열의 바탕. hover/press는 이 템플릿 하나를 공유해도 안전하다 -
+    항상 중립 surface 톤 안에서만 움직이기 때문이다. Accent로 채워진 변형(PrimaryButton)은 같은
+    트리거를 공유하면 hover 시 배경이 거의 흰색으로 바뀌면서 흰 글자와 겹쳐 읽을 수 없게 되는
+    문제가 있어(Milestone 4.5에서 실제 렌더링으로 확인) 별도 템플릿을 쓴다.
+  -->
   <Style TargetType="{x:Type Button}">
     <Setter Property="MinHeight" Value="32" />
     <Setter Property="Padding" Value="10,5" />
@@ -124,15 +183,144 @@
     </Setter>
   </Style>
 
-  <Style x:Key="PrimaryButton" TargetType="{x:Type Button}" BasedOn="{StaticResource {x:Type Button}}">
+  <!-- Primary: 화면당 하나의 핵심 행동(CAD 선택 등). Accent로 항상 채워져 있고, hover/press에서도
+       흰 글자가 항상 읽혀야 한다 - 그래서 자체 템플릿으로 hover/press 배경을 Accent 계열 안에서만 움직인다. -->
+  <Style x:Key="PrimaryButton" TargetType="{x:Type Button}">
+    <Setter Property="MinHeight" Value="32" />
+    <Setter Property="Padding" Value="10,5" />
+    <Setter Property="BorderThickness" Value="1" />
     <Setter Property="Background" Value="{StaticResource BrushAccent}" />
     <Setter Property="BorderBrush" Value="{StaticResource BrushAccent}" />
     <Setter Property="Foreground" Value="White" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="FocusVisualStyle">
+      <Setter.Value>
+        <Style>
+          <Setter Property="Control.Template">
+            <Setter.Value>
+              <ControlTemplate>
+                <Rectangle Margin="2" Stroke="{StaticResource BrushFocus}" StrokeThickness="2" StrokeDashArray="1 2" />
+              </ControlTemplate>
+            </Setter.Value>
+          </Setter>
+        </Style>
+      </Setter.Value>
+    </Setter>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="{x:Type Button}">
+          <Border x:Name="Root"
+                  Background="{TemplateBinding Background}"
+                  BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}"
+                  CornerRadius="{StaticResource RadiusSm}">
+            <ContentPresenter Margin="{TemplateBinding Padding}"
+                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                              TextElement.Foreground="{TemplateBinding Foreground}" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="Root" Property="Background" Value="{StaticResource BrushAccentHover}" />
+              <Setter TargetName="Root" Property="BorderBrush" Value="{StaticResource BrushAccentHover}" />
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+              <Setter TargetName="Root" Property="Background" Value="{StaticResource BrushAccentPressed}" />
+              <Setter TargetName="Root" Property="BorderBrush" Value="{StaticResource BrushAccentPressed}" />
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+              <Setter Property="Opacity" Value="0.45" />
+              <Setter Property="Cursor" Value="Arrow" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- Secondary: Primary와 같이 있을 때 시선을 나눠 갖지 않아야 하는 확정/완료 행동(산출내역 추가 등).
+       Accent 외곽선 + 텍스트, 채워지지 않은 상태. -->
+  <Style x:Key="SecondaryButton" TargetType="{x:Type Button}" BasedOn="{StaticResource {x:Type Button}}">
+    <Setter Property="Background" Value="{StaticResource BrushSurface}" />
+    <Setter Property="BorderBrush" Value="{StaticResource BrushAccent}" />
+    <Setter Property="Foreground" Value="{StaticResource BrushAccent}" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="{x:Type Button}">
+          <Border x:Name="Root"
+                  Background="{TemplateBinding Background}"
+                  BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}"
+                  CornerRadius="{StaticResource RadiusSm}">
+            <ContentPresenter Margin="{TemplateBinding Padding}"
+                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                              TextElement.Foreground="{TemplateBinding Foreground}" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="Root" Property="Background" Value="{StaticResource BrushAccentSoft}" />
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+              <Setter TargetName="Root" Property="Background" Value="{StaticResource BrushSelection}" />
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+              <Setter Property="Opacity" Value="0.45" />
+              <Setter Property="Cursor" Value="Arrow" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- Quiet: 값 복사처럼 항상 곁에 있지만 주목을 끌 필요 없는 행동. 테두리 없이 텍스트만. -->
+  <Style x:Key="QuietButton" TargetType="{x:Type Button}" BasedOn="{StaticResource {x:Type Button}}">
+    <Setter Property="Background" Value="{StaticResource BrushTransparent}" />
+    <Setter Property="BorderBrush" Value="{StaticResource BrushTransparent}" />
+    <Setter Property="Foreground" Value="{StaticResource BrushTextMuted}" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="{x:Type Button}">
+          <Border x:Name="Root"
+                  Background="{TemplateBinding Background}"
+                  BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}"
+                  CornerRadius="{StaticResource RadiusSm}">
+            <ContentPresenter Margin="{TemplateBinding Padding}"
+                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                              TextElement.Foreground="{TemplateBinding Foreground}" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="Root" Property="Background" Value="{StaticResource BrushSurfaceMuted}" />
+              <Setter TargetName="Root" Property="TextElement.Foreground" Value="{StaticResource BrushText}" />
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+              <Setter TargetName="Root" Property="Background" Value="{StaticResource BrushBorder}" />
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+              <Setter Property="Opacity" Value="0.45" />
+              <Setter Property="Cursor" Value="Arrow" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
   </Style>
 
   <Style x:Key="ToolButton" TargetType="{x:Type Button}" BasedOn="{StaticResource {x:Type Button}}">
     <Setter Property="MinWidth" Value="34" />
     <Setter Property="Padding" Value="8,4" />
+  </Style>
+
+  <!-- Navigation 항목처럼 "선택됨" 상태를 갖는 토글형 버튼에 쓴다 - Nav는 자체 템플릿을 MainWindow에서 쓰지
+       않고 이 스타일 하나로 selected/disabled를 함께 표현한다 (§25, §23). -->
+  <Style x:Key="NavItemButton" TargetType="{x:Type Button}" BasedOn="{StaticResource {x:Type Button}}">
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="MinHeight" Value="34" />
   </Style>
 
   <Style TargetType="{x:Type TextBox}">
@@ -189,5 +377,14 @@
     <Setter Property="BorderBrush" Value="{StaticResource BrushBorder}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+  </Style>
+
+  <!-- 인라인 상태 메시지(경고/오류/정보) 공통 뼈대 - Toast 대신 항상 화면에 있는 배너로 쓴다 (§54-57). -->
+  <Style x:Key="InlineMessageBorder" TargetType="{x:Type Border}" BasedOn="{StaticResource PanelBorder}">
+    <Setter Property="Padding" Value="12" />
+  </Style>
+
+  <Style x:Key="InlineMessageText" TargetType="{x:Type TextBlock}" BasedOn="{StaticResource CaptionText}">
+    <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
 </ResourceDictionary>
