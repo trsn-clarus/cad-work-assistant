@@ -85,6 +85,12 @@ public sealed class ParapetWorkflowViewModel : ObservableObject
         {
             if (SetProperty(ref _faceMode, value))
             {
+                // IsSingleFace/IsBothFaces는 FaceMode 위의 계산된 프로퍼티라 SetProperty가 자동으로
+                // 알려주지 않는다 - 직접 raise하지 않으면 RadioButton 자체는 GroupName 덕에 겉보기엔
+                // 정상으로 토글되지만, 같은 값을 구독하는 다른 바인딩(예: "양면" 안내 배너의 Visibility)이
+                // 갱신되지 않는다 (Milestone 4.5 Simulation Mode 재검증 중 실제로 발견한 버그).
+                OnPropertyChanged(nameof(IsSingleFace));
+                OnPropertyChanged(nameof(IsBothFaces));
                 Recalculate();
             }
         }
