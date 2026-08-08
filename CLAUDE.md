@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-이 파일은 이 Repository에서 작업하는 Claude Code 세션을 위한 지침이다. 전체 요구사항 배경은 `docs/REQUIREMENTS.md`, 아키텍처 결정은 `docs/ARCHITECTURE.md`, 진행 상황은 `docs/ROADMAP.md`, AutoCAD 연동 세부사항은 `docs/AUTOCAD_INTEGRATION.md`, AutoCAD 없이 개발/테스트하는 방법은 `docs/TESTING_WITHOUT_AUTOCAD.md`, 수량 조합(Vertical Area/Parapet) 공식/가정은 `docs/QUANTITY_COMPOSITION.md`를 참조한다.
+이 파일은 이 Repository에서 작업하는 Claude Code 세션을 위한 지침이다. 전체 요구사항 배경은 `docs/REQUIREMENTS.md`, 아키텍처 결정은 `docs/ARCHITECTURE.md`, 진행 상황은 `docs/ROADMAP.md`, AutoCAD 연동 세부사항은 `docs/AUTOCAD_INTEGRATION.md`, AutoCAD 없이 개발/테스트하는 방법은 `docs/TESTING_WITHOUT_AUTOCAD.md`, 수량 조합(Vertical Area/Parapet) 공식/가정은 `docs/QUANTITY_COMPOSITION.md`, Project/Quantity/Activity 영속화(SQLite) 설계는 `docs/PERSISTENCE.md`를 참조한다.
 
 ## 프로젝트 한 줄 요약
 
@@ -30,15 +30,17 @@ src/
   CADWorkAssistant.Core/            netstandard2.0 — 계산/도메인 로직. Core/Ipc(프로토콜), Core/Cad(DTO+상태머신+단위 변환 계수), Core/Length(길이 집계/포맷), Core/Area(면적 분류/집계/포맷), Core/VerticalArea+Core/Parapet(수량 조합, AutoCAD IPC 없음). AutoCAD·WPF 의존 금지
   CADWorkAssistant.Infrastructure/  net48;net8.0 (멀티타겟) — 로깅(Serilog), 설정(JSON), Ipc/(PipeMessageFramer/AutoCadPipeClient/AutoCadPipeServer - 전송 계층 전체)
   CADWorkAssistant.Documents/       netstandard2.0 — Excel/PDF/CSV export (필요 시점에 구현)
-  CADWorkAssistant.Desktop/         net8.0-windows — WPF, MVVM(자체 구현), Services/(Discovery/ConnectionManager/LengthSelectionCoordinator), Views/(UserControl), 진입점
+  CADWorkAssistant.Persistence/     net8.0 (Desktop 전용, net48 Plugin은 참조 안 함) — SQLite(Microsoft.Data.Sqlite) 영속화. Migrations/(IMigration+DatabaseMigrator, PRAGMA user_version), Repositories/(Project/QuantityRecord/Activity/DrawingFile/ExportRecord/RecentMeasurement), CadWorkAssistantDatabase(연결+경로), ProjectDataService(교차 테이블 트랜잭션 조립)
+  CADWorkAssistant.Desktop/         net8.0-windows — WPF, MVVM(자체 구현), Services/(Discovery/ConnectionManager/LengthSelectionCoordinator/ProjectContextService), Views/(UserControl), 진입점
   CADWorkAssistant.AutoCAD/         net48 — AutoCAD Managed API, in-process plugin, Ipc/Handlers/(Ping/GetApplicationInfo/GetDrawingContext/SelectLengthObjects/SelectAreaObjects) — Vertical Area/Parapet 전용 Handler 없음(기존 SelectLengthObjects 재사용)
 tools/
   CADWorkAssistant.FakeAutoCad/     net8.0 — Headless AutoCAD Simulation Host (실행 가능 콘솔 앱). AutoCAD Plugin과 동일한 서버 코드 재사용. 설치본에 포함 안 함
 tests/
   CADWorkAssistant.Core.Tests/          — Core+Infrastructure 단위 테스트 (AutoCAD 불필요)
+  CADWorkAssistant.Persistence.Tests/   — 실제 파일 기반 SQLite로 Repository/마이그레이션/트랜잭션/재시작/다중 프로젝트 격리 테스트 (:memory: 아님, AutoCAD 불필요)
   CADWorkAssistant.Integration.Tests/   — FakeAutoCad를 실제 프로세스로 띄워 실제 Named Pipe로 종단간 테스트 (AutoCAD 불필요)
 design-system/   — UI 시각 규칙 단일 소스 (색상/타이포/spacing/컴포넌트/안티패턴). UI 작업 전 반드시 확인
-docs/    — ARCHITECTURE / ROADMAP / REQUIREMENTS / AUTOCAD_INTEGRATION / TESTING_WITHOUT_AUTOCAD / AUTOCAD_REAL_MACHINE_CHECKLIST / QUANTITY_COMPOSITION / UI_ENVIRONMENT_SETUP
+docs/    — ARCHITECTURE / ROADMAP / REQUIREMENTS / AUTOCAD_INTEGRATION / TESTING_WITHOUT_AUTOCAD / AUTOCAD_REAL_MACHINE_CHECKLIST / QUANTITY_COMPOSITION / PERSISTENCE / UI_ENVIRONMENT_SETUP
 installer/, samples/
 ```
 
@@ -74,7 +76,7 @@ $env:CWA_USE_FAKE_AUTOCAD = "1"; dotnet run --project src/CADWorkAssistant.Deskt
 - AutoCAD Plugin의 Handler는 원본 데이터(도면 단위 그대로)만 IPC로 반환한다 — 합산/변환/포맷팅은 Core에서 한다 (테스트 가능성).
 - Git 커밋은 의미 단위로 분리한다 (`feat:`, `fix:`, `refactor:` 등). 수십 개 기능을 한 커밋에 몰아넣지 않는다.
 - 새 NuGet 의존성 추가 전: 유지보수 상태, 라이선스, .NET 호환성, 상업적 사용 가능 여부, AutoCAD 프로세스와의 충돌 가능성을 확인한다.
-- 코드를 작성한 뒤에는 실제로 빌드/실행해서 검증한다 (컴파일 성공 ≠ 동작 확인). 이 프로젝트에서 실제로 겪은 예: `NamedPipeServerStreamAcl.Create`+커스텀 `PipeSecurity` 조합이 컴파일은 되지만 런타임에 `IOException`을 냈고, `WaitForConnectionAsync`는 컴파일상 CancellationToken을 받지만 실제로는 취소를 무시하는 경우가 있었다. `double.NaN`을 IPC payload에 담아 보내는 것도 컴파일은 문제없지만 `System.Text.Json`이 기본 설정으로는 NaN 직렬화에서 예외를 던진다 - Integration Test를 실제로 돌려서야 발견했다 (`IpcJson.Options`에 `JsonNumberHandling.AllowNamedFloatingPointLiterals` 필요).
+- 코드를 작성한 뒤에는 실제로 빌드/실행해서 검증한다 (컴파일 성공 ≠ 동작 확인). 이 프로젝트에서 실제로 겪은 예: `NamedPipeServerStreamAcl.Create`+커스텀 `PipeSecurity` 조합이 컴파일은 되지만 런타임에 `IOException`을 냈고, `WaitForConnectionAsync`는 컴파일상 CancellationToken을 받지만 실제로는 취소를 무시하는 경우가 있었다. `double.NaN`을 IPC payload에 담아 보내는 것도 컴파일은 문제없지만 `System.Text.Json`이 기본 설정으로는 NaN 직렬화에서 예외를 던진다 - Integration Test를 실제로 돌려서야 발견했다 (`IpcJson.Options`에 `JsonNumberHandling.AllowNamedFloatingPointLiterals` 필요). `DateTimeStyles.RoundtripKind`와 `DateTimeStyles.AssumeUniversal`을 같이 넘기는 것도 컴파일은 되지만 항상 `ArgumentException`을 던진다(둘은 상호 배타적) - Persistence 단위 테스트를 실제로 돌려서야 발견했다(Milestone 6). WPF에서 `Button`의 `AutomationProperties.Name`을 명시하지 않으면 UI Automation이 그 안의 자식 `TextBlock`(자기 Text가 자동으로 접근성 이름이 됨)을 먼저 찾아버려 `InvokePattern`이 없다는 예외가 난다 - Simulation Mode UI Automation 스크립트로 실제 클릭을 해봐야 드러났다.
 
 ## 작업 방식
 

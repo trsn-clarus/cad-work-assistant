@@ -241,14 +241,71 @@ Cluster 자동 탐지(§65, 이번엔 그 기반인 Zoom/Selection/Bounds만 구
 **Headless Simulation + Simulation Mode 수동 검증으로 완전히 충족**(Zoom의 시각적 정확성과 WBLOCK
 결과물의 완전성은 예외 - 실제 DWG/AutoCAD 기준 최종 확인만 남았다).
 
-## Milestone 6 — Quantity Sheet Persistence
+## Milestone 6 — Persistence + Project Management + Quantity/Activity History
 
-- [ ] SQLite 스키마 설계 (Project, QuantityItem, CalculationHistory)
-- [ ] 현재 메모리상에만 있는 Quantity Sheet(Length/Area/Vertical Area/Parapet의 "산출내역 추가"는
-      이미 Milestone 2-4에서 구현 완료)를 재시작 후에도 유지되도록 영속화
-- [ ] 산출내역 목록/검색 화면
-- [ ] 계산 근거(산식) 보존은 `QuantityRecord.CalculationExpression`으로 이미 구현됨 - 영속화 시
-      그대로 저장
+**상태: 코드/자동 테스트/Simulation Mode 종단간 검증 완료 (2026-08-09)**
+
+Milestone 0-5까지 "CAD Work Assistant"는 세션 기반 도구였다 - 프로그램을 닫으면 산출내역/활동
+이력이 전부 사라졌다. 이 Milestone은 Project를 단위로 QuantityRecord/ActivityRecord/
+DrawingFile/ExportRecord를 로컬 SQLite에 저장해 재시작 후에도 유지되는 "프로젝트 기반 업무
+프로그램"으로 전환한다. 자세한 스키마/트랜잭션/테스트 전략은 `docs/PERSISTENCE.md`,
+호출 구조 요약은 `docs/ARCHITECTURE.md` §8.6 참고.
+
+- [x] `CADWorkAssistant.Persistence` 신규 프로젝트(net8.0 전용, AutoCAD Plugin이 참조하는
+      Infrastructure와 분리) - `Microsoft.Data.Sqlite` raw ADO.NET(EF Core 대비 이 규모에서
+      오버헤드가 크다고 판단, 기존 CommunityToolkit.Mvvm/MediatR 거절과 같은 기준)
+- [x] `Core.Models`에 `Project`/`ActivityRecord`/`DrawingFile`/`ExportRecord`/
+      `RecentMeasurement` 신규 + 기존 `QuantityRecord`에 `ProjectId`/`Description`/`UpdatedAt`/
+      `CalculationMetadataJson` 확장 (netstandard2.0 제약으로 `record` 대신 기존 스타일 그대로
+      plain class + 명시적 생성자 유지) - `OperationLogEntry`는 `ActivityRecord`로 완전히 대체
+- [x] `PRAGMA user_version` 기반 마이그레이션(`IMigration`/`DatabaseMigrator`) - 6개 테이블
+      (Project/QuantityRecord/ActivityRecord/DrawingFile/ExportRecord/RecentMeasurement) 전체
+      생성하는 `Migration001InitialSchema` 1개로 시작. 기존 마이그레이션은 절대 수정하지 않고
+      새 버전을 추가하는 절차를 문서화
+- [x] Repository 6쌍(Project/QuantityRecord/Activity/DrawingFile/ExportRecord/
+      RecentMeasurement) - 커넥션을 인자로 받는 상태 없는(stateless) 클래스. `ProjectDataService`가
+      QuantityRecord+ActivityRecord, Project+ActivityRecord처럼 교차 테이블 원자성이 필요한
+      곳만 트랜잭션으로 조립
+- [x] `decimal`은 TEXT(InvariantCulture), `DateTimeOffset`은 UTC ISO-8601 TEXT로 저장하는 변환
+      규칙을 `SqliteValueConverters` 한 곳에 통일 (mm/m 계수를 `DrawingUnitConversion` 한 곳에
+      모은 것과 같은 이유)
+- [x] `CADWorkAssistant.Persistence.Tests` 신규(25개, 전부 실제 파일 기반 SQLite - `:memory:`
+      아님) - 스키마/마이그레이션, Repository별 CRUD, 트랜잭션 원자성(성공+FK 위반 강제 실패
+      롤백), 앱 재시작 시뮬레이션, 다중 프로젝트 데이터 격리
+- [x] Desktop: `IProjectContextService`/`ProjectContextService` - Project 미보유 시("빠른
+      세션") 메모리 전용, 보유 시 DB 위임. 4개 측정 ViewModel은 Project를 여전히 모른다
+      (`MainWindowViewModel`이 저장 직전 `ProjectId`를 채움, 기존 `RecordAdded` 이벤트 패턴
+      그대로 재사용)
+- [x] Desktop: `ProjectDialog`(생성 폼 + 최근 프로젝트 목록을 한 창에) + 사이드바 상단 프로젝트
+      전환 버튼 - 별도 "Projects 페이지"를 만들지 않음(§18 원칙)
+- [x] Desktop: AutoCAD 연결로 도면이 바뀔 때마다 `DrawingFile` 자동 upsert(파일 복사 없이 경로만,
+      `UNIQUE(ProjectId, FullPath)`로 중복 방지), WBLOCK Export 완료 시 `ExportRecord`+
+      `ActivityRecord` 자동 기록
+- [x] 자동 저장 - 명시적 "저장" 버튼 없이 프로젝트 생성/산출내역 추가/Export 완료 등 각 사용자
+      행동이 즉시 커밋됨
+- [x] Simulation Mode(FakeAutoCad + 실제 SQLite 파일)로 전체 흐름 실제 검증 - 빠른 세션에서
+      프로젝트 생성 → Length 측정("255.941 m") → 산출내역 추가 → Activity Log 확인 → 프로세스
+      강제 종료(재시작 흉내) → 재실행 → 최근 프로젝트 목록에서 열기 → QuantityRecord/Activity
+      정확히 복원 확인. 이 과정에서 실제 버그 2건 발견/수정: (1) `DateTimeStyles.RoundtripKind`+
+      `AssumeUniversal` 동시 사용 시 `ArgumentException`(상호 배타적, 단위 테스트로 발견),
+      (2) WPF `Button`에 `AutomationProperties.Name`을 명시하지 않으면 자식 `TextBlock`이 대신
+      잡혀 클릭 자동화가 실패(UI Automation 클릭 검증으로 발견) - 둘 다 `docs/PERSISTENCE.md`
+      §9에 상세 기록
+- [x] 기존 209개 테스트(Core.Tests 130 + Persistence.Tests 25 + Integration.Tests 54) 전부
+      통과 유지, `CADWorkAssistant.CI.slnf`/`CADWorkAssistant.sln` 양쪽 0 경고 0 오류
+- [x] `docs/PERSISTENCE.md`(신규), `docs/ARCHITECTURE.md` §8.6 신규 + 프로젝트 구성표/의사결정
+      로그/§12 갱신, `CLAUDE.md` 프로젝트 구조 갱신
+
+**의도적으로 하지 않은 것**: Project 삭제(스키마는 FK CASCADE로 대비했으나 §170 필수 Acceptance
+Criteria 밖), "최근 측정값 사용"의 재시작 후 DB 기반 자동 복구(`RecentMeasurement` 저장 자체는
+동작, §92가 조건부 표현이었음), DB 암호화, 클라우드 동기화, 다중 사용자/로그인, Project ZIP
+아카이브, 자동 백업 스케줄링, Excel/PDF/Plot, 비용 산정, AI Assistant - 전부 마스터 프롬프트가
+명시적으로 범위 밖으로 지정했다.
+
+**완료 기준**: 프로젝트를 만들고, 산출내역을 추가하고, 프로그램을 완전히 종료했다가 다시 열어도
+프로젝트/산출내역/활동 이력이 정확히 남아 있다. → **Persistence.Tests(실제 파일 SQLite) +
+Simulation Mode 실제 재시작 검증으로 완전히 충족**. AutoCAD Managed API를 새로 쓰지 않는
+Milestone이라 Real AutoCAD 전용 검증 대상은 없다.
 
 ## Milestone 7 — Quantity History & 검산
 
@@ -271,7 +328,10 @@ Cluster 자동 탐지(§65, 이번엔 그 기반인 Zoom/Selection/Bounds만 구
 
 ## Milestone 11 — Project Manager 고도화
 
-- [ ] 프로젝트 목록/검색, 최근 프로젝트
+프로젝트 생성/열기/전환/최근 목록은 Milestone 6에서 이미 구현됐다(`ProjectDialog`). 여기 남는
+범위는 그 이후 고도화뿐이다.
+
+- [ ] 프로젝트 검색/필터(개수가 많아지는 시점에), Project 삭제(Milestone 6에서 스키마만 대비)
 - [ ] Files/PDF/Report 연결
 
 ## Milestone 12+ — Advanced Drawing Analysis (장기)

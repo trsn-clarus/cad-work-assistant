@@ -55,7 +55,8 @@
 | `CADWorkAssistant.Core` | netstandard2.0 | 단위 변환, 길이 계산(`Core/Length`), 면적 계산(`Core/Area`), 수직면적/파라펫 수량 조합(`Core/VerticalArea`, `Core/Parapet`), 도메인 모델, IPC 프로토콜(`Core/Ipc`)과 상태머신(`Core/Cad`). **AutoCAD 타입을 절대 참조하지 않는다** → AutoCAD 없이 유닛 테스트 가능 (§32) | 없음 |
 | `CADWorkAssistant.Infrastructure` | **net48;net8.0** (멀티타겟) | 구조화 로깅(Serilog), 설정 저장(JSON), Named Pipe 전송 계층 전체(`Ipc/PipeMessageFramer`, `AutoCadPipeClient`, `AutoCadPipeServer`) | 없음 |
 | `CADWorkAssistant.Documents` | netstandard2.0 | Excel/PDF/CSV 내보내기 (Milestone: Excel Export 단계에서 실제 구현) | 없음 |
-| `CADWorkAssistant.Desktop` | net8.0-windows | WPF UI, MVVM, `Services/`(Discovery/ConnectionManager/LengthSelectionCoordinator), `ViewModels/`(LengthWorkflowViewModel, AreaWorkflowViewModel, VerticalAreaWorkflowViewModel, ParapetWorkflowViewModel, LengthSourceSelector 등) | WPF |
+| `CADWorkAssistant.Persistence` | **net8.0만** (Infrastructure와 달리 net48 없음) | Project/QuantityRecord/ActivityRecord/DrawingFile/ExportRecord/RecentMeasurement SQLite 영속화 (`Microsoft.Data.Sqlite`, raw ADO.NET). Migrations/(스키마 버전 관리), Repositories/(6쌍), `ProjectDataService`(교차 테이블 트랜잭션) | 없음 (Desktop만 참조, AutoCAD Plugin은 참조하지 않음 — §8.6) |
+| `CADWorkAssistant.Desktop` | net8.0-windows | WPF UI, MVVM, `Services/`(Discovery/ConnectionManager/LengthSelectionCoordinator/ProjectContextService), `ViewModels/`(LengthWorkflowViewModel, AreaWorkflowViewModel, VerticalAreaWorkflowViewModel, ParapetWorkflowViewModel, LengthSourceSelector, ProjectDialogViewModel 등) | WPF |
 | `CADWorkAssistant.AutoCAD` | net48 | AutoCAD Managed API 연동, IPC Handler(Ping/GetApplicationInfo/GetDrawingContext/SelectLengthObjects/SelectAreaObjects), 원본 DWG 보호/Undo 그룹 처리 | AutoCAD 2024 Managed API |
 | `CADWorkAssistant.FakeAutoCad` (`tools/`) | net8.0 | AutoCAD 없이 개발/테스트하기 위한 Headless Simulation Host. `AutoCAD.Ipc.Handlers`와 **똑같은 IPC 프로토콜/서버 코드**를 재사용, Handler만 Scenario 기반 canned data로 교체. 설치 프로그램에 포함 안 함 (§73) | 없음 |
 | `*.Tests` | net8.0 | Core/Infrastructure 로직 단위 테스트 + Integration.Tests는 FakeAutoCad를 실제 프로세스로 띄워 실제 Named Pipe로 검증 | 없음 (AutoCAD 미설치 환경에서도 실행 가능) |
@@ -270,6 +271,44 @@ Desktop.ViewModels.DrawingWorkflowViewModel (Navigation+Selection 통합, §80)
 정확히 되돌리는" 책임이 핵심이라, 상태를 어디서 스냅샷하고 언제 지우는지가 Length/Area의 "선택 →
 계산 → 저장"보다 훨씬 중요하다(`DrawingIsolationState`, §45-46).
 
+## 8.6 Persistence Architecture (Milestone 6)
+
+§6-8.5는 전부 "AutoCAD에서 값을 가져온다"는 방향이었다. Persistence는 반대 방향이다 -
+Desktop이 만든 데이터(Project/QuantityRecord/ActivityRecord/DrawingFile/ExportRecord/
+RecentMeasurement)를 로컬 SQLite에 남겨 프로세스 재시작 후에도 유지한다. AutoCAD Managed
+API를 전혀 새로 쓰지 않는 유일한 Milestone이다. 스키마/마이그레이션/트랜잭션/테스트 전략의
+자세한 내용은 [`PERSISTENCE.md`](./PERSISTENCE.md) 참고, 여기서는 호출 구조만 요약한다:
+
+```text
+Desktop.ViewModels (Length/Area/VerticalArea/Parapet/Export WorkflowViewModel)
+  │ RecordAdded / ExportCompleted 이벤트 (Project를 전혀 모름 - 기존 Milestone 2-5 패턴 그대로)
+  ▼
+Desktop.ViewModels.MainWindowViewModel
+  │ 이벤트를 구독해 QuantityRecord.ProjectId를 채우고 IProjectContextService에 위임
+  ▼
+Desktop.Services.ProjectContextService (IProjectContextService)
+  │ CurrentProject 없음 → 메모리 전용("빠른 세션")
+  │ CurrentProject 있음 → ProjectDataService로 위임
+  ▼
+CADWorkAssistant.Persistence.ProjectDataService
+  │ 커넥션+트랜잭션을 열어 여러 Repository를 조립 (예: QuantityRecord+ActivityRecord 원자적 저장)
+  ▼
+CADWorkAssistant.Persistence.Repositories.Sqlite*Repository (6쌍)
+  │ 매 호출마다 SqliteConnection을 받는 상태 없는(stateless) 클래스
+  ▼
+CADWorkAssistant.Persistence.CadWorkAssistantDatabase
+  │ 경로 결정(%LOCALAPPDATA%\CADWorkAssistant\data\, CWA_DATABASE_PATH override) + PRAGMA(WAL/
+  │ foreign_keys/busy_timeout) + DatabaseMigrator.MigrateToLatest(PRAGMA user_version 기반)
+  ▼
+Microsoft.Data.Sqlite → cadworkassistant.db (WAL)
+```
+
+**다른 Milestone과 다른 점**: AutoCAD Managed API가 전혀 등장하지 않는다 - `DrawingFile` 등록에
+쓰는 `FullPath`/`Units`조차 Milestone 1의 기존 `GetDrawingContext` 응답을 재사용한다. 대신 "DB
+파일을 프로세스 재시작 사이에 정확히 보존한다"는 책임이 핵심이라, Level 1/2 테스트가 `:memory:`
+DB가 아니라 실제 파일 기반이어야 의미가 있었다(`PERSISTENCE.md` §8) - 다른 Milestone들의
+FakeAutoCad Headless E2E와 같은 위치를 실제 파일 SQLite가 대신한다.
+
 ## 9. Desktop App 구조 (MVVM)
 
 - `*.xaml` — 뷰 (구조/레이아웃/스타일), `Themes/DesignTokens.xaml`에 색상·타이포·spacing 토큰 정의
@@ -282,7 +321,7 @@ Desktop.ViewModels.DrawingWorkflowViewModel (Navigation+Selection 통합, §80)
 
 - **Logging**: Serilog, 파일 싱크. 경로: `%LOCALAPPDATA%\CADWorkAssistant\logs\yyyy-MM-dd.log`, 일 단위 롤링. 도면 내부 좌표/치수 등 민감할 수 있는 상세 데이터는 Verbose 레벨에서만 기록하고 기본 레벨(Information)에는 요약만 남긴다 (§25).
 - **Settings**: `%APPDATA%\CADWorkAssistant\settings.json`, `System.Text.Json` 직렬화. 소수점 자릿수(길이/면적 별도), 기본 단위 표시 등 사용자 환경설정을 저장한다 (§21).
-- **Project/Quantity 데이터**: SQLite는 실제 Quantity Sheet 기능(Milestone 4) 구현 시점에 도입한다. 지금 시점에 스키마를 미리 설계하지 않는다 (§34 조기 구현 금지).
+- **Project/Quantity 데이터**: SQLite(`%LOCALAPPDATA%\CADWorkAssistant\data\cadworkassistant.db`, WAL 모드), Milestone 6에서 구현 완료. 자세한 스키마/마이그레이션/트랜잭션 설계는 §8.6, [`PERSISTENCE.md`](./PERSISTENCE.md) 참고.
 
 ## 11. 의사결정 로그
 
@@ -314,13 +353,18 @@ Desktop.ViewModels.DrawingWorkflowViewModel (Navigation+Selection 통합, §80)
 | Vertical Area/Parapet 결과 표시를 3자리로, Area는 2자리로 유지(같은 `AreaFormatter`를 다른 `decimalPlaces` 인자로 호출) | Area처럼 2자리로 통일 | Milestone 4 마스터 요구사항의 모든 실무값 예시(25.594/29.514/69.054)가 정확히 3자리였다 - 회귀 테스트로 고정된 값이라 임의로 바꿀 수 없었고, Area의 기존 2자리 결정(Milestone 3)도 그 나름의 근거가 있어 함께 바꾸지 않았다 |
 | Vertical Area/Parapet Workflow State를 enum이 아니라 `IsReady`/`IsInvalidHeight` 등 개별 bool로 표현 | Length/Area처럼 `VerticalAreaWorkflowState` enum 사용 | 실시간 계산(버튼 클릭 없이 입력마다 재계산)이라 "성공 순간"이 따로 없다 - 실제로 enum을 먼저 만들었다가 구현 중 쓰이지 않는 상태가 대부분이라 제거했다(§62) |
 | `LengthWorkflowViewModel.LastResult` 갱신 시 `OnPropertyChanged(nameof(LastResult))` 명시적 호출 추가 | 계산된 값만 맞으면 충분하다고 가정 | Simulation Mode 수동 검증 중 "최근 측정값 사용" 라디오가 Length 쪽 새 측정 완료 후에도 계속 비활성화 상태로 멈춰 있는 것을 실제로 발견했다 - `LastResult`가 PropertyChanged 없이 계산 전용 프로퍼티였던 것이 원인 |
+| Persistence: `Microsoft.Data.Sqlite` raw ADO.NET | Entity Framework Core | 테이블 6개, 대부분 단순 CRUD - EF Core의 마이그레이션 도구/Change Tracking 오버헤드가 이 규모에서는 이득보다 비용이 크다. CommunityToolkit.Mvvm/MediatR을 거절한 것과 같은 기준(§39, "이 규모에 과함") |
+| `CADWorkAssistant.Persistence`를 net8.0 전용 새 프로젝트로 분리 | 기존 `CADWorkAssistant.Infrastructure`(net48;net8.0)에 추가 | Infrastructure는 net48 AutoCAD Plugin이 참조한다 - Plugin이 SQLite 의존성을 갖게 되는 걸 원천 차단하려면 별도 프로젝트가 필요하다(마스터 프롬프트 §4, "AutoCAD Plugin → IPC → Desktop/Core → Persistence") |
+| 스키마 버전 관리: `PRAGMA user_version` + `IMigration` 순서 적용 | 별도 SchemaVersion 테이블 | SQLite에 이미 내장된 정수 하나로 충분하다 - 별도 테이블은 그 자체로 하나의 스키마 결정이 더 필요해진다 |
+| `decimal`은 TEXT(InvariantCulture), `DateTimeOffset`은 UTC ISO-8601 "O" TEXT로 저장 | `decimal`은 REAL, `DateTimeOffset`은 Unix timestamp(INTEGER) | SQLite REAL은 IEEE754 부동소수점이라 `255.941` 같은 실무 계산값의 정밀도가 깨질 위험이 있다(§143 기존 회귀 보호 대상과 같은 값 형태). ISO-8601 TEXT는 사전식 정렬이 곧 시간순 정렬이 되고 사람이 읽어도 바로 이해된다 |
+| `ObjectHandlesJson`/`CalculationMetadataJson`을 JSON TEXT 컬럼으로 저장 | 각각 별도 child table (`QuantityRecordHandle`, `QuantityRecordMetadata`) | 지금 이 값들을 SQL로 개별 쿼리할 필요가 없고(§28), Vertical Area/Parapet처럼 필드가 늘어날 수 있는 구조라 스키마 유연성이 더 중요했다 |
+| Repository는 `SqliteConnection`을 매 호출 인자로 받는 상태 없는 클래스, 커넥션은 작업마다 열고 닫음 | Repository가 장수명 커넥션을 필드로 소유 | SQLite 파일 연결은 비용이 낮고 WAL+busy_timeout으로 동시 접근을 다룰 수 있다 - 장수명 공유 커넥션을 여러 스레드(UI+백그라운드)에서 쓰는 스레드 안전성 복잡도를 피했다 |
+| Project 삭제는 이번 Milestone에 구현하지 않음(스키마는 FK CASCADE로 대비) | QuantityRecord처럼 바로 구현 | 마스터 프롬프트 §170 필수 Acceptance Criteria 목록에 없다("필요할 때 구현한다" 원칙, CLAUDE.md 절대 원칙 6). QuantityRecord 삭제는 명시적으로 요구되어 구현했다 |
+| "최근 측정값 사용"의 앱 재시작 후 DB 기반 자동 복구는 연결하지 않음(테이블/저장은 실제로 동작) | `LengthSourceSelector` 초기화 시 DB에서 자동 로드 | 마스터 프롬프트 §92 자체가 "구현한다면"이라는 조건부 표현이었다 - 확실히 요구된 범위가 아니다 |
+| `DateTimeStyles.RoundtripKind`만 사용(AssumeUniversal 제거) | `RoundtripKind \| AssumeUniversal` 조합 | 실제로 조합해서 써봤더니 항상 `ArgumentException`(상호 배타적) - `ToDbText`가 이미 UTC Kind로 "O" 포맷을 쓰므로 문자열에 'Z'가 항상 붙어 RoundtripKind 하나로 충분했다. Persistence 단위 테스트를 실제로 돌려서 발견했다 |
 
 ## 12. 아직 결정하지 않은 것 (의도적으로 보류)
 
-- SQLite 접근 방식(Raw ADO.NET vs Dapper vs EF Core) — 산출내역이 프로그램 재시작 후에도 남아야
-  하는 시점(과거 Roadmap의 "Milestone 4 Quantity Sheet" 범위)에 착수 시 결정. Vertical Area/Parapet
-  자체는 SQLite가 필요 없었다 - 기존 Length/Area와 같은 방식으로 메모리상의 Quantity Sheet에만
-  추가된다
 - Excel 라이브러리(ClosedXML 후보) — Excel Export 착수 시 라이선스/유지보수 재확인 후 결정
 - PDF 라이브러리 — PDF Export 착수 시 결정 (QuestPDF는 회사 규모에 따라 상업 라이선스 필요할 수 있어 확인 필요)
 - Installer(Inno Setup vs MSIX) — 첫 배포 가능한 빌드가 나온 뒤 결정
