@@ -64,6 +64,7 @@ Desktop(net8.0, 별도 프로세스)과 Plugin(net48, `acad.exe` in-process)은 
 | `GetDrawingContext` | 없음 | `DrawingContext`(DocumentDisplayName, FullPath, IsSaved, IsReadOnly, Layout, Units, DocumentCount) | 열린 문서가 없으면 `NoActiveDocument` 오류 |
 | `SelectLengthObjects`(Milestone 2) | 없음 | `LengthSelectionResponse`(Objects, ExcludedObjectTypeNames, Unit) | Editor.GetSelection이 사용자 입력을 기다린다 - Command Context에서 실행 (§5.5). 집계/변환은 AutoCAD Plugin이 아니라 Core.Length가 한다 |
 | `SelectAreaObjects`(Milestone 3) | 없음 | `AreaSelectionResponse`(Objects, ExcludedObjectTypeNames, Unit) | SelectLengthObjects와 같은 Command Context 경로(§5.5, §5.6). 분류(Valid/Open/Unsupported/InvalidGeometry)/합산/변환은 AutoCAD Plugin이 아니라 Core.Area가 한다 |
+| `GetDrawingOverview`/`ZoomExtents`/`ZoomToBounds`/`SelectDrawingObjects`/`IsolateObjects`/`GetLayers`/`SetLayerVisibility`/`RestoreVisibility`/`ExportSelection`(Milestone 5) | 각각 다름 | 각각 다름 | Drawing Navigation 9개 명령 - 자세한 API/설계는 [`DRAWING_NAVIGATION.md`](./DRAWING_NAVIGATION.md) 참고. `SelectDrawingObjects`만 Command Context(GetPoint+GetCorner+SelectWindow/CrossingWindow), 나머지 8개는 ApplicationContext |
 
 향후 명령은 `Core/Ipc/IpcMessageTypes.cs`에 상수를 추가하고 `CADWorkAssistant.AutoCAD/Ipc/Handlers/`에 `IIpcRequestHandler` 구현을 추가하는 것으로 확장한다 — 거대한 switch문을 두지 않는다.
 
@@ -194,6 +195,7 @@ Autodesk.AutoCAD.Runtime.Exception (acdbmgd.dll)
 - **읽기 전용 작업** (길이/면적 조회 등): `Database.TransactionManager.StartTransaction()`을 읽기 용도로만 사용하고 `Commit()` 대신 `Dispose()`(자동 Abort)로 종료. `Database.SaveAs`/`qsave`는 어떤 경로로도 자동 호출하지 않는다.
 - **변경 작업** (Text 삽입, Export 등): 실행 전 사용자 확인 UI를 거치고, `Editor.Command`/Transaction을 하나의 논리적 단위로 묶어 AutoCAD Undo 스택에 단일 항목으로 남도록 한다.
 - 이 규칙은 코드 리뷰 체크리스트에도 반영한다 — Plugin 코드에서 `Commit()`을 호출하는 모든 지점은 "왜 도면을 변경해야 하는가"가 명확해야 한다.
+- **Milestone 5 Isolation의 예외**: `IsolateObjectsHandler`/`SetLayerVisibilityHandler`/`RestoreVisibilityHandler`는 `Entity.Visible`/`LayerTableRecord.IsOff`를 바꾸고 `Commit()`한다 - 원본 파일을 자동 저장하지는 않지만(위 원칙 그대로 지킴), `Entity.Visible`은 DXF group code 60에 대응하는 진짜 Database 프로퍼티라 AutoCAD의 "수정됨" 상태/Undo 스택에 흔적을 남길 가능성이 높다. 실제 동작은 Real AutoCAD에서만 확인 가능하다 - [`DRAWING_NAVIGATION.md`](./DRAWING_NAVIGATION.md) "Isolation/Restore 설계" 참고.
 
 ## 7. 단위 처리
 

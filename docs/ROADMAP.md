@@ -180,7 +180,68 @@ Empty State만 이번 범위), 전체 Nav 항목에 대한 실제 키보드 단�
 바인딩으로 동작하고, hover 상태에서도 모든 버튼 텍스트가 legible하며, 연결 상태가 색상 없이도
 구분 가능하다. → **Simulation Mode 시각 재검증(스크린샷 + UI Automation)으로 완전히 충족**.
 
-## Milestone 5 — Quantity Sheet Persistence
+## Milestone 5 — Drawing Navigation + Layer Isolation + Selection + WBLOCK Extraction
+
+**상태: 코드/자동 테스트/Simulation Mode 종단간 검증 완료, 실제 AutoCAD GUI 검증만 남음 (2026-08-08)**
+
+복잡한 DWG 안에서 필요한 도면/객체를 빠르게 찾고, 집중해서 보고, 안전하게 분리해 별도 DWG로
+추출하는 기능. 원래 로드맵에서 별도 Milestone(8 Drawing Export, 9 Layer Tools)으로 나눠뒀던
+범위를 하나로 묶어 먼저 진행했다 - Selection/Isolation/Layer/Export가 전부 같은
+`SelectionSession` 하나를 공유하는 한 흐름이라 따로 만들면 상태를 중복해서 관리하게 된다.
+자세한 아키텍처/실기 검증 대상 구분은 `docs/DRAWING_NAVIGATION.md` 참고.
+
+- [x] Core DTO/집계 로직(`Core.Drawing`) - `CadBoundsDto`/`BoundsAggregator`(NaN/Infinity 방어,
+      union 계산)/`CadSelectedObjectDto`/`SelectionSession`/`DrawingSelectionSummary`(타입별/
+      Layer별 집계)/`CadLayerDto`/`ExportFileNameService`(파일명 제안+살균) - AutoCAD 비의존,
+      단위 테스트 27개(추가로 130개 Core.Tests 전체 통과 유지)
+- [x] IPC 명령 9개 추가(`GetDrawingOverview`/`ZoomExtents`/`ZoomToBounds`/`SelectDrawingObjects`/
+      `IsolateObjects`/`GetLayers`/`SetLayerVisibility`/`RestoreVisibility`/`ExportSelection`) -
+      13개 후보를 의미 단위로 통합(예: Selection+GetSelectedObjects를 하나로, Layer Isolate/
+      Restore를 개별 토글과 같은 명령으로)
+- [x] AutoCAD Handler 9개 구현 - 전부 실제 설치된 AutoCAD 2024 Managed API(acdbmgd.dll/acmgd.dll)를
+      리플렉션으로 실존 확인 후 사용(추측 금지 원칙). Zoom은 `_ZOOM _E` 명령 문자열 대신
+      `Matrix3d.PlaneToWorld`+`Editor.SetCurrentView` 기반 View 계산으로 구현(§22).
+      Isolate/Restore는 `Entity.Visible` 토글 + `DrawingIsolationState`(Plugin 내 공유 상태)로
+      "복원 = 작업 전 정확한 상태"를 보장(§45-46, 아래 참고). Export는
+      `Database.Wblock(ObjectIdCollection, Point3d)` + `SaveAs`로 원본 Database를 건드리지 않는다
+- [x] FakeAutoCad Handler 9개 + `FakeDrawingState`(Fake 프로세스가 Layer On/Off 상태를 자체적으로
+      추적해 Isolate→Restore 왕복을 실제 Named Pipe로 검증 가능하게 함) + Scenario 9개
+      (DrawingNavigationNormal 등)
+- [x] Headless Integration E2E 15개 - Select→Zoom→Isolate→Restore, **Layer Restore가 "전부 On"이
+      아니라 원래 Off였던 Layer(A-DOOR)까지 정확히 복원하는지 검증**(§45-46 핵심 원칙), 현재
+      Layer 보호, Export 성공/실패/빈 선택, Selection 실패 4종(Cancel/Timeout/Disconnect/Error),
+      1,000개 객체 성능(CADWorkAssistant.Integration.Tests 총 54개로 확대)
+- [x] Desktop: `DrawingWorkflowViewModel`(Navigation+Selection 통합, §80) + `LayerWorkflowViewModel`
+      (조회/실제 동작하는 검색 필터/개별 토글/"선택 Layer만 보기") + `ExportWorkflowViewModel`
+      (설명 입력 시 파일명 실시간 미리보기 + native `SaveFileDialog`) - 3개로 분리하되 거대한 단일
+      ViewModel은 만들지 않음(§83)
+- [x] `DrawingPanel.xaml` - Milestone 4.5의 Production Design System 그대로 사용(새 색상/버튼
+      스타일 없음). Selection 결과 | Layer Manager 2단 분할(GridSplitter), Isolation 상태 배너,
+      Property Inspector에 Drawing 전용 Row 추가
+- [x] Navigation: Selection/Layers/Export를 별도 페이지로 예약해뒀던 것을 제거하고 Drawing 하나로
+      통합, `isImplemented: true`로 전환
+- [x] Simulation Mode 실제 렌더링으로 버그 2건 발견/수정 - (1) `OnActivated()`가 `IsBusy` 경쟁
+      상태 때문에 Layer Manager를 절대 채우지 못했던 문제, (2) `DataGridCheckBoxColumn`의 기본
+      TwoWay 바인딩이 읽기 전용 속성(`IsFrozen`/`IsLocked`)에서 처리되지 않은 예외를 던져 Layer
+      Manager 전체가 빈 채로 남았던 문제 - 둘 다 `docs/DRAWING_NAVIGATION.md`에 상세 기록
+- [x] `docs/DRAWING_NAVIGATION.md`(신규), `docs/AUTOCAD_REAL_MACHINE_CHECKLIST.md` Milestone 5
+      섹션 대폭 추가(Zoom/Selection/Isolation/Layer/WBLOCK 각각), `design-system/pages/
+      drawing-workspace.md`(신규)
+- [ ] **실제 AutoCAD 2024 GUI로 검증** - 이 Milestone은 이전 Milestone들과 달리 AutoCAD 의존성이
+      높다(View 조작/인터랙티브 선택/Entity Visible 변경/WBLOCK 전부 실물에서만 최종 확인 가능).
+      항목은 `docs/AUTOCAD_REAL_MACHINE_CHECKLIST.md` Milestone 5 섹션에 정리(약 45개 세부 항목)
+
+**의도적으로 하지 않은 것**: Freeze/Thaw 토글(조회만, §42), Object Hide(선택 안 한 것만 끄기 -
+Isolate가 핵심 요구를 이미 충족), Zoom Window(AutoCAD 자체 기능과 중복도 높음, §25), Polygon
+Selection UI(Window/Crossing으로 핵심 요구 충족, API 존재는 확인해둠), Xref 특수 처리, Drawing
+Cluster 자동 탐지(§65, 이번엔 그 기반인 Zoom/Selection/Bounds만 구축).
+
+**완료 기준**: 영역을 선택하고, 화면에 맞추고, 선택한 것만 보고, 필요하면 Layer까지 격리했다가,
+전부 정확히 원래대로 복원하고, 선택한 객체를 원본 손상 없이 새 DWG로 저장할 수 있다. →
+**Headless Simulation + Simulation Mode 수동 검증으로 완전히 충족**(Zoom의 시각적 정확성과 WBLOCK
+결과물의 완전성은 예외 - 실제 DWG/AutoCAD 기준 최종 확인만 남았다).
+
+## Milestone 6 — Quantity Sheet Persistence
 
 - [ ] SQLite 스키마 설계 (Project, QuantityItem, CalculationHistory)
 - [ ] 현재 메모리상에만 있는 Quantity Sheet(Length/Area/Vertical Area/Parapet의 "산출내역 추가"는
@@ -189,41 +250,31 @@ Empty State만 이번 범위), 전체 Nav 항목에 대한 실제 키보드 단�
 - [ ] 계산 근거(산식) 보존은 `QuantityRecord.CalculationExpression`으로 이미 구현됨 - 영속화 시
       그대로 저장
 
-## Milestone 6 — Quantity History & 검산
+## Milestone 7 — Quantity History & 검산
 
 - [ ] 계산 이력 화면 (AutoCAD Handle 저장 → 원본 객체 재탐색)
 - [ ] 수량 검산 경고 (Area/Perimeter/Compactness 기반, 단순 임계값 아님)
 
-## Milestone 7 — Excel Export
+## Milestone 8 — Excel Export
 
 - [ ] Excel 라이브러리 선정(라이선스/유지보수 확인)
 - [ ] 산출내역 → Excel/CSV 내보내기
 
-## Milestone 8 — Drawing Export (부분 추출)
-
-- [ ] 영역/객체 선택 → WBLOCK 기반 별도 DWG 저장
-- [ ] 파일명 자동 제안
-
-## Milestone 9 — Layer Tools
-
-- [ ] Layer 목록/On-Off/Freeze
-- [ ] 선택 객체만 보기 / 선택 Layer만 보기 / 전체 복원
-
-## Milestone 10 — Plot / PDF
+## Milestone 9 — Plot / PDF
 
 - [ ] Plot 설정 화면 + 프리셋 (A3/A4, 컬러/흑백)
 - [ ] 기존 CTB/STB 안전하게 확인 후 적용
 
-## Milestone 11 — Text Tools
+## Milestone 10 — Text Tools
 
 - [ ] Text/MText 생성, 높이/색상/레이어 수정
 
-## Milestone 12 — Project Manager 고도화
+## Milestone 11 — Project Manager 고도화
 
 - [ ] 프로젝트 목록/검색, 최근 프로젝트
 - [ ] Files/PDF/Report 연결
 
-## Milestone 13+ — Advanced Drawing Analysis (장기)
+## Milestone 12+ — Advanced Drawing Analysis (장기)
 
 - [ ] Drawing Cluster 자동 탐지(도면 영역 구분)
 - [ ] Drawing Intelligence (평면도/실내마감표/단면도 자동 구분)

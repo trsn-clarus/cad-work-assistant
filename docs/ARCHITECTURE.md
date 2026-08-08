@@ -236,6 +236,40 @@ Simulation Mode 수동 검증 중 이 알림 호출이 빠져 있어서 "최근 
 새 측정이 끝나도 계속 비활성화 상태로 멈춰 있는 버그를 실제로 발견하고 고쳤다 - 계산된 값 자체는
 맞았지만 WPF 바인딩이 그 사실을 몰랐던 경우다.
 
+## 8.5 Drawing Navigation Architecture (Milestone 5)
+
+Length/Area/Vertical Area/Parapet(§6-8)은 전부 "값 하나를 계산해서 보여준다"였다. Drawing
+Navigation은 성격이 다르다 - 계산이 아니라 탐색/선택/일시적 표시 변경/파일 추출이 목적이다. 자세한
+설계(IPC 명령 통합 근거, Isolation/Restore 정확성 보장 방식, WBLOCK 원리, Real AutoCAD 검증
+대상)는 [`DRAWING_NAVIGATION.md`](./DRAWING_NAVIGATION.md) 참고. 여기서는 호출 구조만 요약한다:
+
+```text
+AutoCAD Plugin - 9개 신규 Handler (Ipc/Handlers/*.cs)
+  GetDrawingOverview/ZoomExtents/ZoomToBounds - ApplicationContext(비인터랙티브)
+  SelectDrawingObjects - CommandContext(Editor.GetPoint+GetCorner+SelectWindow/CrossingWindow,
+    Length/Area의 GetSelection과 달리 사용자가 직접 두 모서리를 지정하는 인터랙션)
+  IsolateObjects/SetLayerVisibility/RestoreVisibility - ApplicationContext, 셋이
+    DrawingIsolationState(Plugin 내 공유 인스턴스)를 통해 "복원 = 변경 직전 정확한 상태"를 보장
+  ExportSelection - ApplicationContext, Database.Wblock+SaveAs로 원본 Database 비수정
+        │
+        ▼
+CADWorkAssistant.Core.Drawing (AutoCAD 비의존, 단위 테스트됨)
+  - SelectionSession: 한 번의 선택 결과(Handle/타입별·Layer별 집계/합산 Bounds)를 담아
+    Zoom/Isolate/Export가 재사용한다 - Selection을 반복하지 않는다
+  - BoundsAggregator: 여러 Bounds의 union, NaN/Infinity 방어
+  - ExportFileNameService: 파일명 제안("원본_설명.dwg")/Windows 금지문자 살균
+        │
+        ▼
+Desktop.ViewModels.DrawingWorkflowViewModel (Navigation+Selection 통합, §80)
+  ├── LayerWorkflowViewModel (조회/실제 동작하는 검색 필터/개별 토글/"선택 Layer만 보기")
+  └── ExportWorkflowViewModel (설명 → 파일명 실시간 미리보기 → native SaveFileDialog)
+```
+
+**Length/Area/Parapet과 다른 점**: 이번 Milestone은 AutoCAD Managed API를 새로 9개나 쓰면서도
+계산 로직은 거의 없다(Core.Drawing은 집계/문자열 유틸뿐) - 대신 "AutoCAD의 실제 표시 상태를 바꿨다가
+정확히 되돌리는" 책임이 핵심이라, 상태를 어디서 스냅샷하고 언제 지우는지가 Length/Area의 "선택 →
+계산 → 저장"보다 훨씬 중요하다(`DrawingIsolationState`, §45-46).
+
 ## 9. Desktop App 구조 (MVVM)
 
 - `*.xaml` — 뷰 (구조/레이아웃/스타일), `Themes/DesignTokens.xaml`에 색상·타이포·spacing 토큰 정의

@@ -76,6 +76,79 @@ Level 1(Unit)/Level 2(Headless Integration) 테스트로 커버할 수 없는, �
 - [ ] 높이/상부 폭 단위(mm/cm/m) 조합별 계산 확인
 - [ ] "산출내역 추가" → Dashboard에 정확한 값/산식으로 반영
 
+## Milestone 5 — Drawing Navigation + Layer Isolation + Selection + WBLOCK Export
+
+이 Milestone은 이전 Milestone들과 달리 AutoCAD 의존성이 높다 - View 조작(Zoom)/인터랙티브 영역
+선택/Entity Visible 변경/Layer 상태 변경/WBLOCK 전부 실제 AutoCAD 화면과 파일 시스템에서만 최종
+검증할 수 있다 (`docs/DRAWING_NAVIGATION.md` 참고, 어떤 게 Headless로 이미 검증됐고 어떤 게 여기
+남았는지 문서화되어 있다).
+
+### Zoom (§21-25) — 가장 먼저 확인해야 할 항목
+
+`DrawingZoomService`의 WCS→DCS 변환(Matrix3d.PlaneToWorld + Target 이동 + ViewTwist 회전 후 역행렬)은
+표준적으로 알려진 기법을 따랐지만, 실제 AutoCAD 화면 없이는 단 한 번도 시각적으로 검증하지 못했다.
+
+- [ ] Zoom Extents - 도면 전체가 화면에 딱 맞게(10% 여백 포함) 보이는지
+- [ ] Zoom Selection - 선택한 객체들만 화면에 맞게 보이는지, 선택 밖 영역이 과도하게 잘리거나 남지 않는지
+- [ ] 매우 큰 모델(좌표 범위가 넓은 도면)에서 Zoom Extents
+- [ ] 음수 좌표를 포함한 도면에서 Zoom
+- [ ] 여러 도면이 동시에 열려 있을 때 - 활성 도면에만 Zoom이 적용되는지
+- [ ] Model Space ↔ Layout 전환 후 Zoom가 여전히 정확한지
+- [ ] View가 회전(ViewTwist ≠ 0)되어 있거나 등각뷰(Isometric) 등 정면이 아닌 뷰에서 Zoom - `DrawingZoomService`가 이 경우까지 고려해 구현했지만 실사용 시나리오(정면 2D 평면도)에서만 우선 검증
+- [ ] 객체 1개(점 하나 크기)만 선택해서 Zoom Selection - 화면이 과도하게 확대되어 이상해지지 않는지 (최소 크기 보정 로직 확인)
+
+### Selection (§26-31)
+
+- [ ] Window 선택 - 영역 내부에 완전히 들어온 객체만 선택되는지
+- [ ] Crossing 선택 - 영역에 닿기만 해도 포함되는지
+- [ ] "첫 번째 모서리를 지정하세요" / "반대쪽 모서리를 지정하세요" 프롬프트가 자연스러운지, 고무줄 사각형이 정상적으로 그려지는지
+- [ ] 혼합 객체 타입 선택 (Polyline/Line/MText/BlockReference/Dimension 등)
+- [ ] 1개 객체, 100개 객체, 1,000개 객체 각각 선택
+- [ ] Esc로 선택 취소 → "선택이 취소되었습니다" (오류 아님)
+- [ ] 빈 영역 선택(아무 객체도 없는 곳) → 빈 목록으로 정상 처리되는지(AutoCAD 버전에 따라 PromptStatus가 다르게 올 수 있어 코드에서 이미 방어했지만 실기 확인 필요)
+
+### Object Isolation (§32-36, §104)
+
+- [ ] 선택 객체만 보기 → 나머지 객체가 실제로 화면에서 사라지는지
+- [ ] 전체 복원 → 정확히 원래 보이던 객체만 다시 보이는지 (Isolation 이전에 이미 안 보이던 객체까지 보이게 만들지 않는지)
+- [ ] Isolation 중 Entity.Visible 변경이 도면을 "수정됨" 상태로 표시하는지, 저장 확인 프롬프트가 뜨는지 - **뜬다면 사용자에게 어떻게 안내할지 결정 필요** (§104, 원본을 저장하지 않는다는 절대 원칙과 별개로 "수정됨 표시" 자체는 막지 못할 수 있다)
+- [ ] Isolation 중 Ctrl+Z(Undo)를 누르면 어떻게 되는지 - Isolation이 Undo 스택에 몇 단계로 남는지
+- [ ] Isolation 중 다른 객체가 이미 안 보이는(Off Layer 등) 상태였을 때 - 전체 복원 후에도 그 객체는 계속 안 보이는지
+- [ ] Isolation 중 AutoCAD를 닫으면(Plugin unload) - 복원 안 된 상태로 종료될 때 사용자 도면에 어떤 흔적이 남는지 (§36)
+
+### Layer (§37-48) — Restore 정확성이 가장 중요
+
+- [ ] Layer On/Off 토글이 실제로 화면에 반영되는지
+- [ ] "선택 Layer만 보기" - 선택 객체가 속한 Layer만 켜지고 나머지는 꺼지는지
+- [ ] 전체 복원 - Isolation 전 상태(예: 원래 Off였던 Layer)가 정확히 그대로 복원되는지, "전부 On"으로 잘못 복원되지 않는지 (§45-46, 가장 위험한 부분)
+- [ ] 현재 활성 Layer를 Off로 바꾸려는 시도 - `SetLayerVisibilityHandler`가 조용히 무시하는데, 실제 AutoCAD 동작(GUI로 직접 끌 때 나오는 경고 등)과 비교했을 때 사용자에게 혼란을 주지 않는지
+- [ ] Locked Layer의 On/Off 토글 - Lock 상태와 무관하게 정상 동작하는지
+- [ ] Xref가 포함된 도면의 Layer 목록/토글 동작
+- [ ] DEFPOINTS 등 특수 Layer의 On/Off 동작에 이상이 없는지
+- [ ] Layer가 매우 많은 도면(수백 개)에서 GetLayers 응답 시간
+- [ ] Isolation 도중 사용자가 AutoCAD에서 직접 Layer를 변경 - Restore가 그 변경을 덮어쓰는지, 어떤 결과가 나오는지 (§48, 완벽한 conflict resolution은 범위 밖이지만 실제 동작은 관찰해서 문서화)
+- [ ] Freeze/Thaw는 이번 Milestone에서 조회만 구현했다 - 실제 Frozen 상태가 `IsFrozen`에 정확히 반영되는지만 확인 (토글 기능 자체는 없음)
+
+### WBLOCK Export (§49-63, §78) — 가장 위험도가 높은 항목
+
+`Database.Wblock(ObjectIdCollection, Point3d)` + `SaveAs(path, DwgVersion.Current)`는 리플렉션으로
+시그니처 존재만 확인했다 - 실제 출력 파일의 정확성/완전성은 전혀 검증하지 못했다.
+
+- [ ] 단순 도형(Line/Polyline) Export → 새 DWG를 열어서 정확히 재현되는지
+- [ ] Text/MText Export → 폰트/스타일이 원본과 동일하게 보존되는지
+- [ ] BlockReference(단일/중첩 Block) Export → Block 정의가 함께 따라가는지, 중첩 Block도 정상인지
+- [ ] Dimension Export → Dimension Style이 함께 따라가는지
+- [ ] Hatch Export → 패턴/축척이 보존되는지
+- [ ] 여러 Layer에 걸친 객체 Export → 대상 Layer들이 새 DWG에 전부 생성되는지, 원본 Layer 설정(색상/선종류)이 유지되는지
+- [ ] Linetype이 Continuous가 아닌 객체 Export → Linetype 정의가 함께 따라가는지
+- [ ] TextStyle/DimStyle이 표준이 아닌 객체 Export → 스타일 정의가 함께 따라가는지
+- [ ] Xref를 포함한 선택 Export → 현재 범위 밖으로 명시했지만(§60) 실제로 어떻게 동작하는지(binding되는지, 깨지는지) 관찰 후 `docs/DRAWING_NAVIGATION.md`에 실제 동작 기록
+- [ ] Export 후 원본 도면(현재 활성 Document)이 전혀 변경되지 않았는지 - Database 상태, Undo 스택, 수정 플래그 전부 확인
+- [ ] Export한 새 DWG를 AutoCAD로 다시 열었을 때 오류/경고 없이 열리는지 ("도면 복구" 프롬프트가 뜨지 않는지)
+- [ ] 대상 폴더에 쓰기 권한이 없는 경우 - 에러 메시지가 사용자에게 이해 가능한 형태로 오는지
+- [ ] 같은 파일명이 이미 존재할 때 - SaveFileDialog의 덮어쓰기 확인이 정상 동작하는지(Desktop 쪽 기능이라 AutoCAD 재현 없이도 확인 가능하지만 전체 흐름에서 함께 확인)
+- [ ] 1,000개 이상 객체 Export - 응답 시간, UI 멈춤 여부
+
 ## 검증 방법 메모
 
 - 이 문서의 각 항목은 AutoCAD가 있는 머신에서 확인 후 `[ ]` → `[x]`로 바꾸고, 특이사항이 있으면 항목 옆에 메모를 남긴다.
