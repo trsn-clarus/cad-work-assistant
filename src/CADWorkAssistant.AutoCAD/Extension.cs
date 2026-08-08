@@ -24,13 +24,23 @@ public class Extension : IExtensionApplication
         Log.Information("CADWorkAssistant.AutoCAD plugin loaded");
 
         var dispatcher = new AutoCadDispatcher();
+        var isolationState = new DrawingIsolationState();
         var handlers = new IIpcRequestHandler[]
         {
             new PingHandler(),
             new GetApplicationInfoHandler(dispatcher),
             new GetDrawingContextHandler(dispatcher),
             new SelectLengthObjectsHandler(dispatcher),
-            new SelectAreaObjectsHandler(dispatcher)
+            new SelectAreaObjectsHandler(dispatcher),
+            new GetDrawingOverviewHandler(dispatcher),
+            new ZoomExtentsHandler(dispatcher),
+            new ZoomToBoundsHandler(dispatcher),
+            new SelectDrawingObjectsHandler(dispatcher),
+            new IsolateObjectsHandler(dispatcher, isolationState),
+            new GetLayersHandler(dispatcher),
+            new SetLayerVisibilityHandler(dispatcher, isolationState),
+            new RestoreVisibilityHandler(dispatcher, isolationState),
+            new ExportSelectionHandler(dispatcher)
         };
 
         _pipeServer = new AutoCadPipeServer(new IpcRequestDispatcher(handlers), Process.GetCurrentProcess().Id);
