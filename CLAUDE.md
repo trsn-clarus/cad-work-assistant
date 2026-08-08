@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-이 파일은 이 Repository에서 작업하는 Claude Code 세션을 위한 지침이다. 전체 요구사항 배경은 `docs/REQUIREMENTS.md`, 아키텍처 결정은 `docs/ARCHITECTURE.md`, 진행 상황은 `docs/ROADMAP.md`, AutoCAD 연동 세부사항은 `docs/AUTOCAD_INTEGRATION.md`를 참조한다.
+이 파일은 이 Repository에서 작업하는 Claude Code 세션을 위한 지침이다. 전체 요구사항 배경은 `docs/REQUIREMENTS.md`, 아키텍처 결정은 `docs/ARCHITECTURE.md`, 진행 상황은 `docs/ROADMAP.md`, AutoCAD 연동 세부사항은 `docs/AUTOCAD_INTEGRATION.md`, AutoCAD 없이 개발/테스트하는 방법은 `docs/TESTING_WITHOUT_AUTOCAD.md`를 참조한다.
 
 ## 프로젝트 한 줄 요약
 
@@ -14,34 +14,39 @@ AutoCAD 실무자가 매일 쓰는 Windows 설치형 업무 자동화 프로그�
 4. **사용자에게 원시 Exception/Stack Trace를 노출하지 않는다.** 이해 가능한 메시지 + "자세히 보기", Stack Trace는 로그 파일로.
 5. **경로/AutoCAD 버전/특정 PC 설정을 하드코딩하지 않는다.**
 6. **필요할 때 구현한다.** 다음 Milestone에서 쓸 기능을 미리 만들어두지 않는다 (`docs/ROADMAP.md` 순서를 따른다).
+7. **AutoCAD가 없어도 개발/테스트를 중단하지 않는다.** `CADWorkAssistant.FakeAutoCad`(실제 AutoCAD Plugin과 동일한 IPC 프로토콜/서버 코드를 쓰는 별도 프로세스)로 대부분의 기능을 종단간 검증할 수 있다 (`docs/TESTING_WITHOUT_AUTOCAD.md`).
 
 ## 현재 확인된 개발 환경 (2026-08-08 기준, 변경되면 갱신할 것)
 
 - 설치된 AutoCAD: **2024** (net48 기반 Managed API) → 이것 때문에 `CADWorkAssistant.AutoCAD` 프로젝트는 `net48`.
 - 다른 AutoCAD 버전이 설치된 PC에서 작업하게 되면 `docs/AUTOCAD_INTEGRATION.md` §9 절차를 따라 버전별 프로젝트를 추가할지 판단할 것 — 기존 net48 프로젝트를 함부로 바꾸지 않는다.
 - .NET SDK 8, Git 설치됨. Visual Studio는 없음 — `dotnet` CLI로 빌드/실행/테스트한다.
-- **이 PC에서 AutoCAD 2024 GUI를 실제로 띄우면 그래픽 드라이버가 불안정해진다** (Windows 이벤트 로그에 LiveKernelEvent 기록, Milestone 1에서 확인). AutoCAD Managed API 참조/컴파일은 정상 동작하므로 개발은 계속하되, NETLOAD 등 실제 GUI 연동 검증은 시도하기 전에 사용자에게 먼저 확인할 것 (`docs/AUTOCAD_INTEGRATION.md` §8).
+- **이 PC에서 AutoCAD 2024 GUI를 실제로 띄우면 그래픽 드라이버가 불안정해진다** (Windows 이벤트 로그에 LiveKernelEvent 기록, Milestone 1에서 확인). AutoCAD Managed API 참조/컴파일은 정상 동작하므로 개발은 계속하되, NETLOAD 등 실제 GUI 연동 검증은 시도하기 전에 사용자에게 먼저 확인할 것 (`docs/AUTOCAD_INTEGRATION.md` §8). 대신 `CADWorkAssistant.FakeAutoCad`로 Headless 검증을 표준으로 쓴다.
 
 ## 프로젝트 구조
 
 ```text
 src/
-  CADWorkAssistant.Core/            netstandard2.0 — 계산/도메인 로직, Core/Ipc(프로토콜), Core/Cad(DTO+상태머신). AutoCAD·WPF 의존 금지
-  CADWorkAssistant.Infrastructure/  netstandard2.0 — 로깅(Serilog), 설정(JSON), Infrastructure/Ipc(Pipe Framer/Client), (추후) SQLite
+  CADWorkAssistant.Core/            netstandard2.0 — 계산/도메인 로직. Core/Ipc(프로토콜), Core/Cad(DTO+상태머신), Core/Length(단위변환/집계/포맷). AutoCAD·WPF 의존 금지
+  CADWorkAssistant.Infrastructure/  net48;net8.0 (멀티타겟) — 로깅(Serilog), 설정(JSON), Ipc/(PipeMessageFramer/AutoCadPipeClient/AutoCadPipeServer - 전송 계층 전체)
   CADWorkAssistant.Documents/       netstandard2.0 — Excel/PDF/CSV export (필요 시점에 구현)
-  CADWorkAssistant.Desktop/         net8.0-windows — WPF, MVVM(자체 구현), Services/(Discovery/ConnectionManager), 진입점
-  CADWorkAssistant.AutoCAD/         net48 — AutoCAD Managed API, in-process plugin, Ipc/(Dispatcher/Handlers/PipeServer)
+  CADWorkAssistant.Desktop/         net8.0-windows — WPF, MVVM(자체 구현), Services/(Discovery/ConnectionManager), Views/(UserControl), 진입점
+  CADWorkAssistant.AutoCAD/         net48 — AutoCAD Managed API, in-process plugin, Ipc/Handlers/(Ping/GetApplicationInfo/GetDrawingContext/SelectLengthObjects)
+tools/
+  CADWorkAssistant.FakeAutoCad/     net8.0 — Headless AutoCAD Simulation Host (실행 가능 콘솔 앱). AutoCAD Plugin과 동일한 서버 코드 재사용. 설치본에 포함 안 함
 tests/
   CADWorkAssistant.Core.Tests/          — Core+Infrastructure 단위 테스트 (AutoCAD 불필요)
-  CADWorkAssistant.Integration.Tests/   — 실제 Named Pipe로 Fake AutoCAD 서버 상대 종단간 테스트 (AutoCAD 불필요) + 향후 AutoCAD 전용 테스트
+  CADWorkAssistant.Integration.Tests/   — FakeAutoCad를 실제 프로세스로 띄워 실제 Named Pipe로 종단간 테스트 (AutoCAD 불필요)
 design-system/   — UI 시각 규칙 단일 소스 (색상/타이포/spacing/컴포넌트/안티패턴). UI 작업 전 반드시 확인
-docs/    — ARCHITECTURE / ROADMAP / REQUIREMENTS / AUTOCAD_INTEGRATION / UI_ENVIRONMENT_SETUP
+docs/    — ARCHITECTURE / ROADMAP / REQUIREMENTS / AUTOCAD_INTEGRATION / TESTING_WITHOUT_AUTOCAD / AUTOCAD_REAL_MACHINE_CHECKLIST / UI_ENVIRONMENT_SETUP
 installer/, samples/
 ```
 
 MVVM은 외부 패키지 없이 직접 구현한 `ObservableObject`/`RelayCommand`(`src/CADWorkAssistant.Desktop/Common/`, `ViewModels/`)를 쓴다. CommunityToolkit.Mvvm 같은 패키지로 바꿀 필요가 생기기 전까지 추가하지 않는다.
 
-Desktop(별도 프로세스)과 AutoCAD Plugin(in-process, net48)은 **Named Pipe + JSON**으로 통신한다 (Milestone 1에서 구현 완료). 자세한 프로토콜/호출 경로는 `docs/ARCHITECTURE.md` §5, `docs/AUTOCAD_INTEGRATION.md` §5.
+Desktop(별도 프로세스)과 AutoCAD Plugin(in-process, net48)은 **Named Pipe + JSON**으로 통신한다. 자세한 프로토콜/호출 경로는 `docs/ARCHITECTURE.md` §5-6, `docs/AUTOCAD_INTEGRATION.md` §5.
+
+새 AutoCAD 명령(Area 등)을 추가할 때: (1) `Core/Ipc/IpcMessageTypes.cs`에 상수 추가, (2) 필요하면 `Core/`에 요청/응답 DTO와 도메인 계산 로직(AutoCAD 비의존, 단위 테스트 가능하게) 추가, (3) `AutoCAD/Ipc/Handlers/`에 실제 Handler 구현, (4) `FakeAutoCad/Handlers/`에 대응하는 Fake Handler + `ScenarioCatalog`에 Scenario 추가, (5) `Extension.cs`/`FakeAutoCad/Program.cs` 양쪽의 handler 배열에 등록. AutoCAD 원본 API 사용 전에는 항상 리플렉션으로 실존을 확인한다 - 추측 금지.
 
 ## 빌드 / 테스트
 
@@ -49,16 +54,22 @@ Desktop(별도 프로세스)과 AutoCAD Plugin(in-process, net48)은 **Named Pip
 dotnet build CADWorkAssistant.sln
 dotnet test CADWorkAssistant.sln
 dotnet run --project src/CADWorkAssistant.Desktop
+
+# Simulation Mode로 Desktop 실행 (AutoCAD 없이 UI까지 확인)
+tools\CADWorkAssistant.FakeAutoCad\bin\Debug\net8.0\CADWorkAssistant.FakeAutoCad.exe --scenario NormalSelection
+$env:CWA_USE_FAKE_AUTOCAD = "1"; dotnet run --project src/CADWorkAssistant.Desktop
 ```
 
-`CADWorkAssistant.AutoCAD` 프로젝트는 로컬에 AutoCAD가 설치되어 있어야 빌드된다 (참조 DLL을 자동 탐지). CI에서는 `CADWorkAssistant.CI.slnf` (AutoCAD/Integration 제외)를 사용한다.
+`CADWorkAssistant.AutoCAD` 프로젝트는 로컬에 AutoCAD가 설치되어 있어야 빌드된다 (참조 DLL을 자동 탐지). CI에서는 `CADWorkAssistant.CI.slnf`를 쓴다 - `CADWorkAssistant.AutoCAD`만 제외하고 `CADWorkAssistant.FakeAutoCad`/`Integration.Tests`를 포함한다(AutoCAD 없이도 빌드/테스트 가능하므로).
 
 ## 코딩 컨벤션
 
 - Nullable reference types 활성화, `ImplicitUsings` 사용 (net48 프로젝트도 SDK 스타일이라 동일하게 적용됨).
-- 단위 변환은 항상 `CADWorkAssistant.Core`의 변환 로직을 거친다 — Plugin이나 Desktop에서 mm/m 변환식을 직접 작성하지 않는다.
+- 단위 변환은 항상 `CADWorkAssistant.Core.Length`의 변환 로직을 거친다 — Plugin이나 Desktop에서 mm/m 변환식을 직접 작성하지 않는다.
+- AutoCAD Plugin의 Handler는 원본 데이터(도면 단위 그대로)만 IPC로 반환한다 — 합산/변환/포맷팅은 Core에서 한다 (테스트 가능성).
 - Git 커밋은 의미 단위로 분리한다 (`feat:`, `fix:`, `refactor:` 등). 수십 개 기능을 한 커밋에 몰아넣지 않는다.
 - 새 NuGet 의존성 추가 전: 유지보수 상태, 라이선스, .NET 호환성, 상업적 사용 가능 여부, AutoCAD 프로세스와의 충돌 가능성을 확인한다.
+- 코드를 작성한 뒤에는 실제로 빌드/실행해서 검증한다 (컴파일 성공 ≠ 동작 확인). 이 프로젝트에서 실제로 겪은 예: `NamedPipeServerStreamAcl.Create`+커스텀 `PipeSecurity` 조합이 컴파일은 되지만 런타임에 `IOException`을 냈고, `WaitForConnectionAsync`는 컴파일상 CancellationToken을 받지만 실제로는 취소를 무시하는 경우가 있었다.
 
 ## 작업 방식
 

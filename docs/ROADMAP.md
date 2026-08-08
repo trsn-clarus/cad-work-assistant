@@ -42,12 +42,22 @@
 
 ## Milestone 2 — Length (첫 실사용 가능 버전)
 
-- [ ] `[CAD에서 길이 선택]` 버튼 → AutoCAD Selection 모드 진입
-- [ ] Line/Polyline/Arc 길이 계산 (Core, AutoCAD 독립적으로 유닛 테스트)
-- [ ] mm → m 자동 변환 (도면 단위 자동 인식)
-- [ ] Desktop에 결과 표시 + 클립보드 복사
+**상태: 코드/자동 테스트/Simulation Mode 종단간 검증 완료, 실제 AutoCAD GUI 검증만 남음 (2026-08-08)**
 
-**완료 기준**: 실제 DWG에서 여러 Polyline을 선택해 정확한 총 길이(m)를 확인할 수 있다. 이 지점부터 "안정적으로 매일 쓸 수 있는" 첫 실사용 버전으로 간주한다 (§37).
+- [x] `[CAD에서 객체 선택]` 버튼 → AutoCAD Selection 모드 진입 (`SelectLengthObjectsHandler`, `Editor.GetSelection`)
+- [x] Line/Polyline/Arc 길이 계산 (`Core.Length`, AutoCAD 독립적으로 유닛 테스트 46개)
+- [x] mm → m 자동 변환 (도면 단위 자동 인식, `LengthUnitConverter`) — cm/dm/km/inch/feet/yard/mile도 함께 지원
+- [x] Desktop에 결과 표시 + 클립보드 복사 + "산출내역 추가"로 Quantity Sheet에 저장
+- [x] 지원하지 않는 객체(Hatch 등) 혼재 선택 시 제외 개수/타입 표시, 프로그램 죽지 않음
+- [x] 선택 취소(Esc)를 오류가 아닌 정상 상태로 처리
+- [x] Unitless 도면에서 자동 변환하지 않고 명확히 안내
+- [x] **Headless AutoCAD Simulation 인프라 구축** (`CADWorkAssistant.FakeAutoCad`, 12개 Scenario) — AutoCAD 없이 전체 Workflow를 실제 Named Pipe로 종단간 검증 가능
+- [x] Integration.Tests 17개 — 실제 프로세스 2개 사이 통신, 실패 시나리오(Cancel/Timeout/Disconnect/Error), 1,000개 객체 성능 테스트
+- [x] Desktop을 Simulation Mode(`CWA_USE_FAKE_AUTOCAD=1`)로 실제 실행해 전체 Workflow 수동 검증 — "255.941 m" 결과와 Quantity Sheet 저장까지 확인
+- [ ] **실제 AutoCAD 2024 GUI로 검증** — 이 개발 PC는 AutoCAD GUI가 불안정해(Milestone 1에서 확인) 수행하지 못함. 항목은 `docs/AUTOCAD_REAL_MACHINE_CHECKLIST.md`에 정리
+- [ ] `CWA_LENGTH` AutoCAD 명령 등록 — Desktop 없이 Plugin만 Smoke Test하기 위한 부가 기능, 실제 AutoCAD 검증이 가능해지는 시점으로 미룸 (§47)
+
+**완료 기준**: 실제 DWG에서 여러 Polyline을 선택해 정확한 총 길이(m)를 확인할 수 있다. → **Headless Simulation으로는 완전히 충족** (School_Roof.dwg 시나리오로 정확히 255.941 m 확인). 실제 DWG/AutoCAD 기준 최종 확인만 남았다. 이 지점부터 "안정적으로 매일 쓸 수 있는" 첫 실사용 버전으로 간주한다 (§37) — 단, 실제 AutoCAD 검증 전까지는 잠정.
 
 ## Milestone 3 — Area
 

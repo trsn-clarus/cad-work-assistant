@@ -16,9 +16,12 @@ CAD 개발자가 아니라 **AutoCAD를 매일 사용하는 현장/설계 실무
 - 단순 연결/미연결 두 상태가 아니라 "AutoCAD 미실행 / 감지됐지만 Plugin 미로드 / 연결 중 / 연결됨 / 재연결 중 / 끊김 / 오류"를 구분해서 보여준다 (Milestone 1에서 `CadConnectionState`로 구현, `docs/ARCHITECTURE.md` §5)
 - AutoCAD가 여러 개 실행 중이면 어떤 Instance에 연결할지 선택할 수 있어야 한다 (서비스 계층은 Milestone 1에서 구현, UI 셀렉터는 후속 작업)
 
-### 3.2 길이 산출
+### 3.2 길이 산출 — Milestone 2에서 구현 완료
 - Line/Polyline/Arc 등 선택 → 개별 길이 + 총 길이
-- mm → m 자동 변환 (사용자가 단위를 직접 입력하지 않아도 됨)
+- mm → m 자동 변환 (사용자가 단위를 직접 입력하지 않아도 됨) — cm/dm/km/inch/feet/yard/mile도 지원, Unitless는 자동 변환하지 않고 안내
+- 지원하지 않는 객체가 섞여도 지원 객체만 계산 + 제외 안내
+- 선택 취소는 오류가 아닌 정상 상태로 처리
+- 결과를 산출내역(Quantity Sheet)에 저장 가능 (원본값/단위/객체 Handle/산식 보존)
 
 ### 3.3 면적 산출
 - 닫힌 Polyline 선택 → Area 계산, mm² → m² 변환
@@ -89,7 +92,7 @@ CAD 개발자가 아니라 **AutoCAD를 매일 사용하는 현장/설계 실무
 | 오류 처리 | 사용자에게는 이해 가능한 메시지만 노출하고("닫힌 Polyline을 선택해주세요"), 원본 Exception/Stack Trace는 개발자 로그에만 기록한다 (§24) |
 | 로그 | 실행/AutoCAD 연결/파일/명령/계산 결과/Export/Plot/Exception을 구조화 로그로 기록한다. 도면 내부 민감 데이터는 과도하게 기록하지 않는다 (§25) |
 | 버전 독립성 | 특정 AutoCAD 버전에 강하게 종속되지 않도록 설계하고, 실제 설치 버전은 자동 탐지한다 (§29) |
-| 테스트 가능성 | 계산 로직은 AutoCAD 없이 단위 테스트가 가능해야 한다 (§32) |
+| 테스트 가능성 | 계산 로직은 AutoCAD 없이 단위 테스트가 가능해야 한다 (§32). Milestone 2부터 3단계 테스트 구조(Unit → Headless Integration(FakeAutoCAD 실제 프로세스) → Real AutoCAD)를 표준으로 쓴다 - AutoCAD가 없는 개발 환경도 정식 개발 인프라로 지원한다 (`docs/TESTING_WITHOUT_AUTOCAD.md`) |
 | 데이터 유실 방지 | 산출내역/설정은 원자적으로 저장하고, 프로그램 비정상 종료 시에도 데이터가 손상되지 않아야 한다 |
 | 하드코딩 금지 | 파일 경로, AutoCAD 버전, 특정 PC 종속 설정을 하드코딩하지 않는다 (§34) |
 

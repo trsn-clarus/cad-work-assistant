@@ -52,14 +52,15 @@
 
 | 프로젝트 | TFM | 책임 | AutoCAD/WPF 의존성 |
 |---|---|---|---|
-| `CADWorkAssistant.Core` | netstandard2.0 | 단위 변환, 길이/면적/파라펫 계산, 도메인 모델(Project, QuantityItem 등), IPC 요청/응답 DTO. **AutoCAD 타입을 절대 참조하지 않는다** → AutoCAD 없이 유닛 테스트 가능 (§32) | 없음 |
-| `CADWorkAssistant.Infrastructure` | netstandard2.0 | 구조화 로깅(Serilog), 설정 저장(JSON), 향후 SQLite 데이터 접근 | 없음 |
+| `CADWorkAssistant.Core` | netstandard2.0 | 단위 변환, 길이 계산(`Core/Length`), 도메인 모델, IPC 프로토콜(`Core/Ipc`)과 상태머신(`Core/Cad`). **AutoCAD 타입을 절대 참조하지 않는다** → AutoCAD 없이 유닛 테스트 가능 (§32) | 없음 |
+| `CADWorkAssistant.Infrastructure` | **net48;net8.0** (멀티타겟) | 구조화 로깅(Serilog), 설정 저장(JSON), Named Pipe 전송 계층 전체(`Ipc/PipeMessageFramer`, `AutoCadPipeClient`, `AutoCadPipeServer`) | 없음 |
 | `CADWorkAssistant.Documents` | netstandard2.0 | Excel/PDF/CSV 내보내기 (Milestone: Excel Export 단계에서 실제 구현) | 없음 |
-| `CADWorkAssistant.Desktop` | net8.0-windows | WPF UI, MVVM, `Services/`(Discovery/ConnectionManager, Named Pipe Client 사용) | WPF |
-| `CADWorkAssistant.AutoCAD` | net48 | AutoCAD Managed API 연동, CWA_* 명령(예정), Named Pipe Server + Handler, 원본 DWG 보호/Undo 그룹 처리 | AutoCAD 2024 Managed API |
-| `*.Tests` | net8.0 | Core/Infrastructure 로직 단위 테스트 | 없음 (AutoCAD 미설치 환경에서도 실행 가능) |
+| `CADWorkAssistant.Desktop` | net8.0-windows | WPF UI, MVVM, `Services/`(Discovery/ConnectionManager), `ViewModels/`(LengthWorkflowViewModel 등) | WPF |
+| `CADWorkAssistant.AutoCAD` | net48 | AutoCAD Managed API 연동, IPC Handler(Ping/GetApplicationInfo/GetDrawingContext/SelectLengthObjects), 원본 DWG 보호/Undo 그룹 처리 | AutoCAD 2024 Managed API |
+| `CADWorkAssistant.FakeAutoCad` (`tools/`) | net8.0 | AutoCAD 없이 개발/테스트하기 위한 Headless Simulation Host. `AutoCAD.Ipc.Handlers`와 **똑같은 IPC 프로토콜/서버 코드**를 재사용, Handler만 Scenario 기반 canned data로 교체. 설치 프로그램에 포함 안 함 (§73) | 없음 |
+| `*.Tests` | net8.0 | Core/Infrastructure 로직 단위 테스트 + Integration.Tests는 FakeAutoCad를 실제 프로세스로 띄워 실제 Named Pipe로 검증 | 없음 (AutoCAD 미설치 환경에서도 실행 가능) |
 
-Core/Infrastructure/Documents가 `netstandard2.0`인 이유: net48(Plugin)과 net8.0-windows(Desktop) 양쪽에서 참조 가능한 가장 단순한 공통분모이기 때문이다. net8.0으로 멀티타게팅하는 방법도 있으나, Core 로직이 최신 BCL API를 필요로 하지 않는 한 빌드 구성을 두 배로 늘릴 이유가 없다 (§0 "불필요하게 복잡한 구조 지양").
+Core/Documents가 `netstandard2.0`인 이유: net48(Plugin)과 net8.0(Desktop/FakeAutoCad) 양쪽에서 참조 가능한 가장 단순한 공통분모이기 때문이다. **Infrastructure만 예외적으로 `net48;net8.0` 멀티타겟이다** - Named Pipe에 현재 사용자 전용 ACL을 거는 방식이 두 런타임에서 서로 다르기 때문 (§9 의사결정 로그 참고). netstandard2.0을 기본값으로 유지하고, 실제로 막힌 경우에만 멀티타겟으로 전환한다 (§0 "불필요하게 복잡한 구조 지양").
 
 ## 4. AutoCAD 연동 계층
 
@@ -114,7 +115,35 @@ Desktop (net8.0-windows)
 - **UI 스레드 marshaling**: `AutoCadConnectionManager`는 생성 시점(App.xaml.cs `OnStartup`, WPF UI 스레드)에 `SynchronizationContext.Current`를 캡처해두고, 모든 `PropertyChanged`를 그 컨텍스트로 `Post`한다. ViewModel은 Pipe 세부사항을 전혀 모른다.
 - **검증**: `IpcRequestDispatcher`/`PipeMessageFramer`/`CadConnectionStateEvaluator`는 Core.Tests에서 AutoCAD 없이 단위 테스트했고, `AutoCadPipeClient`는 Integration.Tests에서 실제 Named Pipe로 Fake 서버 상대 종단간 테스트했다. 실제 AutoCAD GUI를 통한 연동 테스트는 이 개발 PC에서 그래픽 드라이버 불안정 문제로 완료하지 못했고, AutoCAD가 정상 동작하는 머신에서 진행하기로 했다 (docs/AUTOCAD_INTEGRATION.md §8).
 
-## 6. Desktop App 구조 (MVVM)
+## 6. Measurement Architecture (Length, Milestone 2)
+
+Length가 Milestone 2의 첫 기능이지만, Area/Vertical Area/Parapet(§75)이 같은 모양으로 붙을 수 있도록 처음부터 책임을 나눠뒀다 - 아직 쓰지 않는 추상화 계층은 만들지 않되, 나눌 이유가 명확한 책임은 미리 나눴다:
+
+```text
+AutoCAD Plugin (SelectLengthObjectsHandler)
+  - Editor.GetSelection으로 사용자 선택을 받는다
+  - Curve.GetDistanceAtParameter로 원본 길이(RawLength, 도면 단위 그대로)를 구한다
+  - 지원 안 하는 Geometry는 걸러서 ExcludedObjectTypeNames에 담는다
+  - 합산도, 단위 변환도, 포맷팅도 하지 않는다 - 원본 데이터만 IPC로 보낸다
+        │  LengthSelectionResponse { Objects, ExcludedObjectTypeNames, Unit }
+        ▼
+CADWorkAssistant.Core.Length (AutoCAD 비의존, 단위 테스트됨)
+  - LengthUnitConverter: mm/cm/dm/m/km/inch/feet/yard/mile → m. Unitless/Other는 변환 실패를 값으로 반환한다(예외 아님)
+  - LengthAggregationService: 여러 객체 합산 + 단위 변환 → LengthMeasurementResult
+  - LengthFormatter: 표시용 반올림(기본 소수 3자리) - 내부 계산은 double 원본 정밀도 유지
+        │
+        ▼
+Desktop.ViewModels.LengthWorkflowViewModel
+  - IAutoCadConnectionManager.SendRequestAsync로 IPC 요청만 보낸다 (Pipe 세부사항을 모른다)
+  - 응답을 Core.Length로 넘겨 집계하고, 결과를 Rows/TotalDisplay로 노출한다
+  - 성공/취소/빈 선택/오류를 각각 다른 State로 구분한다 - 취소·빈 선택은 오류가 아니다
+```
+
+**AutoCAD Plugin과 FakeAutoCAD가 똑같은 프로토콜을 쓰는 이유**: `LengthSelectionResponse`/`CadLengthObjectDto`는 Core에 있고 AutoCAD 타입을 참조하지 않는다. AutoCAD Plugin의 Handler는 실제 Selection에서 이 DTO를 채우고, FakeAutoCAD의 Handler는 미리 정해둔 Scenario 데이터로 채운다 - Desktop과 Integration Test 입장에서는 둘을 구분할 수 없다 (실제로 `AutoCadConnectionManager`/`AutoCadPipeClient` 코드에 Fake 분기가 전혀 없다).
+
+**Quantity Sheet와의 관계**: `LengthMeasurementResult`(방금 계산한 값)와 `QuantityRecord`(저장하기로 한 값)는 다른 타입이다. 사용자가 "산출내역 추가"를 눌러야 `QuantityRecord`로 변환되며, 이때 `RawValue`/`SourceUnit`/`ObjectHandles`/`CalculationExpression`을 함께 저장해 나중에 재검산할 수 있게 한다 (§28-29).
+
+## 7. Desktop App 구조 (MVVM)
 
 - `*.xaml` — 뷰 (구조/레이아웃/스타일), `Themes/DesignTokens.xaml`에 색상·타이포·spacing 토큰 정의
 - `ViewModels/` — 자체 구현 `ObservableObject`/`RelayCommand` 기반, 상태와 커맨드
@@ -122,13 +151,13 @@ Desktop (net8.0-windows)
 - Navigation은 §27 정보구조를 기반으로 하되 실제 구현은 [`design-system/MASTER.md`](../design-system/MASTER.md)의 PROJECT/CAD/QUANTITY/OUTPUT/SETTINGS 그룹을 따른다. Milestone 0의 UI Shell은 더미 데이터로 채워진 상태이며, 실제 AutoCAD 연동은 Milestone 1부터 연결한다.
 - UI 디자인 원칙(색상, spacing, 밀도, 안티패턴)은 `design-system/MASTER.md`가 단일 소스다 — ARCHITECTURE.md는 프로세스/데이터 구조를, design-system은 시각적 규칙을 다룬다.
 
-## 7. 로깅 / 설정
+## 8. 로깅 / 설정
 
 - **Logging**: Serilog, 파일 싱크. 경로: `%LOCALAPPDATA%\CADWorkAssistant\logs\yyyy-MM-dd.log`, 일 단위 롤링. 도면 내부 좌표/치수 등 민감할 수 있는 상세 데이터는 Verbose 레벨에서만 기록하고 기본 레벨(Information)에는 요약만 남긴다 (§25).
 - **Settings**: `%APPDATA%\CADWorkAssistant\settings.json`, `System.Text.Json` 직렬화. 소수점 자릿수(길이/면적 별도), 기본 단위 표시 등 사용자 환경설정을 저장한다 (§21).
 - **Project/Quantity 데이터**: SQLite는 실제 Quantity Sheet 기능(Milestone 4) 구현 시점에 도입한다. 지금 시점에 스키마를 미리 설계하지 않는다 (§34 조기 구현 금지).
 
-## 8. 의사결정 로그
+## 9. 의사결정 로그
 
 | 결정 | 대안 | 선택 이유 |
 |---|---|---|
@@ -143,8 +172,13 @@ Desktop (net8.0-windows)
 | Desktop 의존성 구성: App.xaml.cs에서 직접 `new` (수동 composition root) | Microsoft.Extensions.DependencyInjection 등 DI 컨테이너 | 서비스 개수가 2~3개뿐이라 컨테이너 없이도 충분히 명확함 |
 | AutoCAD API 스레드 마샬링: `DocumentCollection.ExecuteInApplicationContext` | `Application.Idle` 이벤트, `ExecuteInCommandContextAsync` | 리플렉션으로 실존을 확인한 API 중 읽기 전용 조회에 가장 가벼움. `ExecuteInCommandContextAsync`는 인터랙티브 명령(Selection 등)이 필요한 후속 Milestone을 위해 남겨둠 |
 | Heartbeat(`Ping`)는 AutoCAD API를 전혀 호출하지 않음 | 매 heartbeat마다 `GetDrawingContext`로 통합 | 2초마다 AutoCAD 메인 스레드에 진입하는 것 자체가 조작감에 영향을 줄 수 있어, 연결 생존 확인과 문서 상태 조회를 분리 |
+| `AutoCadPipeServer`를 AutoCAD 프로젝트에서 Infrastructure로 이동 | FakeAutoCad용 서버 코드를 별도로 새로 작성 | AutoCAD 타입을 전혀 참조하지 않는 순수 Named Pipe 코드였다 - 이동하면 AutoCAD Plugin과 FakeAutoCAD가 완전히 같은 서버 구현을 공유해서 프로토콜 불일치가 원천적으로 불가능해진다 |
+| Named Pipe ACL: net8.0은 `PipeOptions.CurrentUserOnly`, net48은 수동 `PipeSecurity` | net8.0에도 수동 `PipeSecurity` + `NamedPipeServerStreamAcl.Create` | 실제로 시도했을 때 `NamedPipeServerStreamAcl.Create`+커스텀 `PipeSecurity` 조합이 `IOException("매개변수가 틀렸습니다")`를 냈다. `CurrentUserOnly`는 net48에 없어서 net48은 여전히 수동 구성이 필요하다 |
+| `WaitForConnectionAsync` 취소 시 Pipe를 명시적으로 Dispose | CancellationToken만 전달 | 아무도 연결하지 않은 상태에서 취소해도 `WaitForConnectionAsync`가 실제로는 풀리지 않는 것을 실제로 겪었다 - `cancellationToken.Register`로 Pipe를 강제 Dispose해서 우회 |
+| Length 계산: AutoCAD Plugin은 원본 데이터만 반환, 합산/변환/포맷팅은 Core.Length | Plugin에서 전부 계산해서 완성된 문자열만 보냄 | 계산 로직을 AutoCAD 없이 단위 테스트하기 위함 (§25, §32) - Plugin이 두꺼워지면 테스트 불가능한 로직이 늘어난다 |
+| FakeAutoCad: `tools/`에 별도 실행 파일 프로젝트, 실제 서버 코드(Infrastructure.Ipc) 재사용 | Integration.Tests 안에 있는 in-process Fake만 계속 사용 | Milestone 1의 in-process Fake는 Transport 계층 테스트에는 충분하지만, Desktop을 실제로 띄워 UI까지 눈으로 확인하려면(§10, §55) 별도 프로세스가 필요하다. 기존 in-process Fake(`tests/.../Fakes/FakeAutoCadServer.cs`)는 그대로 남겨 Transport 단위 테스트에 계속 쓴다 |
 
-## 9. 아직 결정하지 않은 것 (의도적으로 보류)
+## 10. 아직 결정하지 않은 것 (의도적으로 보류)
 
 - SQLite 접근 방식(Raw ADO.NET vs Dapper vs EF Core) — Milestone 4 착수 시 결정
 - Excel 라이브러리(ClosedXML 후보) — Excel Export 착수 시 라이선스/유지보수 재확인 후 결정

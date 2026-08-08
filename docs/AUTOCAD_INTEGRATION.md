@@ -36,7 +36,7 @@ AutoCAD Managed API DLL은 **NuGet으로 배포되지 않고 로컬 설치 경�
 | `CWA_LAYER` | Layer 도구 | 9 |
 | `CWA_PLOT` | Plot 프리셋 실행 | 10 |
 
-`CWA` prefix는 흔한 AutoCAD 내장/서드파티 명령과 충돌 가능성이 낮아 채택했다. 실제 등록 전 `(command-list)` 또는 각 명령 등록 시 AutoCAD가 충돌을 알려주므로, Milestone 1에서 실제 등록하며 재확인한다.
+`CWA` prefix는 흔한 AutoCAD 내장/서드파티 명령과 충돌 가능성이 낮아 채택했다. **아직 실제로 등록한 명령은 없다** - Milestone 2까지는 Desktop → IPC → Handler 경로가 유일한 진입점이고, AutoCAD 쪽 `[CommandMethod]`는 "Desktop 없이도 Plugin을 Smoke Test할 수 있게" 하는 부가 기능(Milestone 2 §47)이라 실제 AutoCAD에서 검증 가능해지는 시점(`docs/AUTOCAD_REAL_MACHINE_CHECKLIST.md`)에 추가하기로 미뤘다 - 등록하더라도 `SelectLengthObjectsHandler`와 같은 로직을 재사용하고 중복 구현하지 않는다.
 
 ## 5. IPC — Desktop ↔ Plugin (Milestone 1에서 구현 완료)
 
@@ -51,15 +51,16 @@ Desktop(net8.0, 별도 프로세스)과 Plugin(net48, `acad.exe` in-process)은 
 - **보안**: 서버 Pipe는 `PipeSecurity` + `WindowsIdentity.GetCurrent().User`로 현재 Windows 사용자만 접근 가능하도록 제한한다 (`AutoCadPipeServer.CreatePipe`).
 - **Timeout**: Connect 1.5초, Request 3초 (`IpcProtocol`). 서버는 자체 타임아웃이 걸리면 `Cancelled`가 아니라 `Timeout` 오류로 정확히 구분해서 응답한다.
 
-### 5.1 지원하는 요청 (Milestone 1)
+### 5.1 지원하는 요청
 
 | MessageType | 요청 Payload | 응답 Payload | 비고 |
 |---|---|---|---|
 | `Ping` | 없음 | `{ pong, serverTimeUtc }` | AutoCAD API를 전혀 건드리지 않는다 - 2초 간격 heartbeat가 AutoCAD 조작감을 해치면 안 되기 때문 |
-| `GetApplicationInfo` | 없음 | `AutoCadInstanceInfo`(Product, Version, ProcessId, PluginVersion, ProtocolVersion) | |
+| `GetApplicationInfo` | 없음 | `AutoCadInstanceInfo`(Product, Version, ProcessId, PluginVersion, ProtocolVersion, IsSimulated) | |
 | `GetDrawingContext` | 없음 | `DrawingContext`(DocumentDisplayName, FullPath, IsSaved, IsReadOnly, Layout, Units, DocumentCount) | 열린 문서가 없으면 `NoActiveDocument` 오류 |
+| `SelectLengthObjects`(Milestone 2) | 없음 | `LengthSelectionResponse`(Objects, ExcludedObjectTypeNames, Unit) | Editor.GetSelection이 사용자 입력을 기다린다 - Command Context에서 실행 (§5.5). 집계/변환은 AutoCAD Plugin이 아니라 Core.Length가 한다 |
 
-향후 명령(`SelectObjects`, `GetLength` 등)은 `Core/Ipc/IpcMessageTypes.cs`에 상수를 추가하고 `CADWorkAssistant.AutoCAD/Ipc/Handlers/`에 `IIpcRequestHandler` 구현을 추가하는 것으로 확장한다 — 거대한 switch문을 두지 않는다.
+향후 명령(`GetArea` 등)은 `Core/Ipc/IpcMessageTypes.cs`에 상수를 추가하고 `CADWorkAssistant.AutoCAD/Ipc/Handlers/`에 `IIpcRequestHandler` 구현을 추가하는 것으로 확장한다 — 거대한 switch문을 두지 않는다.
 
 ### 5.2 AutoCAD API 스레드 경계 (AutoCadDispatcher)
 
@@ -93,7 +94,53 @@ Autodesk.AutoCAD.ApplicationServices.Core.Application (accoremgd.dll)
   static Version Version   // "24.3.119.0" 형태 - 마케팅 연도("2024")는 주지 않는다
 ```
 
-`AutoCadDispatcher.InvokeAsync<T>(Func<T> operation, CancellationToken)`은 `ExecuteInApplicationContext`를 `TaskCompletionSource`로 감싼 것이다. Milestone 1의 읽기 전용 조회(`GetApplicationInfo`, `GetDrawingContext`)에는 이것으로 충분하다. 향후 Selection처럼 인터랙티브한 명령이 필요해지면 `ExecuteInCommandContextAsync`(문서 Command Context 안에서 실행, `Editor.GetSelection` 등이 가능해짐)를 추가로 도입한다 - 지금은 쓰지 않는다.
+`AutoCadDispatcher`는 두 메서드를 제공한다. `InvokeAsync<T>`는 `ExecuteInApplicationContext`를 감싼 것으로 `GetApplicationInfo`/`GetDrawingContext` 같은 즉시-반환 조회에 쓴다. `InvokeInCommandContextAsync<T>`(Milestone 2에서 추가)는 `ExecuteInCommandContextAsync`를 감싼 것으로, `Editor.GetSelection`처럼 **사용자 입력을 기다리는** 작업에 쓴다 - Command Context 안에서 실행되어야 Selection/Prompt API가 안전하게 동작한다. 둘 다 내부적으로 같은 `TaskCompletionSource` 패턴을 쓴다.
+
+### 5.5 Selection / Curve API (Milestone 2, `SelectLengthObjectsHandler`)
+
+이 PC의 AutoCAD 2024 DLL에서 리플렉션으로 직접 확인한 API (추측 없음):
+
+```
+Autodesk.AutoCAD.EditorInput.Editor (accoremgd.dll)
+  PromptSelectionResult GetSelection(PromptSelectionOptions options)
+
+Autodesk.AutoCAD.EditorInput.PromptSelectionResult
+  SelectionSet Value
+  PromptStatus Status   // None, Modeless, Other, OK, Keyword, Cancel, Error
+
+Autodesk.AutoCAD.EditorInput.SelectionSet
+  ObjectId[] GetObjectIds()
+  int Count
+
+Autodesk.AutoCAD.DatabaseServices.Curve (acdbmgd.dll) - Line/Arc/Polyline/Polyline2d/Polyline3d 전부 이 클래스의 자식
+  double GetDistanceAtParameter(double)
+  double StartParam
+  double EndParam
+  // 직접 쓸 수 있는 "Length" 프로퍼티는 없다 - 길이는 반드시
+  // GetDistanceAtParameter(EndParam) - GetDistanceAtParameter(StartParam)로 구한다
+
+Autodesk.AutoCAD.DatabaseServices.Entity
+  string Layer
+
+Autodesk.AutoCAD.DatabaseServices.DBObject
+  Handle Handle   // Handle.Value(long), ToString()으로 "2A7F" 같은 16진 문자열
+
+Autodesk.AutoCAD.ApplicationServices.Document
+  DocumentLock LockDocument()   // 매개변수 없는 오버로드
+
+Autodesk.AutoCAD.DatabaseServices.Transaction
+  DBObject GetObject(ObjectId id, OpenMode mode)
+
+Autodesk.AutoCAD.DatabaseServices.OpenMode
+  ForRead, ForWrite, ForNotify
+```
+
+구현 방침:
+
+- `PromptStatus.Cancel` → `IpcErrorCode.SelectionCancelled` (오류 아님, §19). `PromptStatus.OK`인데 `SelectionSet.Count == 0`이면(사용자가 아무것도 선택하지 않고 Enter) 빈 `Objects` 배열로 정상 응답한다 - Desktop이 "선택된 객체가 없습니다"로 표시할지 결정한다 (§43).
+- Line/Arc/Polyline/Polyline2d/Polyline3d 외의 Entity는 계산에서 제외하고 `ExcludedObjectTypeNames`에 타입 이름만 담는다 (§18) - 선택 자체는 막지 않는다(전체 선택 후 지원 객체만 계산 방식 채택).
+- `Document.LockDocument()`로 Database/Editor 접근을 감싼다. Transaction은 `Commit()`을 호출하지 않는다 - Read-only이며(§61), `using`이 끝나면 자동 Abort된다.
+- Unit 변환은 여기서 하지 않는다 - `RawLength`(도면 단위 그대로)만 담아 보내고, 합산/변환/포맷팅은 전부 `CADWorkAssistant.Core.Length`(AutoCAD 비의존, 단위 테스트됨)가 담당한다.
 
 ### 5.3 마케팅 버전 이름 (AutoCadVersionMap)
 
@@ -116,27 +163,15 @@ Autodesk.AutoCAD.ApplicationServices.Core.Application (accoremgd.dll)
 
 ## 8. 실제 AutoCAD GUI 스모크 테스트 — 이 PC에서는 보류
 
-Milestone 1 구현 자체(IPC 프로토콜, Named Pipe 서버/클라이언트, AutoCAD Dispatcher, Handler)는 다음 두 가지 방법으로 검증했다:
+Milestone 1에서 이 PC의 AutoCAD 2024 GUI를 실제로 띄우자 그래픽 드라이버가 불안정해지는 문제(Windows 이벤트 로그에 `LiveKernelEvent`/`BlueScreen` fault bucket 기록, 전체 재부팅은 없었음)를 확인했다. 사용자 확인 결과 이 PC는 AutoCAD 실사용 머신이 아니며, 개발은 계속하되 실제 GUI 연동 검증은 AutoCAD가 정상 동작하는 별도 머신에서 진행하기로 했다. Milestone 2에서도 같은 제약이 이어진다.
 
-1. `CADWorkAssistant.AutoCAD` 프로젝트가 이 PC에 설치된 **실제 AutoCAD 2024 Managed API 참조**로 경고 0개/오류 0개로 빌드된다 (§5.2의 API 목록은 리플렉션으로 직접 확인한 것).
-2. `tests/CADWorkAssistant.Integration.Tests/Ipc/AutoCadPipeClientTests.cs` — 실제 Named Pipe로 `AutoCadPipeClient`(Desktop이 쓰는 바로 그 코드)를 Fake 서버 상대로 연결/요청-응답/타임아웃/오류 코드 왕복/RequestId 보존까지 종단간 검증했다 (AutoCAD 불필요).
-3. Desktop 단독 실행 시(AutoCAD 미실행) 크래시 없이 "AutoCAD Not Running"으로 정확히 표시되는 것을 UI Automation으로 직접 확인했다 (§44 Scenario 1).
+대신 다음으로 검증을 대체했다 (`docs/TESTING_WITHOUT_AUTOCAD.md` 참고):
 
-**다만 실제 AutoCAD 2024 GUI를 이 PC에서 띄우는 것 자체가 불안정하다.** NETLOAD를 통한 실제 연결 스모크 테스트(§44 Scenario 2~10)를 시도하는 과정에서 AutoCAD 프로세스가 원인 불명으로 사라졌고, 그 시점에 Windows 이벤트 로그(`Application`, provider `Windows Error Reporting`)에 `LiveKernelEvent`/`BlueScreen` fault bucket이 다수 기록되어 있었다 — 그래픽 드라이버가 AutoCAD의 렌더링 부하를 못 견디고 크래시했다가 Windows가 복구한 것으로 추정된다(전체 재부팅은 없었음). 사용자 확인 결과 이 PC는 AutoCAD를 실제로 쓰는 머신이 아니며, 개발은 이 PC에서 계속하되 실제 AutoCAD 연동 검증은 AutoCAD가 정상 동작하는 별도 머신에서 진행하기로 했다.
+1. `CADWorkAssistant.AutoCAD` 프로젝트가 실제 AutoCAD 2024 Managed API 참조로 경고 0개/오류 0개로 빌드된다 (§5.5의 API 목록은 전부 리플렉션으로 직접 확인).
+2. `CADWorkAssistant.FakeAutoCad` - 실제 AutoCAD Plugin과 동일한 IPC 코드(Infrastructure.Ipc.AutoCadPipeServer, Core.Ipc)를 그대로 쓰는 별도 프로세스. Integration.Tests가 이 프로세스를 실제로 띄워 Named Pipe로 종단간 검증한다.
+3. Desktop을 Simulation Mode(`CWA_USE_FAKE_AUTOCAD=1`)로 FakeAutoCad에 붙여 실제 UI까지 수동으로 확인 - Length 선택 → "255.941 m" 표시 → 산출내역 추가까지 실제 두 프로세스 사이 통신으로 동작하는 것을 확인했다.
 
-**AutoCAD가 정상 동작하는 머신에서 다음을 확인해야 Milestone 1이 완전히 끝난 것으로 본다** (§44 시나리오 그대로):
-
-1. Desktop 실행 → AutoCAD 미실행 상태 확인 (이미 이 PC에서 검증 완료)
-2. AutoCAD 실행, Plugin NETLOAD 전 → "AutoCAD Detected · Plugin Not Loaded" 확인
-3. NETLOAD 후 → 자동으로 "Connected" 전환 확인
-4. DWG를 열고 → Desktop에 Drawing Name/Path/Layout/Unit이 정확히 표시되는지 확인
-5. 다른 DWG로 전환 → Desktop이 최대 2초 안에 갱신되는지 확인
-6. Model → Layout1 전환 → Layout 표시 갱신 확인
-7. AutoCAD 종료 → Desktop 크래시 없이 Disconnected/NoAutoCadProcess로 전환되는지 확인
-8. AutoCAD 재실행 + NETLOAD → Desktop이 자동으로 재연결되는지 확인
-9. AutoCAD 두 개 실행 → `AvailableInstances`에 둘 다 잡히는지, `SelectInstanceAsync`로 전환되는지 확인 (현재 UI에는 선택 화면이 없어 코드로 직접 호출하거나 후속 Milestone에서 UI를 추가해야 함)
-10. Unitless(단위 미지정) 도면 → "Unitless"로 정확히 표시되는지, mm로 잘못 추정하지 않는지 확인
-11. AutoCAD PAN/ZOOM/PLINE 등 조작 중 Desktop의 2초 heartbeat/polling 때문에 끊김이 느껴지지 않는지 확인
+실제 AutoCAD GUI에서만 확인 가능한 항목은 [`AUTOCAD_REAL_MACHINE_CHECKLIST.md`](./AUTOCAD_REAL_MACHINE_CHECKLIST.md)에 전부 정리되어 있다 (현재 전부 Pending).
 
 ## 9. 향후 AutoCAD 버전 추가
 
