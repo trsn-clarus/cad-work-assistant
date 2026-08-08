@@ -10,7 +10,9 @@ public static class IpcMessageTypes
     public const string GetApplicationInfo = "GetApplicationInfo";
     public const string GetDrawingContext = "GetDrawingContext";
 
-    // 향후 Milestone에서 추가될 예정 (§39): SelectObjects, GetLength, GetArea,
-    // SetLayerVisibility, ExportSelection, PlotDrawing 등. 여기 상수만 추가하고
-    // Handlers/ 아래 새 IIpcRequestHandler 구현을 등록하면 된다.
+    /// <summary>사용자가 AutoCAD에서 선택한 Line/Polyline/Arc의 원본 길이 데이터를 반환한다 (Milestone 2 §12).</summary>
+    public const string SelectLengthObjects = "SelectLengthObjects";
+
+    // 향후 Milestone에서 추가될 예정 (§39): GetArea, SetLayerVisibility, ExportSelection,
+    // PlotDrawing 등. 여기 상수만 추가하고 Handlers/ 아래 새 IIpcRequestHandler 구현을 등록하면 된다.
 }
