@@ -21,7 +21,8 @@ public sealed class QuantityRecord
         decimal? rawValue = null,
         string? sourceUnit = null,
         IReadOnlyList<string>? objectHandles = null,
-        string? calculationExpression = null)
+        string? calculationExpression = null,
+        string? measurementSource = null)
     {
         Id = id;
         Type = type;
@@ -35,6 +36,7 @@ public sealed class QuantityRecord
         SourceUnit = sourceUnit;
         ObjectHandles = objectHandles ?? Array.Empty<string>();
         CalculationExpression = calculationExpression;
+        MeasurementSource = measurementSource;
     }
 
     public string Id { get; }
@@ -60,4 +62,11 @@ public sealed class QuantityRecord
 
     /// <summary>사람이 읽을 수 있는 산식 (예: "125.331 + 81.405 + 49.205 = 255.941 m").</summary>
     public string? CalculationExpression { get; }
+
+    /// <summary>
+    /// 기준 길이가 어디서 왔는지 - "CadSelection"/"ExistingMeasurement"/"Manual"
+    /// (Core.VerticalArea.MeasurementSourceType의 문자열 표현). Length/Area처럼 항상 CAD에서
+    /// 직접 뽑는 값에는 없어도 되는 정보라 Length/Area는 null로 남긴다 (Milestone 4 §19, §52).
+    /// </summary>
+    public string? MeasurementSource { get; }
 }
