@@ -52,15 +52,15 @@
 
 | 프로젝트 | TFM | 책임 | AutoCAD/WPF 의존성 |
 |---|---|---|---|
-| `CADWorkAssistant.Core` | netstandard2.0 | 단위 변환, 길이 계산(`Core/Length`), 면적 계산(`Core/Area`), 도메인 모델, IPC 프로토콜(`Core/Ipc`)과 상태머신(`Core/Cad`). **AutoCAD 타입을 절대 참조하지 않는다** → AutoCAD 없이 유닛 테스트 가능 (§32) | 없음 |
+| `CADWorkAssistant.Core` | netstandard2.0 | 단위 변환, 길이 계산(`Core/Length`), 면적 계산(`Core/Area`), 수직면적/파라펫 수량 조합(`Core/VerticalArea`, `Core/Parapet`), 도메인 모델, IPC 프로토콜(`Core/Ipc`)과 상태머신(`Core/Cad`). **AutoCAD 타입을 절대 참조하지 않는다** → AutoCAD 없이 유닛 테스트 가능 (§32) | 없음 |
 | `CADWorkAssistant.Infrastructure` | **net48;net8.0** (멀티타겟) | 구조화 로깅(Serilog), 설정 저장(JSON), Named Pipe 전송 계층 전체(`Ipc/PipeMessageFramer`, `AutoCadPipeClient`, `AutoCadPipeServer`) | 없음 |
 | `CADWorkAssistant.Documents` | netstandard2.0 | Excel/PDF/CSV 내보내기 (Milestone: Excel Export 단계에서 실제 구현) | 없음 |
-| `CADWorkAssistant.Desktop` | net8.0-windows | WPF UI, MVVM, `Services/`(Discovery/ConnectionManager), `ViewModels/`(LengthWorkflowViewModel, AreaWorkflowViewModel 등) | WPF |
+| `CADWorkAssistant.Desktop` | net8.0-windows | WPF UI, MVVM, `Services/`(Discovery/ConnectionManager/LengthSelectionCoordinator), `ViewModels/`(LengthWorkflowViewModel, AreaWorkflowViewModel, VerticalAreaWorkflowViewModel, ParapetWorkflowViewModel, LengthSourceSelector 등) | WPF |
 | `CADWorkAssistant.AutoCAD` | net48 | AutoCAD Managed API 연동, IPC Handler(Ping/GetApplicationInfo/GetDrawingContext/SelectLengthObjects/SelectAreaObjects), 원본 DWG 보호/Undo 그룹 처리 | AutoCAD 2024 Managed API |
 | `CADWorkAssistant.FakeAutoCad` (`tools/`) | net8.0 | AutoCAD 없이 개발/테스트하기 위한 Headless Simulation Host. `AutoCAD.Ipc.Handlers`와 **똑같은 IPC 프로토콜/서버 코드**를 재사용, Handler만 Scenario 기반 canned data로 교체. 설치 프로그램에 포함 안 함 (§73) | 없음 |
 | `*.Tests` | net8.0 | Core/Infrastructure 로직 단위 테스트 + Integration.Tests는 FakeAutoCad를 실제 프로세스로 띄워 실제 Named Pipe로 검증 | 없음 (AutoCAD 미설치 환경에서도 실행 가능) |
 
-Core/Documents가 `netstandard2.0`인 이유: net48(Plugin)과 net8.0(Desktop/FakeAutoCad) 양쪽에서 참조 가능한 가장 단순한 공통분모이기 때문이다. **Infrastructure만 예외적으로 `net48;net8.0` 멀티타겟이다** - Named Pipe에 현재 사용자 전용 ACL을 거는 방식이 두 런타임에서 서로 다르기 때문 (§10 의사결정 로그 참고). netstandard2.0을 기본값으로 유지하고, 실제로 막힌 경우에만 멀티타겟으로 전환한다 (§0 "불필요하게 복잡한 구조 지양").
+Core/Documents가 `netstandard2.0`인 이유: net48(Plugin)과 net8.0(Desktop/FakeAutoCad) 양쪽에서 참조 가능한 가장 단순한 공통분모이기 때문이다. **Infrastructure만 예외적으로 `net48;net8.0` 멀티타겟이다** - Named Pipe에 현재 사용자 전용 ACL을 거는 방식이 두 런타임에서 서로 다르기 때문 (§11 의사결정 로그 참고). netstandard2.0을 기본값으로 유지하고, 실제로 막힌 경우에만 멀티타겟으로 전환한다 (§0 "불필요하게 복잡한 구조 지양").
 
 ## 4. AutoCAD 연동 계층
 
@@ -189,7 +189,54 @@ UI ViewModel의 State enum(Area가 PartialSuccess/NoValidObjects로 더 세분�
 하나의 제네릭 `MeasurementResult<T>`로 합치지 않았다. 두 기능의 계산 로직 자체가 다르기 때문에
 공통화하면 오히려 각 기능의 단순함을 해친다.
 
-## 8. Desktop App 구조 (MVVM)
+## 8. Quantity Composition Architecture (Vertical Area, Parapet, Milestone 4)
+
+Length/Area(§6-7)는 "AutoCAD에서 측정한 값을 보여준다"였다면, Vertical Area/Parapet은 처음으로
+"측정한 값을 현장 조건과 조합해 공사 수량을 만든다" - 공식/단위 정규화/provenance의 자세한 내용은
+[`QUANTITY_COMPOSITION.md`](./QUANTITY_COMPOSITION.md) 참고. 여기서는 호출 구조만 요약한다:
+
+```text
+AutoCAD Plugin - 변경 없음
+  Vertical Area/Parapet 전용 IPC 명령이 없다. 기준 길이는 항상 Milestone 2의
+  SelectLengthObjects로만 들어온다 (§5-6) - "새 AutoCAD Selection Handler를 불필요하게
+  만들지 않는다"는 원칙을 그대로 지켰다.
+        │
+        ▼
+Desktop.ViewModels.LengthSourceSelector (신규, Length/Area에는 없던 합성 컴포넌트)
+  - CAD에서 새로 선택 / Length 도구의 최근 측정값 재사용 / 수동 입력, 세 가지 기준 길이
+    확보 경로를 하나로 묶는다 - VerticalAreaWorkflowViewModel과 ParapetWorkflowViewModel이
+    거의 동일한 로직을 각자 구현하면 명백한 중복이라 여기 하나로 뽑았다 (합성이지 상속이
+    아니다 - 두 ViewModel의 나머지 상태/동작은 서로 다르기 때문에)
+  - CAD 선택은 LengthSelectionCoordinator(공유 정적 헬퍼)를 거쳐 SelectLengthObjects IPC
+    요청 → LengthAggregationService.Aggregate까지 수행하고 LengthMeasurementResult를
+    돌려준다 - Length 도구가 하는 것과 완전히 같은 절차
+        │
+        ▼
+CADWorkAssistant.Core.VerticalArea / Core.Parapet (AutoCAD 비의존, 단위 테스트됨)
+  - VerticalAreaCalculator: A = L × H, 높이 단위 정규화·검증
+  - ParapetCalculator: VerticalAreaCalculator를 측면/상부면 두 번 재사용해 조합 (§23)
+        │
+        ▼
+Desktop.ViewModels.VerticalAreaWorkflowViewModel / ParapetWorkflowViewModel
+  - HeightText 등 입력이 바뀔 때마다(TextBox UpdateSourceTrigger=PropertyChanged) 즉시
+    재계산한다 - Length/Area처럼 "선택 → 결과" 한 번이 아니라 실시간 계산기에 가깝다
+  - LengthSourceSelector.PropertyChanged를 구독해 기준 길이가 바뀔 때도 재계산한다
+```
+
+**Length/Area와 다른 점**: Length/Area는 State를 `LengthWorkflowState`/`AreaWorkflowState`
+enum으로 표현했지만, Vertical Area/Parapet은 실시간 계산이라 "성공"이라는 순간이 따로 없다 - 값이
+갖춰지면 그게 곧 결과다. 그래서 `IsReady`/`IsInvalidHeight`/`Source.IsBusy`/`Source.IsError` 같은
+개별 bool로 표현했다 - 처음에는 별도 enum(`VerticalAreaWorkflowState`)을 만들었지만 실제로 쓰지
+않는 상태가 대부분이라 구현 중 제거했다 (§62 "State enum을 늘리지 않는다"의 실제 적용 사례).
+
+**LengthWorkflowViewModel에 생긴 변화**: `LastResult`(가장 최근 "성공"한 측정 결과, 화면에 지금
+보이는 `_result`와는 다른 변수 - EmptySelection이면 화면은 비워지지만 LastResult는 마지막 성공값을
+유지한다)를 노출하고, 값이 바뀔 때 `OnPropertyChanged(nameof(LastResult))`를 반드시 호출한다.
+Simulation Mode 수동 검증 중 이 알림 호출이 빠져 있어서 "최근 측정값 사용" 라디오가 Length 쪽에서
+새 측정이 끝나도 계속 비활성화 상태로 멈춰 있는 버그를 실제로 발견하고 고쳤다 - 계산된 값 자체는
+맞았지만 WPF 바인딩이 그 사실을 몰랐던 경우다.
+
+## 9. Desktop App 구조 (MVVM)
 
 - `*.xaml` — 뷰 (구조/레이아웃/스타일), `Themes/DesignTokens.xaml`에 색상·타이포·spacing 토큰 정의
 - `ViewModels/` — 자체 구현 `ObservableObject`/`RelayCommand` 기반, 상태와 커맨드
@@ -197,13 +244,13 @@ UI ViewModel의 State enum(Area가 PartialSuccess/NoValidObjects로 더 세분�
 - Navigation은 §27 정보구조를 기반으로 하되 실제 구현은 [`design-system/MASTER.md`](../design-system/MASTER.md)의 PROJECT/CAD/QUANTITY/OUTPUT/SETTINGS 그룹을 따른다. Milestone 0의 UI Shell은 더미 데이터로 채워진 상태이며, 실제 AutoCAD 연동은 Milestone 1부터 연결한다.
 - UI 디자인 원칙(색상, spacing, 밀도, 안티패턴)은 `design-system/MASTER.md`가 단일 소스다 — ARCHITECTURE.md는 프로세스/데이터 구조를, design-system은 시각적 규칙을 다룬다.
 
-## 9. 로깅 / 설정
+## 10. 로깅 / 설정
 
 - **Logging**: Serilog, 파일 싱크. 경로: `%LOCALAPPDATA%\CADWorkAssistant\logs\yyyy-MM-dd.log`, 일 단위 롤링. 도면 내부 좌표/치수 등 민감할 수 있는 상세 데이터는 Verbose 레벨에서만 기록하고 기본 레벨(Information)에는 요약만 남긴다 (§25).
 - **Settings**: `%APPDATA%\CADWorkAssistant\settings.json`, `System.Text.Json` 직렬화. 소수점 자릿수(길이/면적 별도), 기본 단위 표시 등 사용자 환경설정을 저장한다 (§21).
 - **Project/Quantity 데이터**: SQLite는 실제 Quantity Sheet 기능(Milestone 4) 구현 시점에 도입한다. 지금 시점에 스키마를 미리 설계하지 않는다 (§34 조기 구현 금지).
 
-## 10. 의사결정 로그
+## 11. 의사결정 로그
 
 | 결정 | 대안 | 선택 이유 |
 |---|---|---|
@@ -227,11 +274,19 @@ UI ViewModel의 State enum(Area가 PartialSuccess/NoValidObjects로 더 세분�
 | `SelectionOutcome`을 `SelectionOutcome<TResponse>`로 제네릭화 | Area 전용으로 별도 타입 새로 작성 | Length Handler가 이미 쓰던 걸 그대로 복붙하면 Selected/Cancelled/NoActiveDocument/Error 네 가지 결과를 감싸는 코드가 완전히 중복된다 - 명확한 중복이라 공통화했다 (Milestone 3 §6) |
 | `IpcJson.Options`에 `JsonNumberHandling.AllowNamedFloatingPointLiterals` 추가 | Area의 "면적 읽기 실패" 신호를 NaN이 아닌 다른 방식(예: nullable bool 플래그)으로 전달 | AutoCAD가 Area를 읽다 예외를 던진 상황을 NaN으로 전달하도록 설계했는데, `System.Text.Json`은 기본 설정으로 NaN 직렬화 시 예외를 던진다는 걸 Integration Test가 실제로 실행되며 드러났다(`AreaWorkflowEndToEndTests.FullWorkflow_InvalidGeometry_...`가 NullReferenceException으로 실패). IPC 계층 전체에 영향을 주는 근본 수정이 DTO를 새로 설계하는 것보다 작고 안전했다 |
 | Area 총합 epsilon(1e-6) 이하는 InvalidGeometry로 분류 + 저장 버튼 비활성화 | 0인 값도 그대로 Valid로 합산 | 닫혀 있지만 면적이 사실상 0인 형상은 실무적으로 의미가 없고(Milestone 3 §17, §19), 저장 시점에 별도 확인 없이 걸러야 사용자가 빈 산출내역을 저장하는 실수를 하지 않는다 |
-| Unit Override(Unitless 도면의 계산 단위 수동 지정)는 구현하지 않고 평가만 하고 보류 | Length/Area 양쪽에 바로 구현 | Milestone 3 §3 필수 기능에 없고, Project/Drawing 단위 영구 저장소가 필요한 별도 크기의 기능이다 - "필요할 때 구현한다"는 원칙에 따라 미룬다 (§11) |
+| Unit Override(Unitless 도면의 계산 단위 수동 지정)는 구현하지 않고 평가만 하고 보류 | Length/Area 양쪽에 바로 구현 | Milestone 3 §3 필수 기능에 없고, Project/Drawing 단위 영구 저장소가 필요한 별도 크기의 기능이다 - "필요할 때 구현한다"는 원칙에 따라 미룬다 (§12) |
+| Vertical Area/Parapet 전용 AutoCAD IPC 명령을 만들지 않음 | `SelectVerticalAreaObjects`/`SelectParapetObjects` 신규 추가 | 둘 다 결국 "기준 길이 하나"가 필요할 뿐이고, 그건 이미 `SelectLengthObjects`가 준다(Milestone 4 §5-6) - Plugin 코드 변경이 이번 Milestone에서 거의 없다는 것 자체가 올바른 설계라고 판단했다(§104) |
+| 기준 길이 확보(CAD 선택/최근 측정값/수동 입력) 로직을 `LengthSourceSelector`로 추출 | Vertical Area/Parapet ViewModel에 각자 구현 | 같은 Milestone 안에서 두 번째 소비자(Parapet)가 바로 나타나는 명백한 중복 사례라 상속이 아닌 합성으로 추출했다 - `SelectionOutcome<T>`(Milestone 3)와 같은 판단 기준 |
+| Vertical Area/Parapet 결과 표시를 3자리로, Area는 2자리로 유지(같은 `AreaFormatter`를 다른 `decimalPlaces` 인자로 호출) | Area처럼 2자리로 통일 | Milestone 4 마스터 요구사항의 모든 실무값 예시(25.594/29.514/69.054)가 정확히 3자리였다 - 회귀 테스트로 고정된 값이라 임의로 바꿀 수 없었고, Area의 기존 2자리 결정(Milestone 3)도 그 나름의 근거가 있어 함께 바꾸지 않았다 |
+| Vertical Area/Parapet Workflow State를 enum이 아니라 `IsReady`/`IsInvalidHeight` 등 개별 bool로 표현 | Length/Area처럼 `VerticalAreaWorkflowState` enum 사용 | 실시간 계산(버튼 클릭 없이 입력마다 재계산)이라 "성공 순간"이 따로 없다 - 실제로 enum을 먼저 만들었다가 구현 중 쓰이지 않는 상태가 대부분이라 제거했다(§62) |
+| `LengthWorkflowViewModel.LastResult` 갱신 시 `OnPropertyChanged(nameof(LastResult))` 명시적 호출 추가 | 계산된 값만 맞으면 충분하다고 가정 | Simulation Mode 수동 검증 중 "최근 측정값 사용" 라디오가 Length 쪽 새 측정 완료 후에도 계속 비활성화 상태로 멈춰 있는 것을 실제로 발견했다 - `LastResult`가 PropertyChanged 없이 계산 전용 프로퍼티였던 것이 원인 |
 
-## 11. 아직 결정하지 않은 것 (의도적으로 보류)
+## 12. 아직 결정하지 않은 것 (의도적으로 보류)
 
-- SQLite 접근 방식(Raw ADO.NET vs Dapper vs EF Core) — Milestone 4 착수 시 결정
+- SQLite 접근 방식(Raw ADO.NET vs Dapper vs EF Core) — 산출내역이 프로그램 재시작 후에도 남아야
+  하는 시점(과거 Roadmap의 "Milestone 4 Quantity Sheet" 범위)에 착수 시 결정. Vertical Area/Parapet
+  자체는 SQLite가 필요 없었다 - 기존 Length/Area와 같은 방식으로 메모리상의 Quantity Sheet에만
+  추가된다
 - Excel 라이브러리(ClosedXML 후보) — Excel Export 착수 시 라이선스/유지보수 재확인 후 결정
 - PDF 라이브러리 — PDF Export 착수 시 결정 (QuestPDF는 회사 규모에 따라 상업 라이선스 필요할 수 있어 확인 필요)
 - Installer(Inno Setup vs MSIX) — 첫 배포 가능한 빌드가 나온 뒤 결정
@@ -239,3 +294,10 @@ UI ViewModel의 State enum(Area가 PartialSuccess/NoValidObjects로 더 세분�
 - **Project/Drawing 단위 Unit Override**(§24-27, Unitless 도면에서 계산 단위를 사용자가 지정) — Milestone 3
   §3 필수 기능 목록에는 없고, 영구 저장소(Project/Drawing-scoped setting)가 필요한 별도 기능이라 평가만
   하고 미룬다. Unitless 도면은 지금과 같이 "자동 변환할 수 없다"고만 명확히 안내한다
+- **독립 내측/외측 Parapet 길이**(Milestone 4 §30, §85) — 지금은 같은 기준 길이를 양면에 그대로
+  적용하는 간편 산식만 지원한다. 벽 두께 때문에 실제 내/외측 둘레가 다른 경우를 정밀하게 계산하려면
+  Advanced Parapet으로 별도 착수
+- **개구부 공제**(Milestone 4 §87) — 창/문 등 개구부 면적을 자동으로 빼는 기능. Vertical Surface
+  advanced feature로 남겨둔다
+- **다구간(multi-segment) 높이 계산**(Milestone 4 §88) — 예: `10m×1m + 5m×0.5m`처럼 구간별로 다른
+  높이를 적용. Multi-segment quantity composition으로 향후 확장 가능하게만 설계해뒀다

@@ -1,8 +1,8 @@
-# Measurement Workspace Rules (Length, Area)
+# Measurement Workspace Rules (Length, Area, Vertical Area, Parapet)
 
-Length (Milestone 2) and Area (Milestone 3) are the first two tools under the QUANTITY nav group and
-must read as the same product, not two independently designed screens. Vertical Area/Parapet
-(Milestone 4+) should follow the same shape.
+Length (Milestone 2), Area (Milestone 3), and Vertical Area/Parapet (Milestone 4) are the four tools
+under the QUANTITY nav group and must read as the same product, not four independently designed
+screens.
 
 ## Shared structure
 
@@ -47,9 +47,43 @@ Cancel and "selected but nothing usable" are not error states - color communicat
 `StatusText` always carries the same information in words (never color-only, per accessibility
 rules in `MASTER.md`).
 
-## Extending to Vertical Area / Parapet
+Vertical Area/Parapet don't have a `WorkflowState` enum at all - they're live calculators, not
+select-then-show tools, so there's no discrete "success moment" separate from "currently showing a
+valid result." `StatusBrush` there is resolved from a handful of independent bools
+(`Source.IsBusy`/`Source.IsError`/result-not-null/`IsInvalidHeight`) using the same brush keys as the
+table above, but there was genuinely nothing to gain from wrapping them in an enum - an early attempt
+at one was removed mid-implementation once most of its values turned out unused.
 
-New measurement tools should reuse this same four-row shape rather than inventing a new one. If a
-third tool needs the same header/footer markup verbatim, extract `MeasurementStatusHeader` /
-`MeasurementResultFooter` at that point - not before, since two implementations (Length, Area) are
-not yet a clear enough pattern to abstract confidently.
+## Vertical Area / Parapet (Milestone 4)
+
+These two are *composite* measurement tools - they don't just show a CAD-measured value, they combine
+it with a user-entered condition (height, face mode, top width) and compute a result live as the user
+types. That changes the body of the panel but not its bones:
+
+1. Header row - same as Length/Area (title, status dot + text, primary action button), except the
+   primary action (`[CAD에서 기준선 선택]` / `[CAD에서 둘레 선택]`) is only shown when the user has
+   the "CAD에서 새로 선택" source radio active - visible/hidden rather than always-present, since it
+   isn't always the relevant action.
+2. A **source panel** (new, not in Length/Area) instead of the excluded-summary banner: three radio
+   options (CAD selection / reuse Length's last measurement / manual entry) with the resolved length
+   shown inline. This exists because Vertical Area/Parapet's input isn't "what did AutoCAD just
+   return" - it's "which of three ways did the base length come from," and that choice needs to stay
+   visible, not just flash by.
+3. An **input panel** (new) - height, face mode, top surface toggle. Replaces the result table, since
+   there's nothing to select from AutoCAD directly here - just numbers and a mode.
+4. Result panel - same total-with-actions shape as Length/Area's footer, plus a formula line above the
+   total showing the actual multiplication (`255.941 m × 0.100 m`, or for Parapet the two-line 측면/
+   상부 breakdown) so the number is never presented without its derivation.
+
+**Did not extract shared header/footer controls.** Two implementations (Length, Area) sharing verbatim
+markup was already borderline; four implementations exist now but Vertical Area/Parapet's bodies are
+different enough (radio-based source selection, live-recalculating numeric inputs) that a shared
+`MeasurementStatusHeader`/`MeasurementResultFooter` control would only cover the header/footer rows,
+saving a small amount of XAML at the cost of an extra indirection layer to read through. Revisit if a
+fifth tool makes the header/footer duplication clearly worse.
+
+**Did extract shared view-model logic**: `LengthSourceSelector` (Desktop.ViewModels) is the one piece
+Vertical Area and Parapet share verbatim - acquiring a base length via CAD selection, Length-tool
+reuse, or manual entry is identical logic in both, and Parapet was built as the second consumer within
+the same milestone, which is exactly the point this file's "not yet a clear enough pattern" caveat
+(for the *view* layer) stops applying (for the *view-model* layer).

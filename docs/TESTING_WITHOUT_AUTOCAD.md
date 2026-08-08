@@ -94,7 +94,17 @@ tools\CADWorkAssistant.FakeAutoCad\bin\Debug\net8.0\CADWorkAssistant.FakeAutoCad
 | `AreaAutoCadError` | AutoCAD 내부 오류 흉내 |
 | `LargeAreaSelection` | 객체 1,000개 (성능 테스트용, §35, §81) |
 
-새 Scenario는 `ScenarioCatalog.BuildAll()`에 한 항목만 추가하면 된다. Vertical Area/Parapet 등 향후 기능도 같은 Scenario 시스템을 재사용할 수 있게 설계했다.
+새 Scenario는 `ScenarioCatalog.BuildAll()`에 한 항목만 추가하면 된다.
+
+#### Vertical Area / Parapet (Milestone 4) — 전용 Scenario 없음
+
+Vertical Area와 Parapet은 FakeAutoCad에 새 Scenario를 추가하지 않았다. 둘 다 새 AutoCAD IPC 명령이
+없고(`docs/QUANTITY_COMPOSITION.md` 참고) 기준 길이는 기존 `SelectLengthObjects`로만 들어오므로,
+Integration.Tests가 기존 `NormalSelection` Scenario(255.940660 m)를 그대로 재사용해 "실제 IPC 왕복
+→ Core.VerticalArea/Core.Parapet 계산"이라는 배선을 검증한다. 계산 로직 자체(32.118m 등 실무값
+회귀)는 Core.Tests에서 AutoCAD/IPC 없이 이미 정밀 검증했다 - FakeAutoCad 안에는 수량 계산 로직을
+넣지 않는다는 원칙을 지켰다(Milestone 4 §106: "FakeAutoCad는 AutoCAD를 Simulation하는 도구다.
+공사 수량 계산은 Desktop/Core 책임이다").
 
 ## Development Simulation Mode (Desktop)
 
@@ -133,6 +143,23 @@ FakeAutoCad.exe + Desktop.exe를 실제로 별도 프로세스 두 개로 띄워
 7. `EmptyAreaSelection` Scenario → "선택된 객체가 없습니다.", "산출내역 추가" 버튼 비활성화 확인
 
 이 과정에서 실제 버그 하나를 발견/수정했다: `InvalidArea` Scenario(닫혀 있지만 면적이 `double.NaN`)로 Integration Test를 돌렸을 때 `NullReferenceException`이 발생했다 - `System.Text.Json`이 기본 설정으로는 `NaN`을 직렬화하지 못해 IPC 응답이 깨졌기 때문이다. `IpcJson.Options`에 `JsonNumberHandling.AllowNamedFloatingPointLiterals`를 추가해 해결했다 (Length를 포함한 IPC 계층 전체에 적용되는 수정이라 회귀 테스트를 `Core.Tests/Ipc/IpcEnvelopeTests.cs`에 추가했다).
+
+**Milestone 4 (Vertical Area / Parapet, 2026-08-08)**
+
+1. `NormalSelection` Scenario로 Vertical Area → "CAD에서 기준선 선택" 클릭 → "기준 길이 255.941 m" 표시
+2. 높이 TextBox에 `0.1` 입력(버튼 없이 `UpdateSourceTrigger=PropertyChanged`로 즉시 재계산) → "255.941 m × 0.100 m" / "25.594 m²" 실시간 표시 확인
+3. 높이를 `0`으로 바꾸면 "높이는 0보다 커야 합니다." + "산출내역 추가" 버튼 비활성화, 다시 `0.1`로 되돌리면 즉시 복구
+4. "산출내역 추가" → Dashboard Quantity 테이블에 `VerticalArea / 25.594 / m²` 행 추가 확인
+5. Parapet에서 같은 방식으로 둘레 선택 → 높이 `1.0` → "양면" 라디오 선택(양면 511.881 m² = 255.941×1.0×2 확인) → "상부면 포함" 체크 → 폭 `150`(mm) 입력 → 측면 511.881 m² + 상부 38.391 m² = 총 550.272 m² 정확히 표시, "산출내역 추가" → Dashboard에 `Parapet / 550.272 / m²` 확인
+6. 직접 입력(Manual) 소스로 전환 → `32118`(mm) 입력 → "32.118 m × 1.000 m" = "32.118 m²" 정확히 계산 (§57의 실무값과 별개로 단위 변환 자체가 UI에서 올바르게 동작하는지 확인)
+
+이 과정에서 실제 버그 하나를 더 발견/수정했다: Length 도구에서 새 측정을 완료한 뒤 Vertical Area로
+전환해 "최근 측정값 사용" 라디오를 선택하면 계속 비활성화 상태로 남아 있었다 - `LengthWorkflowViewModel.LastResult`가
+값은 정확히 갱신되고 있었지만 `OnPropertyChanged(nameof(LastResult))`를 호출하지 않아 WPF 바인딩이
+그 변경을 몰랐기 때문이다(계산 자체는 항상 맞았고, 데이터 바인딩 알림 누락이었다). `LengthWorkflowViewModel`에
+알림 호출을 추가하고 `LengthSourceSelector`가 그 알림을 구독하도록 고쳤다 - Core.Tests/Integration.Tests는
+WPF 바인딩을 거치지 않아 이 버그를 잡아내지 못했고, Simulation Mode 수동 검증에서만 발견됐다 - "UI까지
+실제로 띄워 확인한다"는 이 문서의 존재 이유를 그대로 보여준 사례다.
 
 ## Real Machine Test 경계
 

@@ -15,7 +15,7 @@ AutoCAD 실무자를 위한 Windows 설치형 업무 자동화 프로그램. 설
 
 ```text
 src/
-  CADWorkAssistant.Core/            netstandard2.0 — 계산·도메인 로직 (AutoCAD/WPF 비의존). Ipc(프로토콜)/Cad(상태머신/단위 변환)/Length(길이 계산)/Area(면적 계산)
+  CADWorkAssistant.Core/            netstandard2.0 — 계산·도메인 로직 (AutoCAD/WPF 비의존). Ipc(프로토콜)/Cad(상태머신/단위 변환)/Length(길이 계산)/Area(면적 계산)/VerticalArea+Parapet(수량 조합)
   CADWorkAssistant.Infrastructure/  net48;net8.0 — 로깅(Serilog), 설정(JSON), Named Pipe 전송 계층
   CADWorkAssistant.Documents/       netstandard2.0 — Excel/PDF/CSV export (구현 예정)
   CADWorkAssistant.Desktop/         net8.0-windows — WPF Desktop App (진입점), MVVM
@@ -26,7 +26,7 @@ tests/
   CADWorkAssistant.Core.Tests/          Core+Infrastructure 단위 테스트 (AutoCAD 불필요)
   CADWorkAssistant.Integration.Tests/   FakeAutoCad를 실제 프로세스로 띄워 실제 Named Pipe로 검증 (AutoCAD 불필요)
 design-system/    UI 디자인 방향과 컴포넌트 규칙 (MASTER.md, pages/)
-docs/             ARCHITECTURE / ROADMAP / REQUIREMENTS / AUTOCAD_INTEGRATION / TESTING_WITHOUT_AUTOCAD / AUTOCAD_REAL_MACHINE_CHECKLIST
+docs/             ARCHITECTURE / ROADMAP / REQUIREMENTS / AUTOCAD_INTEGRATION / TESTING_WITHOUT_AUTOCAD / AUTOCAD_REAL_MACHINE_CHECKLIST / QUANTITY_COMPOSITION
 installer/        설치 프로그램 스크립트 (추후)
 samples/          테스트용 샘플 DWG (커밋 대상 아님)
 ```
@@ -62,4 +62,4 @@ dotnet run --project src/CADWorkAssistant.Desktop
 
 ## 현재 상태
 
-Milestone 3 (Area) — AutoCAD 영역 선택 → 닫힘 확인 → 면적 추출 → 단위 변환 → 합산 → 결과 표시 → 산출내역 저장까지 구현 완료. Length(Milestone 2)와 같은 패턴을 공유하며, Headless Simulation으로 종단간 검증 완료, 실제 AutoCAD GUI 검증만 남음 (`docs/AUTOCAD_REAL_MACHINE_CHECKLIST.md`). 상세 진행 상황은 [`docs/ROADMAP.md`](docs/ROADMAP.md) 참조.
+Milestone 4 (Vertical Area + Parapet) — CAD에서 측정한 길이를 높이/면/상부 폭과 조합해 실제 공사 수량(수직면적, 파라펫)을 계산하고 계산 근거와 함께 저장하는 것까지 구현 완료. 새 AutoCAD IPC 명령 없이 Length(Milestone 2)의 `SelectLengthObjects`를 그대로 재사용한다 (`docs/QUANTITY_COMPOSITION.md`). Headless Simulation + Simulation Mode 수동 검증 완료, 실제 AutoCAD GUI 검증만 남음 (`docs/AUTOCAD_REAL_MACHINE_CHECKLIST.md`). 상세 진행 상황은 [`docs/ROADMAP.md`](docs/ROADMAP.md) 참조.

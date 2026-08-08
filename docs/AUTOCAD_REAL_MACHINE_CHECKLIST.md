@@ -60,6 +60,22 @@ Level 1(Unit)/Level 2(Headless Integration) 테스트로 커버할 수 없는, �
 - [ ] `Hatch`를 실제로 지원해야 할 만큼 사용 빈도가 높은지 실사용자 피드백으로 재평가 (현재는 의도적으로 Unsupported, `docs/AUTOCAD_INTEGRATION.md` §5.6)
 - [ ] `Polyline3d`를 면적 계산에 쓰려는 실사용 요구가 있는지, 있다면 어떤 평면 투영 규칙을 기대하는지 재평가
 
+## Milestone 4 — Vertical Area + Parapet
+
+새 AutoCAD API를 쓰지 않는다 - 기준 길이는 Milestone 2의 `SelectLengthObjects`를 그대로 재사용한다
+(`docs/QUANTITY_COMPOSITION.md`). 그래서 이 Milestone의 Real AutoCAD 의존성은 낮다 - 아래 항목은
+전부 "Length 획득 통합"과 "화면 표시" 확인이지, 새로운 AutoCAD Managed API 동작 확인이 아니다.
+
+- [ ] CAD에서 기준선 선택 → Vertical Area로 넘어가 면적 계산 (Line/Polyline 각각)
+- [ ] 여러 객체 선택 후 합산된 길이를 기준으로 Vertical Area 계산
+- [ ] Esc로 선택 취소 → "선택이 취소되었습니다" (빨간 오류 아님)
+- [ ] mm 도면 / m 도면 각각에서 기준 길이가 정확히 반영되는지
+- [ ] Unitless 도면에서 CAD 선택 → "기준 길이 단위를 확인할 수 없습니다" 안내, 자동 진행 안 함
+- [ ] Length 도구에서 실제로 측정한 뒤 Vertical Area/Parapet에서 "최근 측정값 사용" 선택 → 정확한 값 재사용 (Simulation Mode에서 발견한 PropertyChanged 버그가 실제 AutoCAD 환경에서도 고쳐졌는지 재확인)
+- [ ] 파라펫 둘레 선택 → 한 면/양면/상부면 조합별 계산 확인
+- [ ] 높이/상부 폭 단위(mm/cm/m) 조합별 계산 확인
+- [ ] "산출내역 추가" → Dashboard에 정확한 값/산식으로 반영
+
 ## 검증 방법 메모
 
 - 이 문서의 각 항목은 AutoCAD가 있는 머신에서 확인 후 `[ ]` → `[x]`로 바꾸고, 특이사항이 있으면 항목 옆에 메모를 남긴다.

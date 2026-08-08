@@ -31,12 +31,16 @@ AutoCAD Managed API DLL은 **NuGet으로 배포되지 않고 로컬 설치 경�
 | `CWA` | 메인 Task Pane / 상태 확인 | 1 |
 | `CWA_LENGTH` | 길이 산출 선택 모드 | 2 |
 | `CWA_AREA` | 면적 산출 선택 모드 | 3 |
-| `CWA_PARAPET` | 파라펫 계산 선택 모드 | 5 |
 | `CWA_EXPORT` | 부분 DWG 추출 | 8 |
 | `CWA_LAYER` | Layer 도구 | 9 |
 | `CWA_PLOT` | Plot 프리셋 실행 | 10 |
 
-`CWA` prefix는 흔한 AutoCAD 내장/서드파티 명령과 충돌 가능성이 낮아 채택했다. **아직 실제로 등록한 명령은 없다** - Milestone 3까지도 Desktop → IPC → Handler 경로가 유일한 진입점이고, AutoCAD 쪽 `[CommandMethod]`는 "Desktop 없이도 Plugin을 Smoke Test할 수 있게" 하는 부가 기능(Milestone 2 §47)이라 실제 AutoCAD에서 검증 가능해지는 시점(`docs/AUTOCAD_REAL_MACHINE_CHECKLIST.md`)에 추가하기로 미뤘다 - 등록하더라도 `SelectLengthObjectsHandler`/`SelectAreaObjectsHandler`와 같은 로직을 재사용하고 중복 구현하지 않는다.
+`CWA` prefix는 흔한 AutoCAD 내장/서드파티 명령과 충돌 가능성이 낮아 채택했다. **아직 실제로 등록한 명령은 없다** - Milestone 4까지도 Desktop → IPC → Handler 경로가 유일한 진입점이고, AutoCAD 쪽 `[CommandMethod]`는 "Desktop 없이도 Plugin을 Smoke Test할 수 있게" 하는 부가 기능(Milestone 2 §47)이라 실제 AutoCAD에서 검증 가능해지는 시점(`docs/AUTOCAD_REAL_MACHINE_CHECKLIST.md`)에 추가하기로 미뤘다 - 등록하더라도 `SelectLengthObjectsHandler`/`SelectAreaObjectsHandler`와 같은 로직을 재사용하고 중복 구현하지 않는다.
+
+`CWA_PARAPET`(또는 `CWA_VERTICAL_AREA`)은 이 표에 없다 - Vertical Area/Parapet은 AutoCAD 쪽에
+자기 전용 동작이 전혀 없다(Milestone 4 §5-6). 선택은 전부 `CWA_LENGTH`가 커버할 `SelectLengthObjects`
+그대로이고, 나머지(높이/면/상부폭 입력, 계산)는 Desktop/Core에서만 일어난다 - 별도 명령을 만드는 것
+자체가 불필요한 복잡도다.
 
 ## 5. IPC — Desktop ↔ Plugin (Milestone 1에서 구현 완료)
 

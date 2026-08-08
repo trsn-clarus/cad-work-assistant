@@ -75,21 +75,51 @@
 - [x] Length/Area 공통 UI 패턴 정리 (`design-system/pages/measurement-workspace.md`) — 헤더/제외요약/테이블/총계 4단 구조를 공유
 - [ ] **실제 AutoCAD 2024 GUI로 검증** — 이 개발 PC는 AutoCAD GUI가 불안정해(Milestone 1에서 확인) 수행하지 못함. 항목은 `docs/AUTOCAD_REAL_MACHINE_CHECKLIST.md`에 정리
 - [ ] `CWA_AREA` AutoCAD 명령 등록 — Length의 `CWA_LENGTH`와 같은 이유로 실제 AutoCAD 검증이 가능해지는 시점으로 미룸
-- [ ] Project/Drawing 단위 Unit Override (Unitless 도면의 계산 단위 수동 지정) — §3 필수 기능이 아니라 평가만 하고 보류 (`docs/ARCHITECTURE.md` §11)
+- [ ] Project/Drawing 단위 Unit Override (Unitless 도면의 계산 단위 수동 지정) — §3 필수 기능이 아니라 평가만 하고 보류 (`docs/ARCHITECTURE.md` §12)
 
 **완료 기준**: 실제 DWG에서 여러 닫힌 영역을 선택해 정확한 총 면적(m²)을 확인할 수 있다. → **Headless Simulation으로는 완전히 충족** (School_Roof.dwg 시나리오로 정확히 3,102.43 m² 확인, 4개 중 1개 열림 케이스의 PartialSuccess도 확인). 실제 DWG/AutoCAD 기준 최종 확인만 남았다.
 
-## Milestone 4 — Quantity Sheet
+## Milestone 4 — Vertical Area + Parapet
+
+**상태: 코드/자동 테스트/Simulation Mode 종단간 검증 완료, 실제 AutoCAD GUI 검증만 남음 (2026-08-08)**
+
+- [x] Vertical Area 계산기(`Core.VerticalArea.VerticalAreaCalculator`, A = L × H) + 높이 mm/cm/m 단위
+      정규화 + 검증(0 이하 거부) — AutoCAD 독립적으로 유닛 테스트 (실무값 회귀: 255940.660mm×0.10m
+      → 25.594 m², 295141.237mm×0.10m → 29.514 m²)
+- [x] Parapet 계산기(`Core.Parapet.ParapetCalculator`) — VerticalAreaCalculator를 측면/상부면 두 번
+      재사용해 조합. 한 면/양면(×2) + 상부면 포함 옵션(L × Width) — 실무값 회귀: 32.118m×1.0m 양면+
+      상부폭0.15m → 69.054 m²(측면 64.236 + 상부 4.818)
+- [x] 기준 길이 확보 3가지 경로 — CAD에서 새로 선택 / Length 도구 최근 측정값 재사용 / 직접 입력 —
+      새 AutoCAD IPC 명령 없이 전부 Milestone 2의 `SelectLengthObjects`만 재사용 (`LengthSourceSelector`
+      공유 컴포넌트, Vertical Area/Parapet ViewModel이 각자 구현하지 않도록 추출)
+- [x] 높이/양면/상부면 입력 변경 시 실시간 재계산 (버튼 없이 즉시 결과 갱신)
+- [x] Desktop에 Vertical Area/Parapet 패널 추가 (Length/Area와 같은 Measurement Workspace 시각
+      패턴 공유) + "산출내역 추가"로 Quantity Sheet에 저장 (`QuantityRecord.MeasurementSource` 필드
+      신규 추가로 CAD선택/최근측정값/수동입력 구분 보존)
+- [x] Core.Tests 31개(VerticalArea 13개 + Parapet 18개) 신규, Integration.Tests 6개 신규(기존
+      Length Scenario "NormalSelection" 재사용, Vertical Area/Parapet 전용 FakeAutoCad Scenario는
+      만들지 않음 — §106 "계산 로직은 FakeAutoCad에 넣지 않는다" 원칙)
+- [x] Desktop을 Simulation Mode로 실제 실행해 전체 Workflow 수동 검증 — 이 과정에서 실제 버그 발견/
+      수정(`LengthWorkflowViewModel.LastResult`가 PropertyChanged 없이 갱신되어 "최근 측정값 사용"
+      라디오가 새 측정 후에도 비활성 상태로 멈춰 있던 문제)
+- [ ] **실제 AutoCAD 2024 GUI로 검증** — 이 개발 PC는 AutoCAD GUI가 불안정해(Milestone 1에서 확인)
+      수행하지 못함. 항목은 `docs/AUTOCAD_REAL_MACHINE_CHECKLIST.md`에 정리 (다만 이 기능은 계산
+      로직 대부분이 Core에서 완전히 테스트되므로 Real AutoCAD 의존성이 낮다 - Length acquisition
+      통합만 확인하면 된다)
+
+**완료 기준**: CAD에서 선택한 기준선에 높이를 입력해 정확한 수직면적(m²)을, 파라펫 둘레에 높이/면/
+상부폭을 입력해 정확한 파라펫 총 면적을 확인하고 계산 근거와 함께 저장할 수 있다. →
+**Headless Simulation + Simulation Mode 수동 검증으로 완전히 충족**. 실제 DWG/AutoCAD 기준 최종
+확인만 남았다.
+
+## Milestone 5 — Quantity Sheet Persistence
 
 - [ ] SQLite 스키마 설계 (Project, QuantityItem, CalculationHistory)
-- [ ] Length/Area 결과를 프로젝트에 "산출내역 추가"
-- [ ] 산출내역 목록 화면
-- [ ] 계산 근거(산식) 보존 (§17)
-
-## Milestone 5 — Vertical Area / Parapet
-
-- [ ] 둘레 × 높이 계산기 + 계산식 표시
-- [ ] 파라펫 계산기 (안쪽/바깥쪽/양면, 상부 포함 옵션)
+- [ ] 현재 메모리상에만 있는 Quantity Sheet(Length/Area/Vertical Area/Parapet의 "산출내역 추가"는
+      이미 Milestone 2-4에서 구현 완료)를 재시작 후에도 유지되도록 영속화
+- [ ] 산출내역 목록/검색 화면
+- [ ] 계산 근거(산식) 보존은 `QuantityRecord.CalculationExpression`으로 이미 구현됨 - 영속화 시
+      그대로 저장
 
 ## Milestone 6 — Quantity History & 검산
 

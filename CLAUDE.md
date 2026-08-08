@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-이 파일은 이 Repository에서 작업하는 Claude Code 세션을 위한 지침이다. 전체 요구사항 배경은 `docs/REQUIREMENTS.md`, 아키텍처 결정은 `docs/ARCHITECTURE.md`, 진행 상황은 `docs/ROADMAP.md`, AutoCAD 연동 세부사항은 `docs/AUTOCAD_INTEGRATION.md`, AutoCAD 없이 개발/테스트하는 방법은 `docs/TESTING_WITHOUT_AUTOCAD.md`를 참조한다.
+이 파일은 이 Repository에서 작업하는 Claude Code 세션을 위한 지침이다. 전체 요구사항 배경은 `docs/REQUIREMENTS.md`, 아키텍처 결정은 `docs/ARCHITECTURE.md`, 진행 상황은 `docs/ROADMAP.md`, AutoCAD 연동 세부사항은 `docs/AUTOCAD_INTEGRATION.md`, AutoCAD 없이 개발/테스트하는 방법은 `docs/TESTING_WITHOUT_AUTOCAD.md`, 수량 조합(Vertical Area/Parapet) 공식/가정은 `docs/QUANTITY_COMPOSITION.md`를 참조한다.
 
 ## 프로젝트 한 줄 요약
 
@@ -27,18 +27,18 @@ AutoCAD 실무자가 매일 쓰는 Windows 설치형 업무 자동화 프로그�
 
 ```text
 src/
-  CADWorkAssistant.Core/            netstandard2.0 — 계산/도메인 로직. Core/Ipc(프로토콜), Core/Cad(DTO+상태머신+단위 변환 계수), Core/Length(길이 집계/포맷), Core/Area(면적 분류/집계/포맷). AutoCAD·WPF 의존 금지
+  CADWorkAssistant.Core/            netstandard2.0 — 계산/도메인 로직. Core/Ipc(프로토콜), Core/Cad(DTO+상태머신+단위 변환 계수), Core/Length(길이 집계/포맷), Core/Area(면적 분류/집계/포맷), Core/VerticalArea+Core/Parapet(수량 조합, AutoCAD IPC 없음). AutoCAD·WPF 의존 금지
   CADWorkAssistant.Infrastructure/  net48;net8.0 (멀티타겟) — 로깅(Serilog), 설정(JSON), Ipc/(PipeMessageFramer/AutoCadPipeClient/AutoCadPipeServer - 전송 계층 전체)
   CADWorkAssistant.Documents/       netstandard2.0 — Excel/PDF/CSV export (필요 시점에 구현)
-  CADWorkAssistant.Desktop/         net8.0-windows — WPF, MVVM(자체 구현), Services/(Discovery/ConnectionManager), Views/(UserControl), 진입점
-  CADWorkAssistant.AutoCAD/         net48 — AutoCAD Managed API, in-process plugin, Ipc/Handlers/(Ping/GetApplicationInfo/GetDrawingContext/SelectLengthObjects/SelectAreaObjects)
+  CADWorkAssistant.Desktop/         net8.0-windows — WPF, MVVM(자체 구현), Services/(Discovery/ConnectionManager/LengthSelectionCoordinator), Views/(UserControl), 진입점
+  CADWorkAssistant.AutoCAD/         net48 — AutoCAD Managed API, in-process plugin, Ipc/Handlers/(Ping/GetApplicationInfo/GetDrawingContext/SelectLengthObjects/SelectAreaObjects) — Vertical Area/Parapet 전용 Handler 없음(기존 SelectLengthObjects 재사용)
 tools/
   CADWorkAssistant.FakeAutoCad/     net8.0 — Headless AutoCAD Simulation Host (실행 가능 콘솔 앱). AutoCAD Plugin과 동일한 서버 코드 재사용. 설치본에 포함 안 함
 tests/
   CADWorkAssistant.Core.Tests/          — Core+Infrastructure 단위 테스트 (AutoCAD 불필요)
   CADWorkAssistant.Integration.Tests/   — FakeAutoCad를 실제 프로세스로 띄워 실제 Named Pipe로 종단간 테스트 (AutoCAD 불필요)
 design-system/   — UI 시각 규칙 단일 소스 (색상/타이포/spacing/컴포넌트/안티패턴). UI 작업 전 반드시 확인
-docs/    — ARCHITECTURE / ROADMAP / REQUIREMENTS / AUTOCAD_INTEGRATION / TESTING_WITHOUT_AUTOCAD / AUTOCAD_REAL_MACHINE_CHECKLIST / UI_ENVIRONMENT_SETUP
+docs/    — ARCHITECTURE / ROADMAP / REQUIREMENTS / AUTOCAD_INTEGRATION / TESTING_WITHOUT_AUTOCAD / AUTOCAD_REAL_MACHINE_CHECKLIST / QUANTITY_COMPOSITION / UI_ENVIRONMENT_SETUP
 installer/, samples/
 ```
 
@@ -47,6 +47,11 @@ MVVM은 외부 패키지 없이 직접 구현한 `ObservableObject`/`RelayComman
 Desktop(별도 프로세스)과 AutoCAD Plugin(in-process, net48)은 **Named Pipe + JSON**으로 통신한다. 자세한 프로토콜/호출 경로는 `docs/ARCHITECTURE.md` §5-6, `docs/AUTOCAD_INTEGRATION.md` §5.
 
 새 AutoCAD 명령(Area 등)을 추가할 때: (1) `Core/Ipc/IpcMessageTypes.cs`에 상수 추가, (2) 필요하면 `Core/`에 요청/응답 DTO와 도메인 계산 로직(AutoCAD 비의존, 단위 테스트 가능하게) 추가, (3) `AutoCAD/Ipc/Handlers/`에 실제 Handler 구현, (4) `FakeAutoCad/Handlers/`에 대응하는 Fake Handler + `ScenarioCatalog`에 Scenario 추가, (5) `Extension.cs`/`FakeAutoCad/Program.cs` 양쪽의 handler 배열에 등록. AutoCAD 원본 API 사용 전에는 항상 리플렉션으로 실존을 확인한다 - 추측 금지.
+
+새 "기존 측정값을 조합하는" 계산 기능(Vertical Area/Parapet처럼)을 추가할 때는 위 절차를 따르지
+않는다 - 먼저 기존 IPC 명령(예: `SelectLengthObjects`)으로 필요한 원본 데이터를 이미 얻을 수 있는지
+확인하고, 얻을 수 있다면 새 IPC 명령/AutoCAD Handler/FakeAutoCad Scenario를 만들지 않는다. `Core/`에
+새 계산 로직만 추가하고 Desktop ViewModel에서 조합한다 (`docs/QUANTITY_COMPOSITION.md` 참고).
 
 ## 빌드 / 테스트
 
