@@ -59,6 +59,18 @@ public sealed class AutoCadConnectionManager : IAutoCadConnectionManager
         _loopTask = Task.Run(() => LoopAsync(_cts.Token));
     }
 
+    public async Task<IpcResponseEnvelope> SendRequestAsync(string messageType, object? payload, CancellationToken cancellationToken)
+    {
+        if (_client is not { IsConnected: true } client)
+        {
+            throw new InvalidOperationException("Not connected to AutoCAD - SendRequestAsync called while disconnected.");
+        }
+
+        return await client
+            .SendRequestAsync(messageType, payload, IpcProtocol.RequestTimeoutMs, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
     public async Task SelectInstanceAsync(int processId, CancellationToken cancellationToken)
     {
         await _operationLock.WaitAsync(cancellationToken).ConfigureAwait(false);

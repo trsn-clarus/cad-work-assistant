@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using CADWorkAssistant.Core.Cad;
+using CADWorkAssistant.Core.Ipc;
 using CADWorkAssistant.Core.Models;
 
 namespace CADWorkAssistant.Desktop.Services;
@@ -25,4 +26,11 @@ public interface IAutoCadConnectionManager : INotifyPropertyChanged, IDisposable
 
     /// <summary>AutoCAD Instance가 여러 개일 때 사용자가 하나를 고른다 (§23, §36).</summary>
     Task SelectInstanceAsync(int processId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// 연결된 AutoCAD(또는 FakeAutoCAD)에 임의의 IPC 요청을 보낸다. Length/Area 등 기능별
+    /// ViewModel/Service가 Named Pipe 세부사항을 몰라도 되도록 하는 유일한 진입점이다 (§37, §49 -
+    /// 기능마다 별도 Adapter 인터페이스를 만들지 않고 이걸 재사용한다). 연결되어 있지 않으면 예외를 던진다.
+    /// </summary>
+    Task<IpcResponseEnvelope> SendRequestAsync(string messageType, object? payload, CancellationToken cancellationToken);
 }

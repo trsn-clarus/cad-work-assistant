@@ -24,6 +24,8 @@ public sealed class MainWindowViewModel : ObservableObject
         _connectionManager = connectionManager;
         _connectionManager.PropertyChanged += OnConnectionManagerPropertyChanged;
 
+        Length = new LengthWorkflowViewModel(connectionManager);
+
         Navigation = new ObservableCollection<NavItem>
         {
             new("PROJECT", "Dashboard", "Alt+1", true) { IsSelected = true },
@@ -74,6 +76,8 @@ public sealed class MainWindowViewModel : ObservableObject
             new(DateTimeOffset.Now.AddMinutes(-6), "Warning", "Open polyline skipped", "Select a closed polyline before area calculation")
         };
 
+        Length.RecordAdded += (_, record) => QuantityRecords.Insert(0, record);
+
         OpenCommandPaletteCommand = new RelayCommand(() => IsCommandPaletteOpen = true);
         CloseCommandPaletteCommand = new RelayCommand(() => IsCommandPaletteOpen = false);
         ToggleInspectorCommand = new RelayCommand(() => IsInspectorOpen = !IsInspectorOpen);
@@ -89,6 +93,8 @@ public sealed class MainWindowViewModel : ObservableObject
     public ObservableCollection<DrawingFile> Drawings { get; }
     public ObservableCollection<QuantityRecord> QuantityRecords { get; }
     public ObservableCollection<OperationLogEntry> Activity { get; }
+
+    public LengthWorkflowViewModel Length { get; }
 
     public ICommand OpenCommandPaletteCommand { get; }
     public ICommand CloseCommandPaletteCommand { get; }
@@ -118,8 +124,20 @@ public sealed class MainWindowViewModel : ObservableObject
     public string SelectedTool
     {
         get => _selectedTool;
-        set => SetProperty(ref _selectedTool, value);
+        set
+        {
+            if (SetProperty(ref _selectedTool, value))
+            {
+                OnPropertyChanged(nameof(IsLengthToolSelected));
+                OnPropertyChanged(nameof(IsDashboardContentVisible));
+            }
+        }
     }
+
+    /// <summary>Length는 자기만의 패널을 갖는다 (§38) - 나머지는 아직 기존 Dashboard 콘텐츠를 공유한다.</summary>
+    public bool IsLengthToolSelected => _selectedTool == "Length";
+
+    public bool IsDashboardContentVisible => !IsLengthToolSelected;
 
     public string StatusMessage
     {
@@ -138,7 +156,9 @@ public sealed class MainWindowViewModel : ObservableObject
         CadConnectionState.ProcessDetected => "AutoCAD Detected · Select Instance",
         CadConnectionState.PluginUnavailable => "AutoCAD Detected · Plugin Not Loaded",
         CadConnectionState.Connecting => "Connecting…",
-        CadConnectionState.Connected => _connectionManager.Instance is { } info ? $"{info.Product} Connected" : "AutoCAD Connected",
+        CadConnectionState.Connected => _connectionManager.Instance is { } info
+            ? (info.IsSimulated ? $"[SIMULATION] {info.Product} Connected" : $"{info.Product} Connected")
+            : "AutoCAD Connected",
         CadConnectionState.Reconnecting => "Reconnecting…",
         CadConnectionState.Disconnected => "AutoCAD Disconnected",
         CadConnectionState.Faulted => "AutoCAD Connection Error",
@@ -148,21 +168,7 @@ public sealed class MainWindowViewModel : ObservableObject
     public string ActiveDrawing => _connectionManager.Drawing?.DocumentDisplayName
         ?? (_connectionManager.State == CadConnectionState.Connected ? "No document open" : "—");
 
-    public string Units => _connectionManager.Drawing?.Units switch
-    {
-        null => "—",
-        DrawingUnit.Unitless => "Unitless",
-        DrawingUnit.Millimeters => "mm",
-        DrawingUnit.Centimeters => "cm",
-        DrawingUnit.Decimeters => "dm",
-        DrawingUnit.Meters => "m",
-        DrawingUnit.Kilometers => "km",
-        DrawingUnit.Inches => "in",
-        DrawingUnit.Feet => "ft",
-        DrawingUnit.Yards => "yd",
-        DrawingUnit.Miles => "mi",
-        _ => "other"
-    };
+    public string Units => _connectionManager.Drawing?.Units is { } unit ? DrawingUnitDisplay.Abbreviation(unit) : "—";
 
     public string SelectionSummary => "No selection";
 
