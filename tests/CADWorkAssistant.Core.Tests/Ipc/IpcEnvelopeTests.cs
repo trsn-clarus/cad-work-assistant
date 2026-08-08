@@ -56,4 +56,23 @@ public class IpcEnvelopeTests
         Assert.Equal("No document is open.", restored.Error.Message);
         Assert.Null(restored.Payload);
     }
+
+    private sealed record PayloadWithDouble(double Value);
+
+    [Fact]
+    public void ResponseEnvelope_NaNPayloadValue_RoundTripsInsteadOfThrowing()
+    {
+        // Milestone 3에서 실제로 겪은 버그: AutoCAD의 Area 계산 실패를 Core.Area.CadAreaObjectDto.RawArea에
+        // double.NaN으로 담아 보냈더니 System.Text.Json이 기본 설정으로는 NaN을 직렬화하지 못해
+        // Integration Test가 NullReferenceException으로 실패했다. IpcJson.Options에
+        // AllowNamedFloatingPointLiterals를 켠 뒤에도 계속 통과해야 한다 (회귀 방지).
+        var response = IpcResponseEnvelope.Ok("req-3", new PayloadWithDouble(double.NaN));
+
+        var json = response.ToJson();
+        var restored = IpcResponseEnvelope.FromJson(json);
+        var payload = restored.DeserializePayload<PayloadWithDouble>();
+
+        Assert.True(restored.Success);
+        Assert.True(double.IsNaN(payload!.Value));
+    }
 }
