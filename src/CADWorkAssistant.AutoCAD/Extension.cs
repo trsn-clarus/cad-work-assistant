@@ -1,4 +1,8 @@
+using System.Diagnostics;
 using Autodesk.AutoCAD.Runtime;
+using CADWorkAssistant.AutoCAD.Ipc;
+using CADWorkAssistant.AutoCAD.Ipc.Handlers;
+using CADWorkAssistant.Core.Ipc;
 using CADWorkAssistant.Infrastructure.Logging;
 using Serilog;
 
@@ -7,19 +11,36 @@ using Serilog;
 namespace CADWorkAssistant.AutoCAD;
 
 /// <summary>
-/// AutoCAD 프로세스에 로드되는 진입점. 지금은 로딩/언로딩만 검증한다.
-/// 실제 명령(CWA_*)과 Named Pipe 서버는 Milestone 1에서 추가한다 (docs/ROADMAP.md).
+/// AutoCAD 프로세스에 로드되는 진입점. Named Pipe IPC 서버를 시작/종료한다 (docs/AUTOCAD_INTEGRATION.md §5).
 /// </summary>
 public class Extension : IExtensionApplication
 {
+    private AutoCadPipeServer? _pipeServer;
+
     public void Initialize()
     {
         AppLog.Initialize();
         Log.Information("CADWorkAssistant.AutoCAD plugin loaded");
+
+        var dispatcher = new AutoCadDispatcher();
+        var handlers = new IIpcRequestHandler[]
+        {
+            new PingHandler(),
+            new GetApplicationInfoHandler(dispatcher),
+            new GetDrawingContextHandler(dispatcher)
+        };
+
+        _pipeServer = new AutoCadPipeServer(new IpcRequestDispatcher(handlers), Process.GetCurrentProcess().Id);
+        _pipeServer.Start();
     }
 
     public void Terminate()
     {
         Log.Information("CADWorkAssistant.AutoCAD plugin unloading");
+
+        // AutoCAD 종료를 막지 않도록 짧게 기다린 뒤 포기한다 - 파이프 서버가 이미 멈춰 있어도 안전하다.
+        _pipeServer?.StopAsync().Wait(millisecondsTimeout: 2000);
+
+        AppLog.Shutdown();
     }
 }
