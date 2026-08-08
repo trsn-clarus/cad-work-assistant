@@ -176,6 +176,7 @@ public sealed class VerticalAreaWorkflowViewModel : ObservableObject
         }
 
         var expression = $"{FormulaDisplay} = {TotalDisplay}";
+        var metadata = new VerticalAreaCalculationMetadata(result.SourceLengthMeters, result.HeightMeters);
 
         var record = new QuantityRecord(
             id: "Q-" + System.DateTimeOffset.Now.ToUnixTimeMilliseconds(),
@@ -190,7 +191,8 @@ public sealed class VerticalAreaWorkflowViewModel : ObservableObject
             sourceUnit: "m",
             objectHandles: Source.ObjectHandles,
             calculationExpression: expression,
-            measurementSource: Source.SourceType.ToString());
+            measurementSource: Source.SourceType.ToString(),
+            calculationMetadataJson: metadata.ToJson());
 
         RecordAdded?.Invoke(this, record);
         StatusText = "산출내역에 추가했습니다.";

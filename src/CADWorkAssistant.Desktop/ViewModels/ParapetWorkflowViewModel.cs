@@ -289,6 +289,8 @@ public sealed class ParapetWorkflowViewModel : ObservableObject
         var expression = result.TopIncluded
             ? $"측면: {SideFormulaDisplay} = {SideAreaDisplay}\n상부: {TopFormulaDisplay} = {TopAreaDisplay}\n합계: {TotalDisplay}"
             : $"{SideFormulaDisplay} = {TotalDisplay}";
+        var metadata = new ParapetCalculationMetadata(
+            result.SourceLengthMeters, result.HeightMeters, result.FaceMode, result.TopIncluded, result.TopWidthMeters);
 
         var record = new QuantityRecord(
             id: "Q-" + System.DateTimeOffset.Now.ToUnixTimeMilliseconds(),
@@ -303,7 +305,8 @@ public sealed class ParapetWorkflowViewModel : ObservableObject
             sourceUnit: "m",
             objectHandles: Source.ObjectHandles,
             calculationExpression: expression,
-            measurementSource: Source.SourceType.ToString());
+            measurementSource: Source.SourceType.ToString(),
+            calculationMetadataJson: metadata.ToJson());
 
         RecordAdded?.Invoke(this, record);
         StatusText = "산출내역에 추가했습니다.";
