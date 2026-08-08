@@ -22,7 +22,8 @@ public sealed class QuantityRecord
         string? sourceUnit = null,
         IReadOnlyList<string>? objectHandles = null,
         string? calculationExpression = null,
-        string? measurementSource = null)
+        string? measurementSource = null,
+        string? calculationMetadataJson = null)
     {
         Id = id;
         Type = type;
@@ -37,9 +38,16 @@ public sealed class QuantityRecord
         ObjectHandles = objectHandles ?? Array.Empty<string>();
         CalculationExpression = calculationExpression;
         MeasurementSource = measurementSource;
+        CalculationMetadataJson = calculationMetadataJson;
     }
 
     public string Id { get; }
+
+    /// <summary>어느 프로젝트 소속인지 (Milestone 6) - 생성 시점에는 아직 저장되지 않았을 수 있어
+    /// (예: Project가 열려 있지 않을 때는 애초에 추가할 수 없다, §21-22) 영속화 시점에 채워진다.
+    /// 기존 4개 측정 도구는 이 프로퍼티를 모른다 - MainWindowViewModel이 저장 직전에 채운다.</summary>
+    public string ProjectId { get; set; } = string.Empty;
+
     public string Type { get; }
     public string Layer { get; }
     public int ObjectCount { get; }
@@ -69,4 +77,17 @@ public sealed class QuantityRecord
     /// 직접 뽑는 값에는 없어도 되는 정보라 Length/Area는 null로 남긴다 (Milestone 4 §19, §52).
     /// </summary>
     public string? MeasurementSource { get; }
+
+    /// <summary>Vertical Area/Parapet의 구조화된 입력값(높이/면/상부폭 등)을 JSON으로 보존한다
+    /// (Milestone 6 §24-28). Length/Area는 채우지 않는다 - 구조화할 입력이 없다(선택 결과 자체가
+    /// 전부다). Schema를 자유롭게 바꿀 수 있어야 해서(예: Parapet에 필드가 추가되는 경우) 별도
+    /// child table 대신 JSON을 선택했다 - 지금은 이 값을 SQL로 쿼리할 필요가 없다(§28).</summary>
+    public string? CalculationMetadataJson { get; }
+
+    /// <summary>사용자가 자유롭게 붙이는 메모 - 계산 결과와 달리 언제든 수정 가능하다(§57, 계산값
+    /// 자체의 수동 수정은 이번 범위에서 의도적으로 제외했다 - §58).</summary>
+    public string Description { get; set; } = string.Empty;
+
+    /// <summary>Description을 마지막으로 고친 시각. 처음 만들어진 뒤로 한 번도 안 고쳤으면 null.</summary>
+    public DateTimeOffset? UpdatedAt { get; set; }
 }
