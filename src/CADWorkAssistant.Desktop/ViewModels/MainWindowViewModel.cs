@@ -25,6 +25,7 @@ public sealed class MainWindowViewModel : ObservableObject
         _connectionManager.PropertyChanged += OnConnectionManagerPropertyChanged;
 
         Length = new LengthWorkflowViewModel(connectionManager);
+        Area = new AreaWorkflowViewModel(connectionManager);
 
         Navigation = new ObservableCollection<NavItem>
         {
@@ -77,6 +78,7 @@ public sealed class MainWindowViewModel : ObservableObject
         };
 
         Length.RecordAdded += (_, record) => QuantityRecords.Insert(0, record);
+        Area.RecordAdded += (_, record) => QuantityRecords.Insert(0, record);
 
         OpenCommandPaletteCommand = new RelayCommand(() => IsCommandPaletteOpen = true);
         CloseCommandPaletteCommand = new RelayCommand(() => IsCommandPaletteOpen = false);
@@ -95,6 +97,7 @@ public sealed class MainWindowViewModel : ObservableObject
     public ObservableCollection<OperationLogEntry> Activity { get; }
 
     public LengthWorkflowViewModel Length { get; }
+    public AreaWorkflowViewModel Area { get; }
 
     public ICommand OpenCommandPaletteCommand { get; }
     public ICommand CloseCommandPaletteCommand { get; }
@@ -129,15 +132,19 @@ public sealed class MainWindowViewModel : ObservableObject
             if (SetProperty(ref _selectedTool, value))
             {
                 OnPropertyChanged(nameof(IsLengthToolSelected));
+                OnPropertyChanged(nameof(IsAreaToolSelected));
                 OnPropertyChanged(nameof(IsDashboardContentVisible));
             }
         }
     }
 
-    /// <summary>Length는 자기만의 패널을 갖는다 (§38) - 나머지는 아직 기존 Dashboard 콘텐츠를 공유한다.</summary>
+    /// <summary>Length/Area는 각자 자기만의 패널을 갖는다 (Milestone 2 §38, Milestone 3 §5) - 나머지는
+    /// 아직 기존 Dashboard 콘텐츠를 공유한다.</summary>
     public bool IsLengthToolSelected => _selectedTool == "Length";
 
-    public bool IsDashboardContentVisible => !IsLengthToolSelected;
+    public bool IsAreaToolSelected => _selectedTool == "Area";
+
+    public bool IsDashboardContentVisible => !IsLengthToolSelected && !IsAreaToolSelected;
 
     public string StatusMessage
     {
