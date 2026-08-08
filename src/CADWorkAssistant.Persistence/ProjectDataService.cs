@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using CADWorkAssistant.Core.Models;
 using CADWorkAssistant.Persistence.Repositories;
@@ -20,6 +21,8 @@ public sealed class ProjectDataService
     private readonly IDrawingFileRepository _drawingFiles;
     private readonly IExportRecordRepository _exportRecords;
     private readonly IRecentMeasurementRepository _recentMeasurements;
+    private readonly IQuantityVerificationRepository _quantityVerifications;
+    private readonly IQuantityReviewRepository _quantityReviews;
 
     public ProjectDataService(
         CadWorkAssistantDatabase database,
@@ -28,7 +31,9 @@ public sealed class ProjectDataService
         IActivityRepository? activity = null,
         IDrawingFileRepository? drawingFiles = null,
         IExportRecordRepository? exportRecords = null,
-        IRecentMeasurementRepository? recentMeasurements = null)
+        IRecentMeasurementRepository? recentMeasurements = null,
+        IQuantityVerificationRepository? quantityVerifications = null,
+        IQuantityReviewRepository? quantityReviews = null)
     {
         _database = database;
         _projects = projects ?? new SqliteProjectRepository();
@@ -37,6 +42,8 @@ public sealed class ProjectDataService
         _drawingFiles = drawingFiles ?? new SqliteDrawingFileRepository();
         _exportRecords = exportRecords ?? new SqliteExportRecordRepository();
         _recentMeasurements = recentMeasurements ?? new SqliteRecentMeasurementRepository();
+        _quantityVerifications = quantityVerifications ?? new SqliteQuantityVerificationRepository();
+        _quantityReviews = quantityReviews ?? new SqliteQuantityReviewRepository();
     }
 
     /// <summary>단일 테이블 조회/갱신처럼 트랜잭션 묶음이 필요 없는 호출은 호출부가 직접
@@ -55,6 +62,64 @@ public sealed class ProjectDataService
     public IExportRecordRepository ExportRecords => _exportRecords;
 
     public IRecentMeasurementRepository RecentMeasurements => _recentMeasurements;
+
+    public IQuantityVerificationRepository QuantityVerifications => _quantityVerifications;
+
+    public IQuantityReviewRepository QuantityReviews => _quantityReviews;
+
+    /// <summary>검토 상태 저장 + 활동 기록("Quantity verified" 등)을 하나의 트랜잭션으로 묶는다(§53).
+    /// activity가 null이면(예: 자동 재검산처럼 사용자 행동이 아닌 경우) Review만 저장한다 - 모든 자동
+    /// Check를 Activity에 남기지 않는다는 원칙(§54)에 따라 호출부가 선택한다.</summary>
+    public async Task SaveReviewAsync(QuantityReview review, ActivityRecord? activity)
+    {
+        using var connection = _database.OpenConnection();
+        if (activity is null)
+        {
+            await _quantityReviews.UpsertAsync(review, connection);
+            return;
+        }
+
+        using var transaction = connection.BeginTransaction();
+        try
+        {
+            await _quantityReviews.UpsertAsync(review, connection, transaction);
+            await _activity.InsertAsync(activity, connection, transaction);
+            transaction.Commit();
+        }
+        catch
+        {
+            transaction.Rollback();
+            throw;
+        }
+    }
+
+    /// <summary>여러 QuantityVerificationSnapshot을 하나의 트랜잭션으로 묶어 저장한다 - 배치 검산
+    /// (§89-91)에서 레코드마다 개별 커밋하면 수천 건에서 느려지고, 중간에 실패하면 일부만 저장된
+    /// 애매한 상태가 남는다. 전부 성공하거나 전부 실패한다.</summary>
+    public async Task SaveVerificationBatchAsync(IReadOnlyList<QuantityVerificationSnapshot> snapshots)
+    {
+        if (snapshots.Count == 0)
+        {
+            return;
+        }
+
+        using var connection = _database.OpenConnection();
+        using var transaction = connection.BeginTransaction();
+        try
+        {
+            foreach (var snapshot in snapshots)
+            {
+                await _quantityVerifications.UpsertAsync(snapshot, connection, transaction);
+            }
+
+            transaction.Commit();
+        }
+        catch
+        {
+            transaction.Rollback();
+            throw;
+        }
+    }
 
     /// <summary>산출내역 저장 + 활동 기록을 하나의 트랜잭션으로 묶는다 - 두 INSERT가 같이 성공하거나
     /// 같이 실패한다.</summary>

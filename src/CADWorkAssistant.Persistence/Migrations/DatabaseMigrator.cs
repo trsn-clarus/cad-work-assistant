@@ -16,6 +16,7 @@ internal static class DatabaseMigrator
     private static readonly IReadOnlyList<IMigration> Migrations = new IMigration[]
     {
         new Migration001InitialSchema(),
+        new Migration002AddVerificationAndReview(),
     }.OrderBy(m => m.Version).ToArray();
 
     public static void MigrateToLatest(SqliteConnection connection)
