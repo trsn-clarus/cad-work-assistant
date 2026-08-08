@@ -1,4 +1,6 @@
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -16,7 +18,10 @@ public sealed class MainWindowViewModel : ObservableObject
     private bool _isCommandPaletteOpen;
     private bool _isInspectorOpen = true;
     private string _commandQuery = string.Empty;
-    private string _selectedTool = "Length";
+    // "Dashboard" NavItem이 컬렉션에서 IsSelected=true로 시작하므로 여기도 맞춘다 - 실제 렌더링에서
+    // 발견한 버그: 이 값이 "Length"였을 때 사이드바는 Dashboard가 선택된 것처럼 강조 표시되면서
+    // 정작 보이는 화면은 Length 패널이었다 (Milestone 4.5).
+    private string _selectedTool = "Dashboard";
     private string _statusMessage = "Ready";
 
     public MainWindowViewModel(IAutoCadConnectionManager connectionManager)
@@ -29,77 +34,89 @@ public sealed class MainWindowViewModel : ObservableObject
         VerticalArea = new VerticalAreaWorkflowViewModel(connectionManager, Length);
         Parapet = new ParapetWorkflowViewModel(connectionManager, Length);
 
+        // 실제로 화면이 있는 항목만 isImplemented: true - 나머지는 자리만 예약해두고 비활성화한다
+        // (§23 "미구현 기능을 버튼으로 과도하게 노출하지 않는다" - 완전히 숨기면 향후 기능이 붙을 자리를
+        // 가늠할 수 없고, 그냥 활성화해두면 클릭했을 때 아무 일도 안 일어나거나 엉뚱한 화면이 보인다).
         Navigation = new ObservableCollection<NavItem>
         {
             new("PROJECT", "Dashboard", "Alt+1", true) { IsSelected = true },
-            new("PROJECT", "Files", "Alt+2"),
-            new("CAD", "Drawing", "Alt+3", true),
-            new("CAD", "Selection", "Alt+4"),
-            new("CAD", "Layers", "Alt+5"),
-            new("CAD", "Export", "Alt+6"),
+            new("PROJECT", "Files", "Alt+2", isImplemented: false),
+            new("CAD", "Drawing", "Alt+3", true, isImplemented: false),
+            new("CAD", "Selection", "Alt+4", isImplemented: false),
+            new("CAD", "Layers", "Alt+5", isImplemented: false),
+            new("CAD", "Export", "Alt+6", isImplemented: false),
             new("QUANTITY", "Length", "Ctrl+L", true),
             new("QUANTITY", "Area", "Ctrl+A"),
             new("QUANTITY", "Vertical Area", "Ctrl+V"),
             new("QUANTITY", "Parapet", "Ctrl+R"),
-            new("QUANTITY", "History", "Ctrl+H"),
-            new("OUTPUT", "Plot", "Ctrl+P", true),
-            new("OUTPUT", "PDF", "Ctrl+Shift+P"),
-            new("OUTPUT", "Excel", "Ctrl+E"),
-            new("SETTINGS", "Preferences", "Ctrl+,", true)
+            new("QUANTITY", "History", "Ctrl+H", isImplemented: false),
+            new("OUTPUT", "Plot", "Ctrl+P", true, isImplemented: false),
+            new("OUTPUT", "PDF", "Ctrl+Shift+P", isImplemented: false),
+            new("OUTPUT", "Excel", "Ctrl+E", isImplemented: false),
+            new("SETTINGS", "Preferences", "Ctrl+,", true, isImplemented: false)
         };
 
-        // Length/Area/Parapet 등은 Milestone 2+에서 구현한다 - 아래 데이터는 UI Shell을 보여주기 위한
-        // 더미 데이터로 남겨둔다 (Milestone 1 §38: Selection/Length/Area는 이번 범위 밖).
-        Metrics = new ObservableCollection<MetricItem>
+        // 세션에서 실제로 추가한 산출내역/활동만 보여준다 - 이전에는 화면을 채우려고 가짜 샘플 행을
+        // 미리 넣어뒀는데, 실제 측정값과 섞이면 사용자가 가짜 행을 진짜로 오인할 위험이 있다
+        // (Milestone 4.5 §44-45, "Dashboard는 진짜 Control Center여야 한다"). 비어 있을 때는
+        // XAML의 Empty State 문구가 대신 안내한다.
+        QuantityRecords = new ObservableCollection<QuantityRecord>();
+        QuantityRecords.CollectionChanged += (_, _) =>
         {
-            new("Selected objects", "4", "3 polylines, 1 block reference", "Stable"),
-            new("Total length", "255.941 m", "Layer A-WALL / metric units", "Result"),
-            new("Area queue", "12", "2 drawings pending", "Working"),
-            new("Last export", "09:42", "Excel report generated", "Success")
+            OnPropertyChanged(nameof(HasQuantityRecords));
+            RefreshInspector();
         };
 
-        Drawings = new ObservableCollection<DrawingFile>
+        Activity = new ObservableCollection<OperationLogEntry>();
+        Activity.CollectionChanged += (_, _) =>
         {
-            new("CWA_B1_FloorPlan_Architecture_Rev12.dwg", @"D:\Projects\Clarus\B1\CWA_B1_FloorPlan_Architecture_Rev12.dwg", "mm", DateTimeOffset.Now.AddMinutes(-18), true),
-            new("CWA_B2_Structure_LongFileName_For_Overflow_Check_Rev03.dwg", @"D:\Projects\Clarus\B2\CWA_B2_Structure_LongFileName_For_Overflow_Check_Rev03.dwg", "mm", DateTimeOffset.Now.AddHours(-2), false),
-            new("CWA_Site_Parapet_Area_2026-08.dwg", @"D:\Projects\Clarus\Site\CWA_Site_Parapet_Area_2026-08.dwg", "m", DateTimeOffset.Now.AddDays(-1), false)
+            OnPropertyChanged(nameof(HasActivity));
+            RefreshInspector();
         };
 
-        QuantityRecords = new ObservableCollection<QuantityRecord>
+        InspectorRows = new ObservableCollection<InspectorRow>();
+
+        void OnRecordAdded(object? sender, QuantityRecord record)
         {
-            new("Q-1024", "Length", "A-WALL", 4, 255.941m, "m", "CWA_B1_FloorPlan_Architecture_Rev12.dwg", DateTimeOffset.Now.AddMinutes(-9)),
-            new("Q-1023", "Area", "A-FLOOR", 8, 118.420m, "m2", "CWA_B1_FloorPlan_Architecture_Rev12.dwg", DateTimeOffset.Now.AddMinutes(-17)),
-            new("Q-1022", "Vertical Area", "A-PARAPET", 6, 42.136m, "m2", "CWA_Site_Parapet_Area_2026-08.dwg", DateTimeOffset.Now.AddHours(-1)),
-            new("Q-1021", "Length", "S-BEAM", 14, 364.780m, "m", "CWA_B2_Structure_LongFileName_For_Overflow_Check_Rev03.dwg", DateTimeOffset.Now.AddHours(-2))
-        };
+            QuantityRecords.Insert(0, record);
+            Activity.Insert(0, new OperationLogEntry(record.CreatedAt, "Success", $"{record.Type} 산출내역 추가",
+                $"{record.Layer} · {record.ObjectCount}개 객체 · {record.Value:N3} {record.Unit}"));
+        }
 
-        Activity = new ObservableCollection<OperationLogEntry>
-        {
-            new(DateTimeOffset.Now.AddMinutes(-1), "Info", "AutoCAD connection verified", "Active document: CWA_B1_FloorPlan_Architecture_Rev12.dwg"),
-            new(DateTimeOffset.Now.AddMinutes(-4), "Success", "Length extraction completed", "4 objects measured on A-WALL"),
-            new(DateTimeOffset.Now.AddMinutes(-6), "Warning", "Open polyline skipped", "Select a closed polyline before area calculation")
-        };
+        Length.RecordAdded += OnRecordAdded;
+        Area.RecordAdded += OnRecordAdded;
+        VerticalArea.RecordAdded += OnRecordAdded;
+        Parapet.RecordAdded += OnRecordAdded;
 
-        Length.RecordAdded += (_, record) => QuantityRecords.Insert(0, record);
-        Area.RecordAdded += (_, record) => QuantityRecords.Insert(0, record);
-        VerticalArea.RecordAdded += (_, record) => QuantityRecords.Insert(0, record);
-        Parapet.RecordAdded += (_, record) => QuantityRecords.Insert(0, record);
+        // Property Inspector는 지금 활성화된 도구의 실제 상태를 그대로 비춘다 (Milestone 4.5 §9,
+        // "실제 도구로 구현 - 활성 도구별 동적 바인딩"). 각 Workflow VM/그 Rows 컬렉션/기준 길이를
+        // 다루는 LengthSourceSelector가 바뀔 때마다 다시 그린다.
+        Length.PropertyChanged += (_, _) => RefreshInspector();
+        Length.Rows.CollectionChanged += (_, _) => RefreshInspector();
+        Area.PropertyChanged += (_, _) => RefreshInspector();
+        Area.Rows.CollectionChanged += (_, _) => RefreshInspector();
+        VerticalArea.PropertyChanged += (_, _) => RefreshInspector();
+        VerticalArea.Source.PropertyChanged += (_, _) => RefreshInspector();
+        Parapet.PropertyChanged += (_, _) => RefreshInspector();
+        Parapet.Source.PropertyChanged += (_, _) => RefreshInspector();
 
         OpenCommandPaletteCommand = new RelayCommand(() => IsCommandPaletteOpen = true);
         CloseCommandPaletteCommand = new RelayCommand(() => IsCommandPaletteOpen = false);
         ToggleInspectorCommand = new RelayCommand(() => IsInspectorOpen = !IsInspectorOpen);
         SelectNavigationCommand = new RelayCommand(SelectNavigation);
-        RunExtractionCommand = new RelayCommand(RunExtraction);
-        CopyResultCommand = new RelayCommand(() => StatusMessage = "Copied latest quantity result to clipboard queue");
 
+        RefreshInspector();
         _connectionManager.Start();
     }
 
     public ObservableCollection<NavItem> Navigation { get; }
-    public ObservableCollection<MetricItem> Metrics { get; }
-    public ObservableCollection<DrawingFile> Drawings { get; }
     public ObservableCollection<QuantityRecord> QuantityRecords { get; }
     public ObservableCollection<OperationLogEntry> Activity { get; }
+    public ObservableCollection<InspectorRow> InspectorRows { get; }
+
+    public bool HasQuantityRecords => QuantityRecords.Count > 0;
+
+    public bool HasActivity => Activity.Count > 0;
 
     public LengthWorkflowViewModel Length { get; }
     public AreaWorkflowViewModel Area { get; }
@@ -110,8 +127,6 @@ public sealed class MainWindowViewModel : ObservableObject
     public ICommand CloseCommandPaletteCommand { get; }
     public ICommand ToggleInspectorCommand { get; }
     public ICommand SelectNavigationCommand { get; }
-    public ICommand RunExtractionCommand { get; }
-    public ICommand CopyResultCommand { get; }
 
     public bool IsCommandPaletteOpen
     {
@@ -143,6 +158,7 @@ public sealed class MainWindowViewModel : ObservableObject
                 OnPropertyChanged(nameof(IsVerticalAreaToolSelected));
                 OnPropertyChanged(nameof(IsParapetToolSelected));
                 OnPropertyChanged(nameof(IsDashboardContentVisible));
+                RefreshInspector();
             }
         }
     }
@@ -159,6 +175,15 @@ public sealed class MainWindowViewModel : ObservableObject
 
     public bool IsDashboardContentVisible =>
         !IsLengthToolSelected && !IsAreaToolSelected && !IsVerticalAreaToolSelected && !IsParapetToolSelected;
+
+    public string InspectorTitle => _selectedTool switch
+    {
+        "Length" => "Length Selection",
+        "Area" => "Area Selection",
+        "Vertical Area" => "Vertical Area",
+        "Parapet" => "Parapet",
+        _ => "Session"
+    };
 
     public string StatusMessage
     {
@@ -198,10 +223,27 @@ public sealed class MainWindowViewModel : ObservableObject
 
     private string ConnectionStatusBrushKey => _connectionManager.State switch
     {
-        CadConnectionState.Connected => "BrushSuccess",
-        CadConnectionState.Connecting or CadConnectionState.Reconnecting => "BrushWarning",
-        CadConnectionState.PluginUnavailable or CadConnectionState.Faulted or CadConnectionState.Disconnected => "BrushError",
-        _ => "BrushTextMuted"
+        CadConnectionState.Connected => "BrushConnected",
+        CadConnectionState.Connecting or CadConnectionState.Reconnecting => "BrushConnecting",
+        CadConnectionState.PluginUnavailable or CadConnectionState.Faulted => "BrushConnectionError",
+        CadConnectionState.Disconnected => "BrushConnectionError",
+        _ => "BrushDisconnected"
+    };
+
+    /// <summary>
+    /// 연결 상태를 색상에만 의존하지 않고 별도 기호로도 구분한다 (Milestone 4.5 §67-68, 색맹 사용자도
+    /// 상태를 구분할 수 있어야 한다). ●=연결됨, ◐=진행 중, ◇=감지됨(대기), △=Plugin 없음, ✕=끊김, !=오류, ○=미실행.
+    /// </summary>
+    public string ConnectionStatusGlyph => _connectionManager.State switch
+    {
+        CadConnectionState.NoAutoCadProcess => "○",
+        CadConnectionState.ProcessDetected => "◇",
+        CadConnectionState.PluginUnavailable => "△",
+        CadConnectionState.Connecting or CadConnectionState.Reconnecting => "◐",
+        CadConnectionState.Connected => "●",
+        CadConnectionState.Disconnected => "✕",
+        CadConnectionState.Faulted => "!",
+        _ => "○"
     };
 
     private void OnConnectionManagerPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -212,6 +254,8 @@ public sealed class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(ActiveDrawing));
         OnPropertyChanged(nameof(Units));
         OnPropertyChanged(nameof(ConnectionStatusBrush));
+        OnPropertyChanged(nameof(ConnectionStatusGlyph));
+        RefreshInspector();
     }
 
     private void SelectNavigation(object? parameter)
@@ -230,9 +274,66 @@ public sealed class MainWindowViewModel : ObservableObject
         StatusMessage = $"{selected.Label} workspace selected";
     }
 
-    private void RunExtraction()
+    private void RefreshInspector()
     {
-        StatusMessage = "Analyzing selected polylines: 4 objects detected";
-        Activity.Insert(0, new OperationLogEntry(DateTimeOffset.Now, "Info", "Length extraction queued", "Selection set contains 4 objects"));
+        InspectorRows.Clear();
+
+        switch (_selectedTool)
+        {
+            case "Length":
+                InspectorRows.Add(new InspectorRow("상태", Length.StatusText));
+                InspectorRows.Add(new InspectorRow("선택 객체", $"{Length.Rows.Count}개"));
+                InspectorRows.Add(new InspectorRow("레이어", SummarizeLayers(Length.Rows.Select(r => r.Layer))));
+                InspectorRows.Add(new InspectorRow("총 길이", Length.TotalDisplay ?? "—"));
+                break;
+
+            case "Area":
+                InspectorRows.Add(new InspectorRow("상태", Area.StatusText));
+                InspectorRows.Add(new InspectorRow("선택 객체", $"{Area.Rows.Count}개"));
+                InspectorRows.Add(new InspectorRow("레이어", SummarizeLayers(Area.Rows.Select(r => r.Layer))));
+                InspectorRows.Add(new InspectorRow("총 면적", Area.TotalDisplay ?? "—"));
+                break;
+
+            case "Vertical Area":
+                InspectorRows.Add(new InspectorRow("상태", VerticalArea.StatusText));
+                InspectorRows.Add(new InspectorRow("기준 길이", VerticalArea.Source.LengthDisplay ?? "—"));
+                InspectorRows.Add(new InspectorRow("레이어", VerticalArea.Source.LayerDisplay));
+                InspectorRows.Add(new InspectorRow("높이", FormatHeight(VerticalArea.HeightText, VerticalArea.HeightUnit)));
+                InspectorRows.Add(new InspectorRow("총 수직면적", VerticalArea.TotalDisplay ?? "—"));
+                break;
+
+            case "Parapet":
+                InspectorRows.Add(new InspectorRow("상태", Parapet.StatusText));
+                InspectorRows.Add(new InspectorRow("기준 길이(둘레)", Parapet.Source.LengthDisplay ?? "—"));
+                InspectorRows.Add(new InspectorRow("레이어", Parapet.Source.LayerDisplay));
+                InspectorRows.Add(new InspectorRow("높이", FormatHeight(Parapet.HeightText, Parapet.HeightUnit)));
+                InspectorRows.Add(new InspectorRow("면", Parapet.IsBothFaces ? "양면" : "한 면"));
+                InspectorRows.Add(new InspectorRow("상부면", Parapet.TopIncluded ? "포함" : "미포함"));
+                InspectorRows.Add(new InspectorRow("총 면적", Parapet.TotalDisplay ?? "—"));
+                break;
+
+            default:
+                InspectorRows.Add(new InspectorRow("연결 상태", ConnectionLabel));
+                InspectorRows.Add(new InspectorRow("활성 도면", ActiveDrawing));
+                InspectorRows.Add(new InspectorRow("산출내역", $"{QuantityRecords.Count}건"));
+                InspectorRows.Add(new InspectorRow("최근 활동", Activity.Count > 0 ? Activity[0].Message : "없음"));
+                break;
+        }
+
+        OnPropertyChanged(nameof(InspectorTitle));
     }
+
+    private static string SummarizeLayers(IEnumerable<string> layers)
+    {
+        var distinct = layers.Distinct().ToList();
+        return distinct.Count switch
+        {
+            0 => "—",
+            1 => distinct[0],
+            _ => "Mixed"
+        };
+    }
+
+    private static string FormatHeight(string text, DrawingUnit unit) =>
+        string.IsNullOrWhiteSpace(text) ? "—" : $"{text} {DrawingUnitDisplay.Abbreviation(unit)}";
 }
