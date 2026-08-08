@@ -37,7 +37,8 @@ public static class Program
             new FakePingHandler(),
             new FakeGetApplicationInfoHandler(processId, scenario),
             new FakeGetDrawingContextHandler(scenario),
-            new FakeSelectLengthObjectsHandler(scenario)
+            new FakeSelectLengthObjectsHandler(scenario),
+            new FakeSelectAreaObjectsHandler(scenario)
         };
 
         var server = new AutoCadPipeServer(new IpcRequestDispatcher(handlers), processId);

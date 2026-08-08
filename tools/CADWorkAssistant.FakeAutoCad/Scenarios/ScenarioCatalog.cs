@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using CADWorkAssistant.Core.Area;
 using CADWorkAssistant.Core.Cad;
 using CADWorkAssistant.Core.Length;
 
@@ -101,16 +102,136 @@ public static class ScenarioCatalog
             }
         };
 
-        yield return new SimulationScenario { Name = "SelectionCancelled", Behavior = SelectionBehavior.Cancelled };
-        yield return new SimulationScenario { Name = "ConnectionLost", Behavior = SelectionBehavior.DisconnectBeforeResponding };
-        yield return new SimulationScenario { Name = "RequestTimeout", Behavior = SelectionBehavior.HangForever };
-        yield return new SimulationScenario { Name = "AutoCadError", Behavior = SelectionBehavior.ReturnError };
+        yield return new SimulationScenario { Name = "SelectionCancelled", LengthBehavior = SelectionBehavior.Cancelled };
+        yield return new SimulationScenario { Name = "ConnectionLost", LengthBehavior = SelectionBehavior.DisconnectBeforeResponding };
+        yield return new SimulationScenario { Name = "RequestTimeout", LengthBehavior = SelectionBehavior.HangForever };
+        yield return new SimulationScenario { Name = "AutoCadError", LengthBehavior = SelectionBehavior.ReturnError };
 
         yield return new SimulationScenario
         {
             Name = "LargeSelection",
             Objects = Enumerable.Range(1, 1000)
                 .Select(i => new CadLengthObjectDto(i.ToString("X4"), SupportedGeometryType.Polyline, "A-WALL", 1000 + i))
+                .ToArray()
+        };
+
+        // --- Area (Milestone 3 §32-33) ---
+        // §33 예시 그대로: Polyline 1,520,420,000 + 981,270,000 + 600,740,000 mm² = 3,102,430,000 mm² → 3,102.43 m²
+        yield return new SimulationScenario
+        {
+            Name = "SingleClosedPolyline",
+            AreaObjects = new[]
+            {
+                new CadAreaObjectDto("7001", SupportedAreaGeometryType.Polyline, "A-FLOOR", 1_520_420_000.0, isClosed: true)
+            }
+        };
+
+        yield return new SimulationScenario
+        {
+            Name = "MultipleClosedPolylines",
+            AreaObjects = new[]
+            {
+                new CadAreaObjectDto("7001", SupportedAreaGeometryType.Polyline, "A-FLOOR", 1_520_420_000.0, isClosed: true),
+                new CadAreaObjectDto("7002", SupportedAreaGeometryType.Polyline, "A-FLOOR", 981_270_000.0, isClosed: true),
+                new CadAreaObjectDto("7003", SupportedAreaGeometryType.Polyline, "A-FLOOR", 600_740_000.0, isClosed: true)
+            }
+        };
+
+        yield return new SimulationScenario
+        {
+            Name = "OpenPolyline",
+            AreaObjects = new[]
+            {
+                new CadAreaObjectDto("7010", SupportedAreaGeometryType.Polyline, "A-FLOOR", 0, isClosed: false)
+            }
+        };
+
+        // §34 예시 그대로: 선택 4 / 닫힘 3 / 열림 1 → 3,102.43 m², 제외 1개
+        yield return new SimulationScenario
+        {
+            Name = "MixedClosedOpen",
+            AreaObjects = new[]
+            {
+                new CadAreaObjectDto("7020", SupportedAreaGeometryType.Polyline, "A-FLOOR", 1_520_420_000.0, isClosed: true),
+                new CadAreaObjectDto("7021", SupportedAreaGeometryType.Polyline, "A-FLOOR", 981_270_000.0, isClosed: true),
+                new CadAreaObjectDto("7022", SupportedAreaGeometryType.Polyline, "A-FLOOR", 600_740_000.0, isClosed: true),
+                new CadAreaObjectDto("7023", SupportedAreaGeometryType.Polyline, "A-FLOOR", 0, isClosed: false)
+            }
+        };
+
+        yield return new SimulationScenario { Name = "EmptyAreaSelection", AreaObjects = Array.Empty<CadAreaObjectDto>() };
+
+        yield return new SimulationScenario { Name = "AreaSelectionCancelled", AreaBehavior = SelectionBehavior.Cancelled };
+
+        yield return new SimulationScenario
+        {
+            Name = "UnsupportedAreaObject",
+            AreaObjects = Array.Empty<CadAreaObjectDto>(),
+            AreaExcludedObjectTypeNames = new[] { "Hatch" }
+        };
+
+        // 원래 §32 이름은 "MixedSupportedUnsupported"이지만 Length 시나리오와 이름이 겹쳐(같은
+        // Dictionary Key) Area 접두어를 붙였다 - 딕셔너리 키 충돌을 피하기 위한 조정이다 (§7).
+        yield return new SimulationScenario
+        {
+            Name = "AreaMixedSupportedUnsupported",
+            AreaObjects = new[]
+            {
+                new CadAreaObjectDto("7030", SupportedAreaGeometryType.Polyline, "A-FLOOR", 1_520_420_000.0, isClosed: true)
+            },
+            AreaExcludedObjectTypeNames = new[] { "Hatch" }
+        };
+
+        // 닫혀 있지만 면적이 0에 가깝다 - Core.AreaAggregationService의 epsilon 판정을 검증한다 (§17, §19).
+        yield return new SimulationScenario
+        {
+            Name = "ZeroArea",
+            AreaObjects = new[]
+            {
+                new CadAreaObjectDto("7040", SupportedAreaGeometryType.Polyline, "A-FLOOR", 0.0, isClosed: true)
+            }
+        };
+
+        // AutoCAD가 Area를 읽다가 예외를 던진 것을 흉내낸다 - NaN을 그대로 전달해 Core가
+        // InvalidGeometry로 분류하는지 검증한다 (§17-18).
+        yield return new SimulationScenario
+        {
+            Name = "InvalidArea",
+            AreaObjects = new[]
+            {
+                new CadAreaObjectDto("7050", SupportedAreaGeometryType.Polyline, "A-FLOOR", double.NaN, isClosed: true)
+            }
+        };
+
+        yield return new SimulationScenario
+        {
+            Name = "UnitlessAreaDrawing",
+            Unit = DrawingUnit.Unitless,
+            AreaObjects = new[]
+            {
+                new CadAreaObjectDto("7060", SupportedAreaGeometryType.Polyline, "A-FLOOR", 500_000.0, isClosed: true)
+            }
+        };
+
+        yield return new SimulationScenario
+        {
+            Name = "MeterAreaDrawing",
+            Unit = DrawingUnit.Meters,
+            AreaObjects = new[]
+            {
+                new CadAreaObjectDto("7070", SupportedAreaGeometryType.Polyline, "A-FLOOR", 3102.43, isClosed: true)
+            }
+        };
+
+        yield return new SimulationScenario { Name = "AreaConnectionLost", AreaBehavior = SelectionBehavior.DisconnectBeforeResponding };
+        yield return new SimulationScenario { Name = "AreaRequestTimeout", AreaBehavior = SelectionBehavior.HangForever };
+        yield return new SimulationScenario { Name = "AreaAutoCadError", AreaBehavior = SelectionBehavior.ReturnError };
+
+        yield return new SimulationScenario
+        {
+            Name = "LargeAreaSelection",
+            AreaObjects = Enumerable.Range(1, 1000)
+                .Select(i => new CadAreaObjectDto(i.ToString("X4"), SupportedAreaGeometryType.Polyline, "A-FLOOR", 1000 + i, isClosed: true))
                 .ToArray()
         };
     }
