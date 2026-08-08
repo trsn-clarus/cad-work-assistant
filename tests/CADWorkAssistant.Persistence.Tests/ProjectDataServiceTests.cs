@@ -86,6 +86,59 @@ public sealed class ProjectDataServiceTests : IClassFixture<TestDatabaseFixture>
         Assert.Equal("ProjectCreated", activities[0].ActivityType);
     }
 
+    [Fact]
+    public async Task SaveReviewAsync_WithActivity_PersistsBothInOneTransaction()
+    {
+        var database = _fixture.CreateDatabase();
+        var service = new ProjectDataService(database);
+        var project = await CreateProjectAsync(database, service);
+        var record = await AddQuantityRecordAsync(database, service, project.Id);
+
+        var review = new QuantityReview(Guid.NewGuid().ToString("N"), project.Id, record.Id,
+            QuantityReviewStatus.Verified, "확인 완료", DateTimeOffset.UtcNow);
+        var activity = new ActivityRecord(Guid.NewGuid().ToString("N"), project.Id, "QuantityVerified", "산출내역 검토 완료", null, DateTimeOffset.UtcNow);
+
+        await service.SaveReviewAsync(review, activity);
+
+        using var connection = database.OpenConnection();
+        var reviews = await service.QuantityReviews.GetByProjectAsync(project.Id, connection);
+        var activities = await service.Activity.GetByProjectAsync(project.Id, limit: 10, connection);
+
+        Assert.Single(reviews);
+        Assert.Contains(activities, a => a.ActivityType == "QuantityVerified");
+    }
+
+    [Fact]
+    public async Task SaveReviewAsync_WithoutActivity_PersistsReviewOnly()
+    {
+        var database = _fixture.CreateDatabase();
+        var service = new ProjectDataService(database);
+        var project = await CreateProjectAsync(database, service);
+        var record = await AddQuantityRecordAsync(database, service, project.Id);
+
+        var review = new QuantityReview(Guid.NewGuid().ToString("N"), project.Id, record.Id, QuantityReviewStatus.NeedsReview, null, null);
+        await service.SaveReviewAsync(review, activity: null);
+
+        using var connection = database.OpenConnection();
+        var reviews = await service.QuantityReviews.GetByProjectAsync(project.Id, connection);
+        var activities = await service.Activity.GetByProjectAsync(project.Id, limit: 10, connection);
+
+        Assert.Single(reviews);
+        // CreateProjectAsync가 남긴 활동 1건만 있어야 한다 - 자동 재검산처럼 매번 Activity를 남기지 않는다(§54).
+        Assert.Single(activities);
+    }
+
+    private static async Task<QuantityRecord> AddQuantityRecordAsync(CadWorkAssistantDatabase database, ProjectDataService service, string projectId)
+    {
+        var record = new QuantityRecord(Guid.NewGuid().ToString("N"), "Length", "A-WALL", 1, 10m, "m", "test.dwg", DateTimeOffset.UtcNow)
+        {
+            ProjectId = projectId,
+        };
+        using var connection = database.OpenConnection();
+        await service.QuantityRecords.InsertAsync(record, connection);
+        return record;
+    }
+
     private static async Task<Project> CreateProjectAsync(CadWorkAssistantDatabase database, ProjectDataService service)
     {
         var now = DateTimeOffset.UtcNow;

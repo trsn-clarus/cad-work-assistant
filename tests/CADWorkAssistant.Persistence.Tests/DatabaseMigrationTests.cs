@@ -13,7 +13,7 @@ public sealed class DatabaseMigrationTests : IClassFixture<TestDatabaseFixture>
     }
 
     [Fact]
-    public void OpenConnection_FirstTime_CreatesAllSixTablesAndSetsUserVersion()
+    public void OpenConnection_FirstTime_CreatesAllEightTablesAndSetsUserVersion()
     {
         var database = _fixture.CreateDatabase();
         using var connection = database.OpenConnection();
@@ -22,12 +22,14 @@ public sealed class DatabaseMigrationTests : IClassFixture<TestDatabaseFixture>
         {
             pragma.CommandText = "PRAGMA user_version;";
             var version = (long)pragma.ExecuteScalar()!;
-            Assert.Equal(1, version);
+            // Migration001(v1, Milestone 6) + Migration002(v2, Milestone 7 Verification/Review) 둘 다 적용.
+            Assert.Equal(2, version);
         }
 
         var expectedTables = new[]
         {
             "Project", "QuantityRecord", "ActivityRecord", "DrawingFile", "ExportRecord", "RecentMeasurement",
+            "QuantityVerificationSnapshot", "QuantityReview",
         };
         foreach (var table in expectedTables)
         {
