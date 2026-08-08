@@ -23,10 +23,14 @@ CAD 개발자가 아니라 **AutoCAD를 매일 사용하는 현장/설계 실무
 - 선택 취소는 오류가 아닌 정상 상태로 처리
 - 결과를 산출내역(Quantity Sheet)에 저장 가능 (원본값/단위/객체 Handle/산식 보존)
 
-### 3.3 면적 산출
-- 닫힌 Polyline 선택 → Area 계산, mm² → m² 변환
-- 여러 객체 선택 시 항목별 + 총계
-- 닫히지 않은 Polyline은 명확히 안내 (자동 판별)
+### 3.3 면적 산출 — Milestone 3에서 구현 완료
+- 닫힌 Polyline/Polyline2d/Circle/Ellipse/Region 선택 → Area 계산, mm² → m² 자동 변환 — cm²/dm²/km²/inch²/feet²/yard²/mile²도 지원, Unitless는 자동 변환하지 않고 안내
+- 여러 객체 선택 시 항목별 + 총계 (`Core.Area.AreaAggregationService`)
+- 닫히지 않은 Polyline/Ellipse 호는 0 m²가 아니라 명확히 안내하며 제외 (자동 판별, `Curve.Closed`)
+- 닫혀 있지만 면적이 0/NaN/Infinity인 비정상 형상은 별도로 제외 안내 (InvalidGeometry)
+- 지원하지 않는 객체(Hatch, Polyline3d 등)가 섞여도 지원 객체만 계산 + 제외 안내 — Polyline3d/Hatch는 AutoCAD API 리플렉션 검증 결과 면적 해석이 불확실하거나(비평면 3D) 구현 복잡도가 높아(Associative/Island) 이번 범위에서 의도적으로 제외 (`docs/AUTOCAD_INTEGRATION.md` §5.6)
+- 선택 취소는 오류가 아닌 정상 상태로 처리
+- 결과를 산출내역(Quantity Sheet)에 저장 가능 (Length와 동일한 QuantityRecord, 원본값/단위/객체 Handle/산식 보존)
 
 ### 3.4 수직면 면적
 - 둘레(Polyline 길이) × 높이(사용자 입력) → 면적

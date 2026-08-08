@@ -53,7 +53,9 @@ tools\CADWorkAssistant.FakeAutoCad\bin\Debug\net8.0\CADWorkAssistant.FakeAutoCad
 
 ### Scenario 목록
 
-`Scenarios/ScenarioCatalog.cs`에 정의되어 있다. `GetDrawingContext`(도면 이름/Layout/단위)와 `SelectLengthObjects`(선택 결과) 양쪽에 동시에 쓰인다.
+`Scenarios/ScenarioCatalog.cs`에 정의되어 있다. 하나의 `SimulationScenario`가 `GetDrawingContext`(도면 이름/Layout/단위), `SelectLengthObjects`, `SelectAreaObjects` 전부에 동시에 쓰인다 - Length와 Area는 각자 독립된 `LengthBehavior`/`Objects`와 `AreaBehavior`/`AreaObjects` 필드를 갖는다.
+
+#### Length (13개)
 
 | Scenario | 검증하는 것 |
 |---|---|
@@ -71,7 +73,28 @@ tools\CADWorkAssistant.FakeAutoCad\bin\Debug\net8.0\CADWorkAssistant.FakeAutoCad
 | `AutoCadError` | AutoCAD 내부 오류 흉내 → `ApiExecutionFailed` |
 | `LargeSelection` | 객체 1,000개 (성능 테스트용, §64) |
 
-새 Scenario는 `ScenarioCatalog.BuildAll()`에 한 항목만 추가하면 된다. Area/Layer/Plot 등 향후 기능도 같은 Scenario 시스템을 재사용할 수 있게 설계했다 (§8).
+#### Area (16개, Milestone 3)
+
+| Scenario | 검증하는 것 |
+|---|---|
+| `SingleClosedPolyline` | 닫힌 Polyline 1개 |
+| `MultipleClosedPolylines` | 닫힌 Polyline 3개, mm 단위 → 총 3,102.43 m² (Milestone 3 §33의 실제 예시 값) |
+| `OpenPolyline` | 열린 Polyline 1개 → 0 m²가 아니라 Open으로 제외 (§16) |
+| `MixedClosedOpen` | 4개 중 3개만 닫힘 → PartialSuccess, 3,102.43 m², 제외 1개 (§34) |
+| `EmptyAreaSelection` | 빈 선택 |
+| `AreaSelectionCancelled` | Esc 취소 |
+| `UnsupportedAreaObject` | 전부 제외 객체 (Hatch) |
+| `AreaMixedSupportedUnsupported` | 지원 1개 + 제외 1개 (Length의 `MixedSupportedUnsupported`와 이름이 겹쳐 `Area` 접두어를 붙였다) |
+| `ZeroArea` | 닫혀 있지만 면적이 0 → `InvalidGeometry`로 제외, Valid로 합산되지 않음 (§17, §19) |
+| `InvalidArea` | 닫혀 있지만 면적이 NaN(AutoCAD 예외를 흉내) → `InvalidGeometry`로 제외 (§17-18) |
+| `UnitlessAreaDrawing` | Insunits 없음 → 자동 변환 금지 |
+| `MeterAreaDrawing` | 원본이 이미 m 단위 |
+| `AreaConnectionLost` | 응답 직전 프로세스 자체 종료 |
+| `AreaRequestTimeout` | 영원히 응답하지 않음 |
+| `AreaAutoCadError` | AutoCAD 내부 오류 흉내 |
+| `LargeAreaSelection` | 객체 1,000개 (성능 테스트용, §35, §81) |
+
+새 Scenario는 `ScenarioCatalog.BuildAll()`에 한 항목만 추가하면 된다. Vertical Area/Parapet 등 향후 기능도 같은 Scenario 시스템을 재사용할 수 있게 설계했다.
 
 ## Development Simulation Mode (Desktop)
 
@@ -86,9 +109,11 @@ dotnet run --project src/CADWorkAssistant.Desktop
 
 연결되면 상태 표시줄에 `[SIMULATION]` 접두사가 붙는다 (`AutoCadInstanceInfo.IsSimulated`) - 사용자가 Fake 데이터를 실제 결과로 착각하지 않도록 하기 위함이다 (§39). Production Release 빌드에는 이 배지 자체가 문제되지 않는다 - `CWA_USE_FAKE_AUTOCAD`를 설정하지 않는 한 이 코드 경로는 실행되지 않고, `CADWorkAssistant.FakeAutoCad.exe`는 설치 프로그램에 포함되지 않는다.
 
-### 실제로 검증한 것 (이 문서 작성 시점, 2026-08-08)
+### 실제로 검증한 것
 
 FakeAutoCad.exe + Desktop.exe를 실제로 별도 프로세스 두 개로 띄워서 확인함:
+
+**Milestone 2 (Length)**
 
 1. Discovery가 FakeAutoCad를 찾고 자동 연결 → `[SIMULATION] CAD Work Assistant Simulation Connected` 표시
 2. `School_Roof.dwg`, `Units: mm` 등 GetDrawingContext 결과가 정확히 표시
@@ -96,6 +121,18 @@ FakeAutoCad.exe + Desktop.exe를 실제로 별도 프로세스 두 개로 띄워
 4. 결과 테이블: `2A7F Polyline A-WALL 125.331 m`, `2A80 Polyline A-WALL 81.405 m`, `2A81 Line A-WALL 49.204 m`
 5. 총 길이 **255.941 m** (§7의 기대값과 정확히 일치)
 6. "산출내역 추가" → Dashboard의 Quantity 테이블에 새 행이 정확한 값으로 추가됨
+
+**Milestone 3 (Area, 2026-08-08)**
+
+1. `MixedClosedOpen` Scenario로 "CAD에서 영역 선택" 클릭 → "4개 중 3개 영역의 면적을 계산했습니다.", 제외 배너 "선택한 4개 객체 중 1개는 면적 계산에서 제외했습니다 (열린 형상 1개)." 정확히 표시
+2. 결과 테이블: 3개 행(`7020`/`7021`/`7022` Polyline A-FLOOR, 각 1,520.42 m²/981.27 m²/600.74 m²), 열린 항목은 행으로 들어가지 않음
+3. 총 면적 **3,102.43 m²** (§33의 기대값과 정확히 일치)
+4. "산출내역 추가" → Dashboard Quantity 테이블에 `Area / 3,102.430 / m²` 행 추가 확인
+5. `AreaAutoCadError` Scenario → "면적을 계산하지 못했습니다.\nAutoCAD 연결 상태를 확인한 뒤 다시 시도해주세요." (Error 상태, 빨간 표시)
+6. `UnitlessAreaDrawing` Scenario → "도면 단위가 설정되어 있지 않습니다.", 행은 `500,000.00 (Unitless)`로 원본값 그대로 표시, "산출내역 추가" 버튼 비활성화 확인
+7. `EmptyAreaSelection` Scenario → "선택된 객체가 없습니다.", "산출내역 추가" 버튼 비활성화 확인
+
+이 과정에서 실제 버그 하나를 발견/수정했다: `InvalidArea` Scenario(닫혀 있지만 면적이 `double.NaN`)로 Integration Test를 돌렸을 때 `NullReferenceException`이 발생했다 - `System.Text.Json`이 기본 설정으로는 `NaN`을 직렬화하지 못해 IPC 응답이 깨졌기 때문이다. `IpcJson.Options`에 `JsonNumberHandling.AllowNamedFloatingPointLiterals`를 추가해 해결했다 (Length를 포함한 IPC 계층 전체에 적용되는 수정이라 회귀 테스트를 `Core.Tests/Ipc/IpcEnvelopeTests.cs`에 추가했다).
 
 ## Real Machine Test 경계
 
@@ -105,5 +142,10 @@ Level 2까지 커버하지 못하는 것 (Level 3에서만 확인 가능):
 - `DocumentLock`이 실제 AutoCAD 조작(PAN/ZOOM 등)에 미치는 영향
 - 실제 Arc가 포함된 Polyline의 `GetDistanceAtParameter` 결과 정확도
 - 여러 AutoCAD 인스턴스를 실제로 띄웠을 때의 Discovery 동작
+- 실제 `Curve.Area`/`Region.Area`의 런타임 동작 - 특히 자기교차 Polyline이나 매우 복잡한 형상에서
+  값을 정상 반환하는지, 아니면 `Autodesk.AutoCAD.Runtime.Exception`을 던지는지는 실물로 확인해야 한다
+  (Milestone 3 §18)
+- `Polyline3d`/`Hatch`를 이번 Milestone에서 의도적으로 Unsupported 처리했는데, 실제 도면에서 사용자가
+  얼마나 자주 이런 객체를 면적 계산에 섞어 선택하는지는 실사용 피드백이 필요하다
 
 이 항목들은 [`AUTOCAD_REAL_MACHINE_CHECKLIST.md`](./AUTOCAD_REAL_MACHINE_CHECKLIST.md)에 정리되어 있다.

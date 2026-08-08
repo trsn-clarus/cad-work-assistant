@@ -36,6 +36,30 @@ Level 1(Unit)/Level 2(Headless Integration) 테스트로 커버할 수 없는, �
 - [ ] `DocumentLock`이 실제로 필요한 범위인지 - 다른 명령을 실행 중일 때 길이 산출을 시도하면 어떻게 되는지 (Lock 충돌 시 사용자에게 적절한 메시지가 가는지)
 - [ ] "산출내역 추가"로 저장한 값을 재부팅/재시작 후에도 - **주의: 현재는 SQLite 영속화가 없다(Milestone 4에서 구현 예정), 프로그램을 재시작하면 산출내역이 사라지는 것이 정상이다.** 이 항목은 Milestone 4 이후로 재검토.
 
+## Milestone 3 — Area
+
+- [ ] Closed Polyline 1개 선택 → `AREA` 명령 결과와 `SelectAreaObjects` 응답의 `RawArea`가 일치
+- [ ] Closed Polyline 여러 개 선택 → 합산값이 각 `AREA` 결과의 합과 일치
+- [ ] Open Polyline 선택 → `IsClosed=false`, 0 m²가 아니라 Open으로 제외되고 "열린 형상 N개" 배너 표시
+- [ ] 닫힘/열림 혼재 선택 → PartialSuccess, 유효한 것만 합산 + 제외 개수 정확히 표시
+- [ ] Arc 구간이 포함된 닫힌 Polyline → `Curve.Area`가 호 구간까지 반영해 정확한 면적을 반환하는지 `AREA` 명령과 대조
+- [ ] 자기교차(self-intersecting) Polyline → 예외 없이 값을 반환하는지, 반환한다면 그 값이 사용자 기대와 얼마나 다른지 (§18) - AutoCAD가 예외를 던지면 `InvalidGeometry`로 정상 제외되는지도 확인
+- [ ] 매우 큰 다각형(좌표 값이 크거나 정점이 많은 경우) - 정밀도 손실 없이 계산되는지
+- [ ] Circle 선택 → `Curve.Area`가 원 면적 공식(πr²)과 일치
+- [ ] Ellipse(전체 타원) 선택 → 닫힌 것으로 인식되고 정확한 면적 반환
+- [ ] Ellipse 호(elliptical arc, 일부만 그린 타원) 선택 → `Closed=false`로 인식되어 Open 처리되는지
+- [ ] Region 선택 → `Region.Area`가 정확한 값을 반환
+- [ ] Unitless 도면 → "도면 단위가 설정되어 있지 않습니다", 자동 변환 안 함
+- [ ] mm 도면 / m 도면 각각에서 변환된 m² 값이 정확한지
+- [ ] 지원하지 않는 객체(Hatch, Text, Line, Arc, Polyline3d, Dimension, BlockReference 등) 섞어서 선택 → 제외 개수/타입이 정확히 표시, 프로그램이 죽지 않음
+- [ ] Esc로 선택 취소 → "선택이 취소되었습니다" (빨간 오류 아님)
+- [ ] 100개 이상 선택 → AutoCAD/Desktop 둘 다 멈추지 않는지
+- [ ] DWG 전환 후 연속으로 면적 산출 - 이전 결과가 남아있지 않고 새 도면 기준으로 계산되는지
+- [ ] Layout 전환 후 면적 산출 - Model/Layout 어느 쪽에서 선택하든 동일하게 동작하는지
+- [ ] 면적 산출 도중/직후 AutoCAD에서 PAN/ZOOM - 끊김 없는지
+- [ ] `Hatch`를 실제로 지원해야 할 만큼 사용 빈도가 높은지 실사용자 피드백으로 재평가 (현재는 의도적으로 Unsupported, `docs/AUTOCAD_INTEGRATION.md` §5.6)
+- [ ] `Polyline3d`를 면적 계산에 쓰려는 실사용 요구가 있는지, 있다면 어떤 평면 투영 규칙을 기대하는지 재평가
+
 ## 검증 방법 메모
 
 - 이 문서의 각 항목은 AutoCAD가 있는 머신에서 확인 후 `[ ]` → `[x]`로 바꾸고, 특이사항이 있으면 항목 옆에 메모를 남긴다.

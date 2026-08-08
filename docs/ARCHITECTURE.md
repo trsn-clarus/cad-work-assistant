@@ -52,15 +52,15 @@
 
 | 프로젝트 | TFM | 책임 | AutoCAD/WPF 의존성 |
 |---|---|---|---|
-| `CADWorkAssistant.Core` | netstandard2.0 | 단위 변환, 길이 계산(`Core/Length`), 도메인 모델, IPC 프로토콜(`Core/Ipc`)과 상태머신(`Core/Cad`). **AutoCAD 타입을 절대 참조하지 않는다** → AutoCAD 없이 유닛 테스트 가능 (§32) | 없음 |
+| `CADWorkAssistant.Core` | netstandard2.0 | 단위 변환, 길이 계산(`Core/Length`), 면적 계산(`Core/Area`), 도메인 모델, IPC 프로토콜(`Core/Ipc`)과 상태머신(`Core/Cad`). **AutoCAD 타입을 절대 참조하지 않는다** → AutoCAD 없이 유닛 테스트 가능 (§32) | 없음 |
 | `CADWorkAssistant.Infrastructure` | **net48;net8.0** (멀티타겟) | 구조화 로깅(Serilog), 설정 저장(JSON), Named Pipe 전송 계층 전체(`Ipc/PipeMessageFramer`, `AutoCadPipeClient`, `AutoCadPipeServer`) | 없음 |
 | `CADWorkAssistant.Documents` | netstandard2.0 | Excel/PDF/CSV 내보내기 (Milestone: Excel Export 단계에서 실제 구현) | 없음 |
-| `CADWorkAssistant.Desktop` | net8.0-windows | WPF UI, MVVM, `Services/`(Discovery/ConnectionManager), `ViewModels/`(LengthWorkflowViewModel 등) | WPF |
-| `CADWorkAssistant.AutoCAD` | net48 | AutoCAD Managed API 연동, IPC Handler(Ping/GetApplicationInfo/GetDrawingContext/SelectLengthObjects), 원본 DWG 보호/Undo 그룹 처리 | AutoCAD 2024 Managed API |
+| `CADWorkAssistant.Desktop` | net8.0-windows | WPF UI, MVVM, `Services/`(Discovery/ConnectionManager), `ViewModels/`(LengthWorkflowViewModel, AreaWorkflowViewModel 등) | WPF |
+| `CADWorkAssistant.AutoCAD` | net48 | AutoCAD Managed API 연동, IPC Handler(Ping/GetApplicationInfo/GetDrawingContext/SelectLengthObjects/SelectAreaObjects), 원본 DWG 보호/Undo 그룹 처리 | AutoCAD 2024 Managed API |
 | `CADWorkAssistant.FakeAutoCad` (`tools/`) | net8.0 | AutoCAD 없이 개발/테스트하기 위한 Headless Simulation Host. `AutoCAD.Ipc.Handlers`와 **똑같은 IPC 프로토콜/서버 코드**를 재사용, Handler만 Scenario 기반 canned data로 교체. 설치 프로그램에 포함 안 함 (§73) | 없음 |
 | `*.Tests` | net8.0 | Core/Infrastructure 로직 단위 테스트 + Integration.Tests는 FakeAutoCad를 실제 프로세스로 띄워 실제 Named Pipe로 검증 | 없음 (AutoCAD 미설치 환경에서도 실행 가능) |
 
-Core/Documents가 `netstandard2.0`인 이유: net48(Plugin)과 net8.0(Desktop/FakeAutoCad) 양쪽에서 참조 가능한 가장 단순한 공통분모이기 때문이다. **Infrastructure만 예외적으로 `net48;net8.0` 멀티타겟이다** - Named Pipe에 현재 사용자 전용 ACL을 거는 방식이 두 런타임에서 서로 다르기 때문 (§9 의사결정 로그 참고). netstandard2.0을 기본값으로 유지하고, 실제로 막힌 경우에만 멀티타겟으로 전환한다 (§0 "불필요하게 복잡한 구조 지양").
+Core/Documents가 `netstandard2.0`인 이유: net48(Plugin)과 net8.0(Desktop/FakeAutoCad) 양쪽에서 참조 가능한 가장 단순한 공통분모이기 때문이다. **Infrastructure만 예외적으로 `net48;net8.0` 멀티타겟이다** - Named Pipe에 현재 사용자 전용 ACL을 거는 방식이 두 런타임에서 서로 다르기 때문 (§10 의사결정 로그 참고). netstandard2.0을 기본값으로 유지하고, 실제로 막힌 경우에만 멀티타겟으로 전환한다 (§0 "불필요하게 복잡한 구조 지양").
 
 ## 4. AutoCAD 연동 계층
 
@@ -143,7 +143,53 @@ Desktop.ViewModels.LengthWorkflowViewModel
 
 **Quantity Sheet와의 관계**: `LengthMeasurementResult`(방금 계산한 값)와 `QuantityRecord`(저장하기로 한 값)는 다른 타입이다. 사용자가 "산출내역 추가"를 눌러야 `QuantityRecord`로 변환되며, 이때 `RawValue`/`SourceUnit`/`ObjectHandles`/`CalculationExpression`을 함께 저장해 나중에 재검산할 수 있게 한다 (§28-29).
 
-## 7. Desktop App 구조 (MVVM)
+## 7. Measurement Architecture (Area, Milestone 3)
+
+Area는 §6의 Length와 완전히 같은 형태(Handler → Core 계산 → ViewModel)를 따르되, "닫혀 있는가"가 값 자체의 유효성을 좌우한다는 점이 Length와 다르다. 그래서 선택된 객체 전부(유효/열림/미지원/비정상형상)를 하나의 목록으로 표현하고, 각 항목에 상태를 붙인다:
+
+```text
+AutoCAD Plugin (SelectAreaObjectsHandler)
+  - Editor.GetSelection으로 사용자 선택을 받는다 (Length와 동일한 InvokeInCommandContextAsync)
+  - 면적 산출 Geometry(Polyline/Polyline2d/Circle/Ellipse/Region)인지 CadAreaGeometryMapper로 판별
+  - Region이 아니면 Curve.Closed를 확인, 닫혀 있으면 Curve.Area(Region은 Region.Area)를 읽는다
+  - Area를 읽다 AutoCAD 예외가 나면 catch해서 NaN을 담아 보낸다 - Core가 재현할 수 없는 예외를
+    Handler가 먼저 판단해서 신호로 바꿔주는 것
+        │  AreaSelectionResponse { Objects(CadAreaObjectDto: Handle/GeometryType/Layer/RawArea/IsClosed), ExcludedObjectTypeNames, Unit }
+        ▼
+CADWorkAssistant.Core.Area (AutoCAD 비의존, 단위 테스트됨)
+  - AreaAggregationService.Classify: !IsClosed → Open, NaN/Infinity → InvalidGeometry,
+    RawArea<0 → ArgumentException(방어적 검증), RawArea<=AreaEpsilon(1e-6) → InvalidGeometry(§17),
+    나머지 → Valid로 분류해 AreaMeasurementItem 목록(Items)에 담는다
+  - AreaUnitConverter: Length의 선형 계수를 제곱해서 재사용(mm² → m²는 1,000,000으로 나눈다, §21) -
+    DrawingUnitConversion.MetersPerUnit을 Length/Area가 공유한다
+  - AreaFormatter: 표시용 반올림(기본 소수 2자리, 천 단위 구분자)
+        │
+        ▼
+Desktop.ViewModels.AreaWorkflowViewModel
+  - Rows는 Valid 항목만 담는다 - 제외된 항목은 테이블에 행으로 넣지 않고 ExcludedSummary
+    한 문장으로 요약한다("선택한 4개 객체 중 1개는 면적 계산에서 제외했습니다 (열린 형상 1개)")
+    (design-system/pages/measurement-workspace.md §"왜 하나의 테이블/배너인가")
+  - State가 8종(Idle/AwaitingSelection/Success/PartialSuccess/NoValidObjects/Cancelled/
+    EmptySelection/Error)이라 Length보다 하나 더 많다 - "선택은 했지만 전부 무효"(NoValidObjects)와
+    "아예 선택하지 않음"(EmptySelection)은 사용자에게 다른 메시지를 줘야 한다
+```
+
+**지원 Geometry를 좁게 잡은 이유**: Polyline/Polyline2d/Circle/Ellipse/Region은 실제 AutoCAD 2024
+`acdbmgd.dll`을 리플렉션으로 확인한 결과 `Curve.Area`/`Curve.Closed`(Region은 `Region.Area`)를
+안전하게 읽을 수 있음을 확인했다. Polyline3d는 같은 API를 상속하지만 비평면 3D 형상의 면적 해석이
+불확실하고 실제 AutoCAD가 없어 검증할 수 없어 의도적으로 제외했다. Hatch는 Associative/Pattern/
+Island 처리 복잡도가 높아 같은 이유로 이번 Milestone에서 제외했다 - 둘 다 추측으로 지원한다고
+표시하지 않는다.
+
+**Length와 Area가 공유하는 것**: `SelectionOutcome<TResponse>`(AutoCAD Plugin, 선택됨/취소/문서없음/
+오류 4종 결과 래퍼), `DrawingUnitConversion.MetersPerUnit`(Core.Cad, 단위→미터 계수 표),
+`SelectionCancelled`라는 하나의 `IpcErrorCode`, `AutoCadDispatcher.InvokeInCommandContextAsync`.
+반대로 공유하지 않는 것: 집계/분류 로직 자체(Length는 단순 합산, Area는 4단계 분류 후 합산)와
+UI ViewModel의 State enum(Area가 PartialSuccess/NoValidObjects로 더 세분화됨) - 억지로
+하나의 제네릭 `MeasurementResult<T>`로 합치지 않았다. 두 기능의 계산 로직 자체가 다르기 때문에
+공통화하면 오히려 각 기능의 단순함을 해친다.
+
+## 8. Desktop App 구조 (MVVM)
 
 - `*.xaml` — 뷰 (구조/레이아웃/스타일), `Themes/DesignTokens.xaml`에 색상·타이포·spacing 토큰 정의
 - `ViewModels/` — 자체 구현 `ObservableObject`/`RelayCommand` 기반, 상태와 커맨드
@@ -151,13 +197,13 @@ Desktop.ViewModels.LengthWorkflowViewModel
 - Navigation은 §27 정보구조를 기반으로 하되 실제 구현은 [`design-system/MASTER.md`](../design-system/MASTER.md)의 PROJECT/CAD/QUANTITY/OUTPUT/SETTINGS 그룹을 따른다. Milestone 0의 UI Shell은 더미 데이터로 채워진 상태이며, 실제 AutoCAD 연동은 Milestone 1부터 연결한다.
 - UI 디자인 원칙(색상, spacing, 밀도, 안티패턴)은 `design-system/MASTER.md`가 단일 소스다 — ARCHITECTURE.md는 프로세스/데이터 구조를, design-system은 시각적 규칙을 다룬다.
 
-## 8. 로깅 / 설정
+## 9. 로깅 / 설정
 
 - **Logging**: Serilog, 파일 싱크. 경로: `%LOCALAPPDATA%\CADWorkAssistant\logs\yyyy-MM-dd.log`, 일 단위 롤링. 도면 내부 좌표/치수 등 민감할 수 있는 상세 데이터는 Verbose 레벨에서만 기록하고 기본 레벨(Information)에는 요약만 남긴다 (§25).
 - **Settings**: `%APPDATA%\CADWorkAssistant\settings.json`, `System.Text.Json` 직렬화. 소수점 자릿수(길이/면적 별도), 기본 단위 표시 등 사용자 환경설정을 저장한다 (§21).
 - **Project/Quantity 데이터**: SQLite는 실제 Quantity Sheet 기능(Milestone 4) 구현 시점에 도입한다. 지금 시점에 스키마를 미리 설계하지 않는다 (§34 조기 구현 금지).
 
-## 9. 의사결정 로그
+## 10. 의사결정 로그
 
 | 결정 | 대안 | 선택 이유 |
 |---|---|---|
@@ -177,11 +223,19 @@ Desktop.ViewModels.LengthWorkflowViewModel
 | `WaitForConnectionAsync` 취소 시 Pipe를 명시적으로 Dispose | CancellationToken만 전달 | 아무도 연결하지 않은 상태에서 취소해도 `WaitForConnectionAsync`가 실제로는 풀리지 않는 것을 실제로 겪었다 - `cancellationToken.Register`로 Pipe를 강제 Dispose해서 우회 |
 | Length 계산: AutoCAD Plugin은 원본 데이터만 반환, 합산/변환/포맷팅은 Core.Length | Plugin에서 전부 계산해서 완성된 문자열만 보냄 | 계산 로직을 AutoCAD 없이 단위 테스트하기 위함 (§25, §32) - Plugin이 두꺼워지면 테스트 불가능한 로직이 늘어난다 |
 | FakeAutoCad: `tools/`에 별도 실행 파일 프로젝트, 실제 서버 코드(Infrastructure.Ipc) 재사용 | Integration.Tests 안에 있는 in-process Fake만 계속 사용 | Milestone 1의 in-process Fake는 Transport 계층 테스트에는 충분하지만, Desktop을 실제로 띄워 UI까지 눈으로 확인하려면(§10, §55) 별도 프로세스가 필요하다. 기존 in-process Fake(`tests/.../Fakes/FakeAutoCadServer.cs`)는 그대로 남겨 Transport 단위 테스트에 계속 쓴다 |
+| Area 지원 Geometry: Polyline/Polyline2d/Circle/Ellipse/Region만, Polyline3d/Hatch는 제외 | 리플렉션에 API가 보이는 대로 전부 지원 | Polyline3d는 API는 있지만 비평면 3D 형상의 면적 해석이 불확실하고, Hatch는 Associative/Island 처리 복잡도가 높다 - 둘 다 실제 AutoCAD가 없어 edge case를 검증할 수 없어 "확실하지 않으면 Unsupported로 제외"(Milestone 3 §15) 원칙을 그대로 적용했다 |
+| `SelectionOutcome`을 `SelectionOutcome<TResponse>`로 제네릭화 | Area 전용으로 별도 타입 새로 작성 | Length Handler가 이미 쓰던 걸 그대로 복붙하면 Selected/Cancelled/NoActiveDocument/Error 네 가지 결과를 감싸는 코드가 완전히 중복된다 - 명확한 중복이라 공통화했다 (Milestone 3 §6) |
+| `IpcJson.Options`에 `JsonNumberHandling.AllowNamedFloatingPointLiterals` 추가 | Area의 "면적 읽기 실패" 신호를 NaN이 아닌 다른 방식(예: nullable bool 플래그)으로 전달 | AutoCAD가 Area를 읽다 예외를 던진 상황을 NaN으로 전달하도록 설계했는데, `System.Text.Json`은 기본 설정으로 NaN 직렬화 시 예외를 던진다는 걸 Integration Test가 실제로 실행되며 드러났다(`AreaWorkflowEndToEndTests.FullWorkflow_InvalidGeometry_...`가 NullReferenceException으로 실패). IPC 계층 전체에 영향을 주는 근본 수정이 DTO를 새로 설계하는 것보다 작고 안전했다 |
+| Area 총합 epsilon(1e-6) 이하는 InvalidGeometry로 분류 + 저장 버튼 비활성화 | 0인 값도 그대로 Valid로 합산 | 닫혀 있지만 면적이 사실상 0인 형상은 실무적으로 의미가 없고(Milestone 3 §17, §19), 저장 시점에 별도 확인 없이 걸러야 사용자가 빈 산출내역을 저장하는 실수를 하지 않는다 |
+| Unit Override(Unitless 도면의 계산 단위 수동 지정)는 구현하지 않고 평가만 하고 보류 | Length/Area 양쪽에 바로 구현 | Milestone 3 §3 필수 기능에 없고, Project/Drawing 단위 영구 저장소가 필요한 별도 크기의 기능이다 - "필요할 때 구현한다"는 원칙에 따라 미룬다 (§11) |
 
-## 10. 아직 결정하지 않은 것 (의도적으로 보류)
+## 11. 아직 결정하지 않은 것 (의도적으로 보류)
 
 - SQLite 접근 방식(Raw ADO.NET vs Dapper vs EF Core) — Milestone 4 착수 시 결정
 - Excel 라이브러리(ClosedXML 후보) — Excel Export 착수 시 라이선스/유지보수 재확인 후 결정
 - PDF 라이브러리 — PDF Export 착수 시 결정 (QuestPDF는 회사 규모에 따라 상업 라이선스 필요할 수 있어 확인 필요)
 - Installer(Inno Setup vs MSIX) — 첫 배포 가능한 빌드가 나온 뒤 결정
 - AutoCAD 2025+(.NET 8) 지원 — 필요 시점에 별도 프로젝트로 추가
+- **Project/Drawing 단위 Unit Override**(§24-27, Unitless 도면에서 계산 단위를 사용자가 지정) — Milestone 3
+  §3 필수 기능 목록에는 없고, 영구 저장소(Project/Drawing-scoped setting)가 필요한 별도 기능이라 평가만
+  하고 미룬다. Unitless 도면은 지금과 같이 "자동 변환할 수 없다"고만 명확히 안내한다

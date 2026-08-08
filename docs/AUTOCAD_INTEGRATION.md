@@ -36,7 +36,7 @@ AutoCAD Managed API DLL은 **NuGet으로 배포되지 않고 로컬 설치 경�
 | `CWA_LAYER` | Layer 도구 | 9 |
 | `CWA_PLOT` | Plot 프리셋 실행 | 10 |
 
-`CWA` prefix는 흔한 AutoCAD 내장/서드파티 명령과 충돌 가능성이 낮아 채택했다. **아직 실제로 등록한 명령은 없다** - Milestone 2까지는 Desktop → IPC → Handler 경로가 유일한 진입점이고, AutoCAD 쪽 `[CommandMethod]`는 "Desktop 없이도 Plugin을 Smoke Test할 수 있게" 하는 부가 기능(Milestone 2 §47)이라 실제 AutoCAD에서 검증 가능해지는 시점(`docs/AUTOCAD_REAL_MACHINE_CHECKLIST.md`)에 추가하기로 미뤘다 - 등록하더라도 `SelectLengthObjectsHandler`와 같은 로직을 재사용하고 중복 구현하지 않는다.
+`CWA` prefix는 흔한 AutoCAD 내장/서드파티 명령과 충돌 가능성이 낮아 채택했다. **아직 실제로 등록한 명령은 없다** - Milestone 3까지도 Desktop → IPC → Handler 경로가 유일한 진입점이고, AutoCAD 쪽 `[CommandMethod]`는 "Desktop 없이도 Plugin을 Smoke Test할 수 있게" 하는 부가 기능(Milestone 2 §47)이라 실제 AutoCAD에서 검증 가능해지는 시점(`docs/AUTOCAD_REAL_MACHINE_CHECKLIST.md`)에 추가하기로 미뤘다 - 등록하더라도 `SelectLengthObjectsHandler`/`SelectAreaObjectsHandler`와 같은 로직을 재사용하고 중복 구현하지 않는다.
 
 ## 5. IPC — Desktop ↔ Plugin (Milestone 1에서 구현 완료)
 
@@ -59,8 +59,9 @@ Desktop(net8.0, 별도 프로세스)과 Plugin(net48, `acad.exe` in-process)은 
 | `GetApplicationInfo` | 없음 | `AutoCadInstanceInfo`(Product, Version, ProcessId, PluginVersion, ProtocolVersion, IsSimulated) | |
 | `GetDrawingContext` | 없음 | `DrawingContext`(DocumentDisplayName, FullPath, IsSaved, IsReadOnly, Layout, Units, DocumentCount) | 열린 문서가 없으면 `NoActiveDocument` 오류 |
 | `SelectLengthObjects`(Milestone 2) | 없음 | `LengthSelectionResponse`(Objects, ExcludedObjectTypeNames, Unit) | Editor.GetSelection이 사용자 입력을 기다린다 - Command Context에서 실행 (§5.5). 집계/변환은 AutoCAD Plugin이 아니라 Core.Length가 한다 |
+| `SelectAreaObjects`(Milestone 3) | 없음 | `AreaSelectionResponse`(Objects, ExcludedObjectTypeNames, Unit) | SelectLengthObjects와 같은 Command Context 경로(§5.5, §5.6). 분류(Valid/Open/Unsupported/InvalidGeometry)/합산/변환은 AutoCAD Plugin이 아니라 Core.Area가 한다 |
 
-향후 명령(`GetArea` 등)은 `Core/Ipc/IpcMessageTypes.cs`에 상수를 추가하고 `CADWorkAssistant.AutoCAD/Ipc/Handlers/`에 `IIpcRequestHandler` 구현을 추가하는 것으로 확장한다 — 거대한 switch문을 두지 않는다.
+향후 명령은 `Core/Ipc/IpcMessageTypes.cs`에 상수를 추가하고 `CADWorkAssistant.AutoCAD/Ipc/Handlers/`에 `IIpcRequestHandler` 구현을 추가하는 것으로 확장한다 — 거대한 switch문을 두지 않는다.
 
 ### 5.2 AutoCAD API 스레드 경계 (AutoCadDispatcher)
 
@@ -142,6 +143,40 @@ Autodesk.AutoCAD.DatabaseServices.OpenMode
 - `Document.LockDocument()`로 Database/Editor 접근을 감싼다. Transaction은 `Commit()`을 호출하지 않는다 - Read-only이며(§61), `using`이 끝나면 자동 Abort된다.
 - Unit 변환은 여기서 하지 않는다 - `RawLength`(도면 단위 그대로)만 담아 보내고, 합산/변환/포맷팅은 전부 `CADWorkAssistant.Core.Length`(AutoCAD 비의존, 단위 테스트됨)가 담당한다.
 
+### 5.6 Area API (Milestone 3, `SelectAreaObjectsHandler`)
+
+이 PC의 AutoCAD 2024 `acdbmgd.dll`을 리플렉션으로 직접 확인한 결과 (추측 없음):
+
+```
+Autodesk.AutoCAD.DatabaseServices.Curve (acdbmgd.dll)
+  double Area      // Curve 자체에 선언되어 있다 - Polyline/Polyline2d/Polyline3d/Circle/Ellipse/Spline
+                    // 전부 이 프로퍼티를 그대로 상속받는다 (재정의 없음)
+  bool Closed       // 마찬가지로 Curve에 선언. Polyline/Polyline2d/Polyline3d는 자체 재정의를 갖고,
+                    // Circle/Ellipse/Spline은 Curve의 구현을 그대로 쓴다
+
+Autodesk.AutoCAD.DatabaseServices.Ellipse (acdbmgd.dll)
+  double StartAngle
+  double EndAngle
+  double StartParam
+  double EndParam
+  // Ellipse 엔티티가 전체 타원이 아니라 타원 호(elliptical arc)도 표현할 수 있다는 뜻이다 -
+  // 그래서 Closed 검사가 Circle과 달리 실제로 의미가 있다 (호는 Closed == false)
+
+Autodesk.AutoCAD.DatabaseServices.Region (acdbmgd.dll)
+  double Area   // Region 자신에 직접 선언 (Entity 파생, Curve 아님) - Region은 정의상 항상 닫힌 면이라
+                // Closed 개념 자체가 없다
+
+Autodesk.AutoCAD.Runtime.Exception (acdbmgd.dll)
+  ErrorStatus ErrorStatus   // System.Exception 파생 - AutoCAD API 호출 실패 시 이 타입으로 던져진다
+```
+
+구현 방침:
+
+- 지원 대상은 `Polyline`/`Polyline2d`(Curve.Area/Closed) + `Circle`/`Ellipse`(마찬가지) + `Region`(Region.Area, Closed 검사 불필요) 다섯 가지로 좁혔다. `Polyline3d`는 API 자체는 상속받지만 비평면 3D 형상의 면적 해석이 불확실하고, `Hatch`는 Associative/Pattern/Island 처리 복잡도가 높다 - 둘 다 실제 AutoCAD가 없어 이 PC에서 edge case를 검증할 수 없으므로 의도적으로 Unsupported 취급한다 (Milestone 3 §15, §43).
+- `Curve.Area`/`Region.Area`를 읽는 동안 `Autodesk.AutoCAD.Runtime.Exception`(자기교차 등 비정상 형상에서 발생 가능)을 catch해서 `double.NaN`을 대신 담아 IPC로 보낸다 - AutoCAD 쪽에서만 재현 가능한 예외를 Core가 판단할 수 있는 신호로 바꿔주는 것이다. `Core.Area.AreaAggregationService`가 NaN/Infinity를 `InvalidGeometry`로 분류한다.
+- Closed가 아닌 객체는 Area를 아예 읽지 않는다(`RawArea = 0`으로 응답) - 열린 Curve의 `.Area`를 읽는 것 자체가 어떤 값을 반환할지 문서화되어 있지 않고 실물로 검증할 수 없어, 애초에 접근하지 않는 쪽을 택했다.
+- `Region`은 `Closed` 프로퍼티가 없으므로 `IsClosed: true`로 고정해 응답한다 - Region이라는 타입 자체가 "닫힌 면"이라는 의미이기 때문이다.
+
 ### 5.3 마케팅 버전 이름 (AutoCadVersionMap)
 
 `Application.Version`과 `acad.exe`의 FileVersionInfo 모두 "AutoCAD 2024" 같은 마케팅 연도를 주지 않는다 (`ProductName`은 그냥 "AutoCAD", 버전은 "R24.3.119.0.0"). `AutoCadVersionMap`이 Autodesk의 공개된 릴리스 번호 체계를 바탕으로 한 매핑 표를 갖고 있으며, 매핑에 없는 버전은 절대 연도를 지어내지 않고 `AutoCAD (build {version})` 형태로 원본을 보여준다. 새 AutoCAD 버전이 나오면 이 표에 한 줄 추가하면 된다.
@@ -159,17 +194,17 @@ Autodesk.AutoCAD.DatabaseServices.OpenMode
 ## 7. 단위 처리
 
 - 도면 단위는 `Database.Insunits`(`INSUNITS` 시스템 변수)로 조회한다. `UnitsValue.Millimeters`가 가장 흔하지만 하드코딩하지 않고 항상 조회한다 (실제 구현은 §5.4 `CadUnitMapper` 참고).
-- Length/Area는 AutoCAD 내부 단위(도면 단위) 그대로 가져와 `CADWorkAssistant.Core`의 변환 로직에 넘긴다 — 변환 책임은 Plugin이 아니라 Core에 둔다 (테스트 가능성, §32). 실제 mm/m 변환 로직은 Milestone 2(Length)에서 구현한다.
+- Length/Area는 AutoCAD 내부 단위(도면 단위) 그대로 가져와 `CADWorkAssistant.Core`의 변환 로직에 넘긴다 — 변환 책임은 Plugin이 아니라 Core에 둔다 (테스트 가능성, §32). mm/m 변환은 Milestone 2(Length)에서, mm²/m² 변환은 Milestone 3(Area, 선형 계수를 제곱해서 재사용)에서 구현했다.
 
 ## 8. 실제 AutoCAD GUI 스모크 테스트 — 이 PC에서는 보류
 
-Milestone 1에서 이 PC의 AutoCAD 2024 GUI를 실제로 띄우자 그래픽 드라이버가 불안정해지는 문제(Windows 이벤트 로그에 `LiveKernelEvent`/`BlueScreen` fault bucket 기록, 전체 재부팅은 없었음)를 확인했다. 사용자 확인 결과 이 PC는 AutoCAD 실사용 머신이 아니며, 개발은 계속하되 실제 GUI 연동 검증은 AutoCAD가 정상 동작하는 별도 머신에서 진행하기로 했다. Milestone 2에서도 같은 제약이 이어진다.
+Milestone 1에서 이 PC의 AutoCAD 2024 GUI를 실제로 띄우자 그래픽 드라이버가 불안정해지는 문제(Windows 이벤트 로그에 `LiveKernelEvent`/`BlueScreen` fault bucket 기록, 전체 재부팅은 없었음)를 확인했다. 사용자 확인 결과 이 PC는 AutoCAD 실사용 머신이 아니며, 개발은 계속하되 실제 GUI 연동 검증은 AutoCAD가 정상 동작하는 별도 머신에서 진행하기로 했다. Milestone 2, 3에서도 같은 제약이 이어진다.
 
 대신 다음으로 검증을 대체했다 (`docs/TESTING_WITHOUT_AUTOCAD.md` 참고):
 
-1. `CADWorkAssistant.AutoCAD` 프로젝트가 실제 AutoCAD 2024 Managed API 참조로 경고 0개/오류 0개로 빌드된다 (§5.5의 API 목록은 전부 리플렉션으로 직접 확인).
-2. `CADWorkAssistant.FakeAutoCad` - 실제 AutoCAD Plugin과 동일한 IPC 코드(Infrastructure.Ipc.AutoCadPipeServer, Core.Ipc)를 그대로 쓰는 별도 프로세스. Integration.Tests가 이 프로세스를 실제로 띄워 Named Pipe로 종단간 검증한다.
-3. Desktop을 Simulation Mode(`CWA_USE_FAKE_AUTOCAD=1`)로 FakeAutoCad에 붙여 실제 UI까지 수동으로 확인 - Length 선택 → "255.941 m" 표시 → 산출내역 추가까지 실제 두 프로세스 사이 통신으로 동작하는 것을 확인했다.
+1. `CADWorkAssistant.AutoCAD` 프로젝트가 실제 AutoCAD 2024 Managed API 참조로 경고 0개/오류 0개로 빌드된다 (§5.5/§5.6의 API 목록은 전부 리플렉션으로 직접 확인).
+2. `CADWorkAssistant.FakeAutoCad` - 실제 AutoCAD Plugin과 동일한 IPC 코드(Infrastructure.Ipc.AutoCadPipeServer, Core.Ipc)를 그대로 쓰는 별도 프로세스. Integration.Tests가 이 프로세스를 실제로 띄워 Named Pipe로 종단간 검증한다 (Milestone 3까지 총 29개 Scenario, Length 13개 + Area 16개).
+3. Desktop을 Simulation Mode(`CWA_USE_FAKE_AUTOCAD=1`)로 FakeAutoCad에 붙여 실제 UI까지 수동으로 확인 - Length 선택 → "255.941 m" 표시, Area 선택 → "3,102.43 m²" 표시(4개 중 1개가 열려 있어 제외된 PartialSuccess 배너 포함) → 산출내역 추가까지 실제 두 프로세스 사이 통신으로 동작하는 것을 확인했다.
 
 실제 AutoCAD GUI에서만 확인 가능한 항목은 [`AUTOCAD_REAL_MACHINE_CHECKLIST.md`](./AUTOCAD_REAL_MACHINE_CHECKLIST.md)에 전부 정리되어 있다 (현재 전부 Pending).
 

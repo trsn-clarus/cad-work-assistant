@@ -27,11 +27,11 @@ AutoCAD 실무자가 매일 쓰는 Windows 설치형 업무 자동화 프로그�
 
 ```text
 src/
-  CADWorkAssistant.Core/            netstandard2.0 — 계산/도메인 로직. Core/Ipc(프로토콜), Core/Cad(DTO+상태머신), Core/Length(단위변환/집계/포맷). AutoCAD·WPF 의존 금지
+  CADWorkAssistant.Core/            netstandard2.0 — 계산/도메인 로직. Core/Ipc(프로토콜), Core/Cad(DTO+상태머신+단위 변환 계수), Core/Length(길이 집계/포맷), Core/Area(면적 분류/집계/포맷). AutoCAD·WPF 의존 금지
   CADWorkAssistant.Infrastructure/  net48;net8.0 (멀티타겟) — 로깅(Serilog), 설정(JSON), Ipc/(PipeMessageFramer/AutoCadPipeClient/AutoCadPipeServer - 전송 계층 전체)
   CADWorkAssistant.Documents/       netstandard2.0 — Excel/PDF/CSV export (필요 시점에 구현)
   CADWorkAssistant.Desktop/         net8.0-windows — WPF, MVVM(자체 구현), Services/(Discovery/ConnectionManager), Views/(UserControl), 진입점
-  CADWorkAssistant.AutoCAD/         net48 — AutoCAD Managed API, in-process plugin, Ipc/Handlers/(Ping/GetApplicationInfo/GetDrawingContext/SelectLengthObjects)
+  CADWorkAssistant.AutoCAD/         net48 — AutoCAD Managed API, in-process plugin, Ipc/Handlers/(Ping/GetApplicationInfo/GetDrawingContext/SelectLengthObjects/SelectAreaObjects)
 tools/
   CADWorkAssistant.FakeAutoCad/     net8.0 — Headless AutoCAD Simulation Host (실행 가능 콘솔 앱). AutoCAD Plugin과 동일한 서버 코드 재사용. 설치본에 포함 안 함
 tests/
@@ -65,11 +65,11 @@ $env:CWA_USE_FAKE_AUTOCAD = "1"; dotnet run --project src/CADWorkAssistant.Deskt
 ## 코딩 컨벤션
 
 - Nullable reference types 활성화, `ImplicitUsings` 사용 (net48 프로젝트도 SDK 스타일이라 동일하게 적용됨).
-- 단위 변환은 항상 `CADWorkAssistant.Core.Length`의 변환 로직을 거친다 — Plugin이나 Desktop에서 mm/m 변환식을 직접 작성하지 않는다.
+- 단위 변환은 항상 `CADWorkAssistant.Core`의 변환 로직을 거친다 — Plugin이나 Desktop에서 mm/m, mm²/m² 변환식을 직접 작성하지 않는다. 단위→미터 계수 표는 `Core.Cad.DrawingUnitConversion`에 하나만 있고 `Core.Length`/`Core.Area`가 공유한다(Area는 제곱해서 씀) — 새 단위를 추가할 때 두 곳을 따로 고치지 않는다.
 - AutoCAD Plugin의 Handler는 원본 데이터(도면 단위 그대로)만 IPC로 반환한다 — 합산/변환/포맷팅은 Core에서 한다 (테스트 가능성).
 - Git 커밋은 의미 단위로 분리한다 (`feat:`, `fix:`, `refactor:` 등). 수십 개 기능을 한 커밋에 몰아넣지 않는다.
 - 새 NuGet 의존성 추가 전: 유지보수 상태, 라이선스, .NET 호환성, 상업적 사용 가능 여부, AutoCAD 프로세스와의 충돌 가능성을 확인한다.
-- 코드를 작성한 뒤에는 실제로 빌드/실행해서 검증한다 (컴파일 성공 ≠ 동작 확인). 이 프로젝트에서 실제로 겪은 예: `NamedPipeServerStreamAcl.Create`+커스텀 `PipeSecurity` 조합이 컴파일은 되지만 런타임에 `IOException`을 냈고, `WaitForConnectionAsync`는 컴파일상 CancellationToken을 받지만 실제로는 취소를 무시하는 경우가 있었다.
+- 코드를 작성한 뒤에는 실제로 빌드/실행해서 검증한다 (컴파일 성공 ≠ 동작 확인). 이 프로젝트에서 실제로 겪은 예: `NamedPipeServerStreamAcl.Create`+커스텀 `PipeSecurity` 조합이 컴파일은 되지만 런타임에 `IOException`을 냈고, `WaitForConnectionAsync`는 컴파일상 CancellationToken을 받지만 실제로는 취소를 무시하는 경우가 있었다. `double.NaN`을 IPC payload에 담아 보내는 것도 컴파일은 문제없지만 `System.Text.Json`이 기본 설정으로는 NaN 직렬화에서 예외를 던진다 - Integration Test를 실제로 돌려서야 발견했다 (`IpcJson.Options`에 `JsonNumberHandling.AllowNamedFloatingPointLiterals` 필요).
 
 ## 작업 방식
 

@@ -61,10 +61,23 @@
 
 ## Milestone 3 — Area
 
-- [ ] 닫힌 Polyline 판별
-- [ ] Area 계산 + mm² → m² 변환
-- [ ] 닫히지 않은 Polyline 선택 시 명확한 안내 메시지
-- [ ] 여러 객체 합산 (층별 소계 + 총계)
+**상태: 코드/자동 테스트/Simulation Mode 종단간 검증 완료, 실제 AutoCAD GUI 검증만 남음 (2026-08-08)**
+
+- [x] `[CAD에서 영역 선택]` 버튼 → AutoCAD Selection 모드 진입 (`SelectAreaObjectsHandler`, Length와 동일한 `InvokeInCommandContextAsync` 경로)
+- [x] 닫힌 Polyline/Polyline2d/Circle/Ellipse/Region 면적 계산 (`Core.Area`, AutoCAD 독립적으로 유닛 테스트 29개) — Polyline3d/Hatch는 리플렉션 검증 결과 불확실성이 커서 의도적으로 Unsupported 처리 (`docs/AUTOCAD_INTEGRATION.md` §5.6)
+- [x] mm² → m² 자동 변환 (`AreaUnitConverter`, Length의 선형 계수를 제곱해서 재사용) — cm²/dm²/km²/in²/ft²/yd²/mi²도 함께 지원
+- [x] 닫히지 않은 Polyline/Ellipse 호 선택 시 0 m²가 아니라 Open으로 분류해 명확히 제외 안내
+- [x] 여러 영역 합산 (`AreaAggregationService`) + 선택/유효/제외 개수를 구분해서 표시 (PartialSuccess)
+- [x] 닫혀 있지만 면적이 0/NaN/Infinity인 경우 InvalidGeometry로 분류, Valid로 합산하지 않음
+- [x] Desktop에 결과 표시 + 클립보드 복사 + "산출내역 추가"로 Quantity Sheet에 저장 (Length와 같은 QuantityRecord, `Type="Area"`)
+- [x] FakeAutoCad에 Area Scenario 16개 추가 (Length 13개 + Area 16개 = 29개) — Area Integration.Tests 16개 신규 추가(Length의 기존 17개는 그대로 통과, 총 Integration.Tests 33개)
+- [x] Desktop을 Simulation Mode로 실제 실행해 전체 Workflow 수동 검증 — "3,102.43 m²" 결과, PartialSuccess 배너, Error/Unitless/Empty 상태, Quantity Sheet 저장까지 확인
+- [x] Length/Area 공통 UI 패턴 정리 (`design-system/pages/measurement-workspace.md`) — 헤더/제외요약/테이블/총계 4단 구조를 공유
+- [ ] **실제 AutoCAD 2024 GUI로 검증** — 이 개발 PC는 AutoCAD GUI가 불안정해(Milestone 1에서 확인) 수행하지 못함. 항목은 `docs/AUTOCAD_REAL_MACHINE_CHECKLIST.md`에 정리
+- [ ] `CWA_AREA` AutoCAD 명령 등록 — Length의 `CWA_LENGTH`와 같은 이유로 실제 AutoCAD 검증이 가능해지는 시점으로 미룸
+- [ ] Project/Drawing 단위 Unit Override (Unitless 도면의 계산 단위 수동 지정) — §3 필수 기능이 아니라 평가만 하고 보류 (`docs/ARCHITECTURE.md` §11)
+
+**완료 기준**: 실제 DWG에서 여러 닫힌 영역을 선택해 정확한 총 면적(m²)을 확인할 수 있다. → **Headless Simulation으로는 완전히 충족** (School_Roof.dwg 시나리오로 정확히 3,102.43 m² 확인, 4개 중 1개 열림 케이스의 PartialSuccess도 확인). 실제 DWG/AutoCAD 기준 최종 확인만 남았다.
 
 ## Milestone 4 — Quantity Sheet
 

@@ -9,6 +9,7 @@ CAD Work Assistant is a professional desktop tool for AutoCAD-connected quantity
 - Query used: `engineering desktop software CAD application data dense interface`
 - Adopted recommendations: data-dense dashboard structure, compact tables, hover row highlighting, clear loading and feedback states, visible focus states, keyboard navigation, tabular numeric presentation.
 - Rejected recommendations: neon cyan, interference purple, magenta CTA, marketing landing structure. Those conflict with the CAD Work Assistant requirement for a calm technical workspace.
+- Milestone 3 (Area): no separate UI UX Pro Max / 21st.dev session was available in this environment. Per the documented fallback order (design system → UI UX Pro Max → existing Length UI → general CAD/engineering UX judgment), Area reused this record's findings plus the already-shipped Length panel as its direct reference rather than re-deriving them - see `pages/measurement-workspace.md` for the resulting shared structure and the reasoning for keeping exclusions in one summary sentence instead of a per-row status column.
 
 ## 21st Inputs
 
