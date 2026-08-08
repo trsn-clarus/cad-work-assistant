@@ -263,6 +263,11 @@
                              Grid.RowSpan="4"
                              DataContext="{Binding Parapet}"
                              Visibility="{Binding DataContext.IsParapetToolSelected, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVisibility}}" />
+
+        <views:DrawingPanel Grid.Row="0"
+                             Grid.RowSpan="4"
+                             DataContext="{Binding Drawing}"
+                             Visibility="{Binding DataContext.IsDrawingToolSelected, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVisibility}}" />
       </Grid>
 
       <Border x:Name="InspectorPanel"

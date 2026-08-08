@@ -33,18 +33,20 @@ public sealed class MainWindowViewModel : ObservableObject
         Area = new AreaWorkflowViewModel(connectionManager);
         VerticalArea = new VerticalAreaWorkflowViewModel(connectionManager, Length);
         Parapet = new ParapetWorkflowViewModel(connectionManager, Length);
+        Drawing = new DrawingWorkflowViewModel(connectionManager);
 
         // 실제로 화면이 있는 항목만 isImplemented: true - 나머지는 자리만 예약해두고 비활성화한다
         // (§23 "미구현 기능을 버튼으로 과도하게 노출하지 않는다" - 완전히 숨기면 향후 기능이 붙을 자리를
         // 가늠할 수 없고, 그냥 활성화해두면 클릭했을 때 아무 일도 안 일어나거나 엉뚱한 화면이 보인다).
+        // Drawing은 Milestone 5에서 실제 화면이 생겨 isImplemented: true로 전환했다.
         Navigation = new ObservableCollection<NavItem>
         {
             new("PROJECT", "Dashboard", "Alt+1", true) { IsSelected = true },
             new("PROJECT", "Files", "Alt+2", isImplemented: false),
-            new("CAD", "Drawing", "Alt+3", true, isImplemented: false),
-            new("CAD", "Selection", "Alt+4", isImplemented: false),
-            new("CAD", "Layers", "Alt+5", isImplemented: false),
-            new("CAD", "Export", "Alt+6", isImplemented: false),
+            // Selection/Layers/Export는 별도 화면으로 쪼개지 않고 Drawing 워크스페이스 하나에 통합했다
+            // (§18 "초기 구현에서 너무 많은 페이지로 쪼개지 않아도 된다") - 그래서 각각의 자리를 따로
+            // 예약해두지 않는다.
+            new("CAD", "Drawing", "Alt+3", true),
             new("QUANTITY", "Length", "Ctrl+L", true),
             new("QUANTITY", "Area", "Ctrl+A"),
             new("QUANTITY", "Vertical Area", "Ctrl+V"),
@@ -99,6 +101,8 @@ public sealed class MainWindowViewModel : ObservableObject
         VerticalArea.Source.PropertyChanged += (_, _) => RefreshInspector();
         Parapet.PropertyChanged += (_, _) => RefreshInspector();
         Parapet.Source.PropertyChanged += (_, _) => RefreshInspector();
+        Drawing.PropertyChanged += (_, _) => RefreshInspector();
+        Drawing.Rows.CollectionChanged += (_, _) => RefreshInspector();
 
         OpenCommandPaletteCommand = new RelayCommand(() => IsCommandPaletteOpen = true);
         CloseCommandPaletteCommand = new RelayCommand(() => IsCommandPaletteOpen = false);
@@ -122,6 +126,7 @@ public sealed class MainWindowViewModel : ObservableObject
     public AreaWorkflowViewModel Area { get; }
     public VerticalAreaWorkflowViewModel VerticalArea { get; }
     public ParapetWorkflowViewModel Parapet { get; }
+    public DrawingWorkflowViewModel Drawing { get; }
 
     public ICommand OpenCommandPaletteCommand { get; }
     public ICommand CloseCommandPaletteCommand { get; }
@@ -157,6 +162,7 @@ public sealed class MainWindowViewModel : ObservableObject
                 OnPropertyChanged(nameof(IsAreaToolSelected));
                 OnPropertyChanged(nameof(IsVerticalAreaToolSelected));
                 OnPropertyChanged(nameof(IsParapetToolSelected));
+                OnPropertyChanged(nameof(IsDrawingToolSelected));
                 OnPropertyChanged(nameof(IsDashboardContentVisible));
                 RefreshInspector();
             }
@@ -173,8 +179,10 @@ public sealed class MainWindowViewModel : ObservableObject
 
     public bool IsParapetToolSelected => _selectedTool == "Parapet";
 
+    public bool IsDrawingToolSelected => _selectedTool == "Drawing";
+
     public bool IsDashboardContentVisible =>
-        !IsLengthToolSelected && !IsAreaToolSelected && !IsVerticalAreaToolSelected && !IsParapetToolSelected;
+        !IsLengthToolSelected && !IsAreaToolSelected && !IsVerticalAreaToolSelected && !IsParapetToolSelected && !IsDrawingToolSelected;
 
     public string InspectorTitle => _selectedTool switch
     {
@@ -182,6 +190,7 @@ public sealed class MainWindowViewModel : ObservableObject
         "Area" => "Area Selection",
         "Vertical Area" => "Vertical Area",
         "Parapet" => "Parapet",
+        "Drawing" => "Drawing Navigation",
         _ => "Session"
     };
 
@@ -272,6 +281,11 @@ public sealed class MainWindowViewModel : ObservableObject
 
         SelectedTool = selected.Label;
         StatusMessage = $"{selected.Label} workspace selected";
+
+        if (selected.Label == "Drawing")
+        {
+            Drawing.OnActivated();
+        }
     }
 
     private void RefreshInspector()
@@ -310,6 +324,13 @@ public sealed class MainWindowViewModel : ObservableObject
                 InspectorRows.Add(new InspectorRow("면", Parapet.IsBothFaces ? "양면" : "한 면"));
                 InspectorRows.Add(new InspectorRow("상부면", Parapet.TopIncluded ? "포함" : "미포함"));
                 InspectorRows.Add(new InspectorRow("총 면적", Parapet.TotalDisplay ?? "—"));
+                break;
+
+            case "Drawing":
+                InspectorRows.Add(new InspectorRow("상태", Drawing.StatusText));
+                InspectorRows.Add(new InspectorRow("도면 개요", Drawing.OverviewText));
+                InspectorRows.Add(new InspectorRow("선택 객체", $"{Drawing.Rows.Count}개"));
+                InspectorRows.Add(new InspectorRow("격리 상태", Drawing.IsIsolationActive ? "격리됨" : "정상"));
                 break;
 
             default:
