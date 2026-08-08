@@ -12,4 +12,11 @@ namespace CADWorkAssistant.AutoCAD.Ipc;
 public interface IAutoCadDispatcher
 {
     Task<T> InvokeAsync<T>(Func<T> operation, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Editor.GetSelection처럼 사용자 인터랙션을 기다리는 인터랙티브 명령용. 문서의 Command Context
+    /// 안에서 실행되어 Selection/Prompt API를 안전하게 쓸 수 있다 (Milestone 2 §15, ExecuteInCommandContextAsync
+    /// 실존을 리플렉션으로 확인함).
+    /// </summary>
+    Task<T> InvokeInCommandContextAsync<T>(Func<T> operation, CancellationToken cancellationToken);
 }

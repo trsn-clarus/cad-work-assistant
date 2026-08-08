@@ -3,6 +3,7 @@ using Autodesk.AutoCAD.Runtime;
 using CADWorkAssistant.AutoCAD.Ipc;
 using CADWorkAssistant.AutoCAD.Ipc.Handlers;
 using CADWorkAssistant.Core.Ipc;
+using CADWorkAssistant.Infrastructure.Ipc;
 using CADWorkAssistant.Infrastructure.Logging;
 using Serilog;
 
@@ -27,7 +28,8 @@ public class Extension : IExtensionApplication
         {
             new PingHandler(),
             new GetApplicationInfoHandler(dispatcher),
-            new GetDrawingContextHandler(dispatcher)
+            new GetDrawingContextHandler(dispatcher),
+            new SelectLengthObjectsHandler(dispatcher)
         };
 
         _pipeServer = new AutoCadPipeServer(new IpcRequestDispatcher(handlers), Process.GetCurrentProcess().Id);
