@@ -18,29 +18,30 @@ AutoCAD 실무자가 매일 쓰는 Windows 설치형 업무 자동화 프로그�
 ## 현재 확인된 개발 환경 (2026-08-08 기준, 변경되면 갱신할 것)
 
 - 설치된 AutoCAD: **2024** (net48 기반 Managed API) → 이것 때문에 `CADWorkAssistant.AutoCAD` 프로젝트는 `net48`.
-- 다른 AutoCAD 버전이 설치된 PC에서 작업하게 되면 `docs/AUTOCAD_INTEGRATION.md` §8 절차를 따라 버전별 프로젝트를 추가할지 판단할 것 — 기존 net48 프로젝트를 함부로 바꾸지 않는다.
+- 다른 AutoCAD 버전이 설치된 PC에서 작업하게 되면 `docs/AUTOCAD_INTEGRATION.md` §9 절차를 따라 버전별 프로젝트를 추가할지 판단할 것 — 기존 net48 프로젝트를 함부로 바꾸지 않는다.
 - .NET SDK 8, Git 설치됨. Visual Studio는 없음 — `dotnet` CLI로 빌드/실행/테스트한다.
+- **이 PC에서 AutoCAD 2024 GUI를 실제로 띄우면 그래픽 드라이버가 불안정해진다** (Windows 이벤트 로그에 LiveKernelEvent 기록, Milestone 1에서 확인). AutoCAD Managed API 참조/컴파일은 정상 동작하므로 개발은 계속하되, NETLOAD 등 실제 GUI 연동 검증은 시도하기 전에 사용자에게 먼저 확인할 것 (`docs/AUTOCAD_INTEGRATION.md` §8).
 
 ## 프로젝트 구조
 
 ```text
 src/
-  CADWorkAssistant.Core/            netstandard2.0 — 계산/도메인 로직, IPC DTO. AutoCAD·WPF 의존 금지
-  CADWorkAssistant.Infrastructure/  netstandard2.0 — 로깅(Serilog), 설정(JSON), (추후) SQLite
+  CADWorkAssistant.Core/            netstandard2.0 — 계산/도메인 로직, Core/Ipc(프로토콜), Core/Cad(DTO+상태머신). AutoCAD·WPF 의존 금지
+  CADWorkAssistant.Infrastructure/  netstandard2.0 — 로깅(Serilog), 설정(JSON), Infrastructure/Ipc(Pipe Framer/Client), (추후) SQLite
   CADWorkAssistant.Documents/       netstandard2.0 — Excel/PDF/CSV export (필요 시점에 구현)
-  CADWorkAssistant.Desktop/         net8.0-windows — WPF, MVVM(CommunityToolkit.Mvvm), 진입점
-  CADWorkAssistant.AutoCAD/         net48 — AutoCAD Managed API, in-process plugin, Named Pipe 서버
+  CADWorkAssistant.Desktop/         net8.0-windows — WPF, MVVM(자체 구현), Services/(Discovery/ConnectionManager), 진입점
+  CADWorkAssistant.AutoCAD/         net48 — AutoCAD Managed API, in-process plugin, Ipc/(Dispatcher/Handlers/PipeServer)
 tests/
-  CADWorkAssistant.Core.Tests/          — Core 단위 테스트 (AutoCAD 불필요)
-  CADWorkAssistant.Integration.Tests/   — AutoCAD 설치 환경에서만 실행되는 통합 테스트
+  CADWorkAssistant.Core.Tests/          — Core+Infrastructure 단위 테스트 (AutoCAD 불필요)
+  CADWorkAssistant.Integration.Tests/   — 실제 Named Pipe로 Fake AutoCAD 서버 상대 종단간 테스트 (AutoCAD 불필요) + 향후 AutoCAD 전용 테스트
 design-system/   — UI 시각 규칙 단일 소스 (색상/타이포/spacing/컴포넌트/안티패턴). UI 작업 전 반드시 확인
 docs/    — ARCHITECTURE / ROADMAP / REQUIREMENTS / AUTOCAD_INTEGRATION / UI_ENVIRONMENT_SETUP
 installer/, samples/
 ```
 
-MVVM은 외부 패키지 없이 직접 구현한 `ObservableObject`/`RelayCommand`(`src/CADWorkAssistant.Desktop/ViewModels/`)를 쓴다. CommunityToolkit.Mvvm 같은 패키지로 바꿀 필요가 생기기 전까지 추가하지 않는다.
+MVVM은 외부 패키지 없이 직접 구현한 `ObservableObject`/`RelayCommand`(`src/CADWorkAssistant.Desktop/Common/`, `ViewModels/`)를 쓴다. CommunityToolkit.Mvvm 같은 패키지로 바꿀 필요가 생기기 전까지 추가하지 않는다.
 
-Desktop(별도 프로세스)과 AutoCAD Plugin(in-process, net48)은 **Named Pipe + JSON**으로 통신한다. 자세한 프로토콜은 `docs/AUTOCAD_INTEGRATION.md` §5.
+Desktop(별도 프로세스)과 AutoCAD Plugin(in-process, net48)은 **Named Pipe + JSON**으로 통신한다 (Milestone 1에서 구현 완료). 자세한 프로토콜/호출 경로는 `docs/ARCHITECTURE.md` §5, `docs/AUTOCAD_INTEGRATION.md` §5.
 
 ## 빌드 / 테스트
 

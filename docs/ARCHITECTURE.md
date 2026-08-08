@@ -55,8 +55,8 @@
 | `CADWorkAssistant.Core` | netstandard2.0 | 단위 변환, 길이/면적/파라펫 계산, 도메인 모델(Project, QuantityItem 등), IPC 요청/응답 DTO. **AutoCAD 타입을 절대 참조하지 않는다** → AutoCAD 없이 유닛 테스트 가능 (§32) | 없음 |
 | `CADWorkAssistant.Infrastructure` | netstandard2.0 | 구조화 로깅(Serilog), 설정 저장(JSON), 향후 SQLite 데이터 접근 | 없음 |
 | `CADWorkAssistant.Documents` | netstandard2.0 | Excel/PDF/CSV 내보내기 (Milestone: Excel Export 단계에서 실제 구현) | 없음 |
-| `CADWorkAssistant.Desktop` | net8.0-windows | WPF UI, MVVM, Named Pipe Client, Project Manager 화면 | WPF |
-| `CADWorkAssistant.AutoCAD` | net48 | AutoCAD Managed API 연동, CWA_* 명령, Named Pipe Server, 원본 DWG 보호/Undo 그룹 처리 | AutoCAD 2024 Managed API |
+| `CADWorkAssistant.Desktop` | net8.0-windows | WPF UI, MVVM, `Services/`(Discovery/ConnectionManager, Named Pipe Client 사용) | WPF |
+| `CADWorkAssistant.AutoCAD` | net48 | AutoCAD Managed API 연동, CWA_* 명령(예정), Named Pipe Server + Handler, 원본 DWG 보호/Undo 그룹 처리 | AutoCAD 2024 Managed API |
 | `*.Tests` | net8.0 | Core/Infrastructure 로직 단위 테스트 | 없음 (AutoCAD 미설치 환경에서도 실행 가능) |
 
 Core/Infrastructure/Documents가 `netstandard2.0`인 이유: net48(Plugin)과 net8.0-windows(Desktop) 양쪽에서 참조 가능한 가장 단순한 공통분모이기 때문이다. net8.0으로 멀티타게팅하는 방법도 있으나, Core 로직이 최신 BCL API를 필요로 하지 않는 한 빌드 구성을 두 배로 늘릴 이유가 없다 (§0 "불필요하게 복잡한 구조 지양").
@@ -69,18 +69,56 @@ Core/Infrastructure/Documents가 `netstandard2.0`인 이유: net48(Plugin)과 ne
 - **Undo 그룹화**: AutoCAD 문서를 변경하는 모든 작업은 `Editor.StartUserInteraction` / Command 단위로 하나의 Undo 그룹으로 묶어 사용자가 AutoCAD에서 Ctrl+Z 한 번으로 되돌릴 수 있게 한다 (§23).
 - **버전 독립성**: Plugin 프로젝트는 설치된 AutoCAD 경로를 자동 탐지(`AutoCAD.props`)하며, 특정 버전 경로를 하드코딩하지 않는다. 향후 AutoCAD 2025+(.NET 8) 지원이 필요해지면 `CADWorkAssistant.AutoCAD2025` 프로젝트를 추가하고 Core/Infrastructure는 그대로 재사용한다.
 
-## 5. IPC 프로토콜 (Milestone 1에서 구현 예정)
+## 5. IPC 프로토콜 (Milestone 1에서 구현 완료)
 
-- 전송: `System.IO.Pipes.NamedPipeServerStream` (AutoCAD Plugin이 서버) / `NamedPipeClientStream` (Desktop이 클라이언트)
-- Pipe 이름: `CADWorkAssistant.{AutoCAD 프로세스 ID}` — AutoCAD 다중 인스턴스 지원을 위해 PID를 포함한다.
-- 메시지 형식: 줄바꿈으로 구분된 JSON (`System.Text.Json`), 요청/응답 DTO는 `CADWorkAssistant.Core.Ipc` 네임스페이스에 정의해 Desktop/Plugin이 동일 타입을 공유한다.
-- 연결 끊김/AutoCAD 미실행 감지: Desktop이 주기적으로 실행 중인 `acad.exe` 프로세스 목록을 조회하고, 각 프로세스에 대응하는 Pipe 존재 여부로 연결 상태를 판단한다.
+호출 한 번이 실제로 지나가는 전체 경로:
+
+```text
+Desktop (net8.0-windows)
+  MainWindowViewModel
+        │ (PropertyChanged 구독)
+        ▼
+  AutoCadConnectionManager   ← Discover/Connect/Heartbeat/Reconnect 상태 머신 (CadConnectionStateEvaluator, 순수 함수)
+        │
+        ▼
+  AutoCadDiscoveryService    ← Process.GetProcessesByName("acad") + 각 PID에 짧은 Ping으로 Plugin 존재 확인
+        │
+        ▼
+  AutoCadPipeClient (Infrastructure.Ipc)  ← NamedPipeClientStream, 요청당 1개, 세마포어로 직렬화
+        │
+   ══════════════════ Named Pipe: CADWorkAssistant.AutoCAD.{PID} ══════════════════
+        │  4-byte length prefix + UTF-8 JSON (PipeMessageFramer, Infrastructure.Ipc)
+        ▼
+  AutoCadPipeServer (AutoCAD Plugin, net48, acad.exe in-process)
+        │
+        ▼
+  IpcRequestDispatcher (Core.Ipc)  ← ProtocolVersion 검증, MessageType → IIpcRequestHandler 라우팅, 예외를 IpcError로 변환
+        │
+        ▼
+  IIpcRequestHandler (Ping / GetApplicationInfo / GetDrawingContext, AutoCAD.Ipc.Handlers)
+        │
+        ▼
+  AutoCadDispatcher.InvokeAsync<T>  ← DocumentCollection.ExecuteInApplicationContext로 AutoCAD 메인 스레드에 안전하게 진입
+        │
+        ▼
+  AutoCAD Managed API (Application.DocumentManager, Document, Database, LayoutManager)
+```
+
+- **전송**: `System.IO.Pipes` — 서버는 `NamedPipeServerStream`(현재 사용자만 접근 가능하도록 `PipeSecurity` 적용), 클라이언트는 `NamedPipeClientStream`.
+- **Pipe 이름**: `CADWorkAssistant.AutoCAD.{AutoCAD 프로세스 ID}` — 다중 AutoCAD 인스턴스를 구분한다.
+- **Framing**: 4-byte length prefix + UTF-8 JSON (`PipeMessageFramer`). "한 번의 Read = 메시지 하나"를 가정하지 않는다.
+- **메시지**: `IpcRequestEnvelope`/`IpcResponseEnvelope`(Core.Ipc) — ProtocolVersion, RequestId(GUID), MessageType(문자열 상수), Payload(JSON), 실패 시 `IpcError`(Code/Message/TechnicalDetail).
+- **AutoCAD API 스레드 경계**: Named Pipe accept-loop는 백그라운드 스레드지만, AutoCAD Managed API 호출은 전부 `AutoCadDispatcher`를 통해 `DocumentCollection.ExecuteInApplicationContext`로 마샬링한다 — 이 API의 실존 여부는 리플렉션으로 직접 확인했다 (docs/AUTOCAD_INTEGRATION.md §5.2).
+- **연결 상태**: 단순 bool이 아니라 `CadConnectionState`(NoAutoCadProcess/ProcessDetected/PluginUnavailable/Connecting/Connected/Reconnecting/Disconnected/Faulted) — 상태 전이는 `CadConnectionStateEvaluator`라는 순수 함수로 분리해 AutoCAD/Named Pipe 없이 단위 테스트한다.
+- **Heartbeat/Polling**: 2초 간격 (`IpcProtocol.HeartbeatIntervalMs`). `Ping`은 AutoCAD API를 전혀 건드리지 않아 AutoCAD 조작감(PAN/ZOOM 등)에 영향이 없도록 설계했다.
+- **UI 스레드 marshaling**: `AutoCadConnectionManager`는 생성 시점(App.xaml.cs `OnStartup`, WPF UI 스레드)에 `SynchronizationContext.Current`를 캡처해두고, 모든 `PropertyChanged`를 그 컨텍스트로 `Post`한다. ViewModel은 Pipe 세부사항을 전혀 모른다.
+- **검증**: `IpcRequestDispatcher`/`PipeMessageFramer`/`CadConnectionStateEvaluator`는 Core.Tests에서 AutoCAD 없이 단위 테스트했고, `AutoCadPipeClient`는 Integration.Tests에서 실제 Named Pipe로 Fake 서버 상대 종단간 테스트했다. 실제 AutoCAD GUI를 통한 연동 테스트는 이 개발 PC에서 그래픽 드라이버 불안정 문제로 완료하지 못했고, AutoCAD가 정상 동작하는 머신에서 진행하기로 했다 (docs/AUTOCAD_INTEGRATION.md §8).
 
 ## 6. Desktop App 구조 (MVVM)
 
 - `*.xaml` — 뷰 (구조/레이아웃/스타일), `Themes/DesignTokens.xaml`에 색상·타이포·spacing 토큰 정의
 - `ViewModels/` — 자체 구현 `ObservableObject`/`RelayCommand` 기반, 상태와 커맨드
-- `Services/` — Pipe 통신, 파일 시스템 접근 등 View/ViewModel과 분리된 서비스 (Milestone 1에서 추가)
+- `Services/` — `AutoCadDiscoveryService`(AutoCAD 프로세스 탐색), `AutoCadConnectionManager`(Discover/Connect/Heartbeat/Reconnect 상태 머신). ViewModel은 이 서비스의 인터페이스만 알고 Named Pipe/Process API를 직접 다루지 않는다.
 - Navigation은 §27 정보구조를 기반으로 하되 실제 구현은 [`design-system/MASTER.md`](../design-system/MASTER.md)의 PROJECT/CAD/QUANTITY/OUTPUT/SETTINGS 그룹을 따른다. Milestone 0의 UI Shell은 더미 데이터로 채워진 상태이며, 실제 AutoCAD 연동은 Milestone 1부터 연결한다.
 - UI 디자인 원칙(색상, spacing, 밀도, 안티패턴)은 `design-system/MASTER.md`가 단일 소스다 — ARCHITECTURE.md는 프로세스/데이터 구조를, design-system은 시각적 규칙을 다룬다.
 
@@ -101,6 +139,10 @@ Core/Infrastructure/Documents가 `netstandard2.0`인 이유: net48(Plugin)과 ne
 | IPC: Named Pipe + JSON | gRPC, WCF, COM Automation | 의존성 최소, 방화벽/포트 이슈 없음, 로컬 프로세스 간 통신에 충분 |
 | 로깅: Serilog | NLog, log4net | 구조화 로깅 표준, netstandard2.0 지원, 활발한 유지보수 |
 | Test: xUnit | NUnit, MSTest | .NET 커뮤니티 표준, dotnet CLI 기본 템플릿과 궁합 |
+| IPC Handler: `IIpcRequestHandler` 인터페이스 + Dispatcher의 Dictionary 라우팅 | 거대한 switch, MediatR | 명령이 늘어날 것(Length/Area/Selection/...)이 확실하므로 확장 지점을 미리 두되, MediatR 같은 프레임워크는 이 규모에 과함 (§39) |
+| Desktop 의존성 구성: App.xaml.cs에서 직접 `new` (수동 composition root) | Microsoft.Extensions.DependencyInjection 등 DI 컨테이너 | 서비스 개수가 2~3개뿐이라 컨테이너 없이도 충분히 명확함 |
+| AutoCAD API 스레드 마샬링: `DocumentCollection.ExecuteInApplicationContext` | `Application.Idle` 이벤트, `ExecuteInCommandContextAsync` | 리플렉션으로 실존을 확인한 API 중 읽기 전용 조회에 가장 가벼움. `ExecuteInCommandContextAsync`는 인터랙티브 명령(Selection 등)이 필요한 후속 Milestone을 위해 남겨둠 |
+| Heartbeat(`Ping`)는 AutoCAD API를 전혀 호출하지 않음 | 매 heartbeat마다 `GetDrawingContext`로 통합 | 2초마다 AutoCAD 메인 스레드에 진입하는 것 자체가 조작감에 영향을 줄 수 있어, 연결 생존 확인과 문서 상태 조회를 분리 |
 
 ## 9. 아직 결정하지 않은 것 (의도적으로 보류)
 

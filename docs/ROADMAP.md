@@ -23,15 +23,22 @@
 
 ## Milestone 1 — AutoCAD Connection
 
-- [x] AutoCAD Plugin: IExtensionApplication 스켈레톤 (Milestone 0에서 조기 완료)
-- [ ] CWA 명령 등록
-- [ ] Named Pipe 서버(Plugin) / 클라이언트(Desktop) 구현
-- [ ] 실행 중인 AutoCAD 프로세스 감지
-- [ ] 현재 Document(DWG 경로), 현재 Layout, Drawing Unit(INSUNITS) 조회
-- [ ] AutoCAD 미실행/연결 끊김 시 사용자 친화적 메시지
-- [ ] Desktop UI: "AutoCAD 연결됨 / Drawing: example.dwg" 표시
+**상태: 코드/자동 테스트 완료, 실제 AutoCAD GUI 스모크 테스트는 보류 (2026-08-08)**
 
-**완료 기준**: Desktop App에서 AutoCAD 연결 상태와 현재 열린 DWG 이름을 실시간으로 확인할 수 있다.
+- [x] AutoCAD Plugin: IExtensionApplication 스켈레톤 (Milestone 0에서 조기 완료)
+- [x] IPC 프로토콜 설계/구현 (버전/RequestId/Framing/Handler 라우팅) — `docs/AUTOCAD_INTEGRATION.md` §5
+- [x] Named Pipe 서버(`AutoCadPipeServer`, Plugin) / 클라이언트(`AutoCadPipeClient`, Infrastructure) 구현, 현재 사용자로 Pipe 접근 제한
+- [x] AutoCAD API 스레드 경계 (`AutoCadDispatcher` + `ExecuteInApplicationContext`, 실제 API 존재 확인)
+- [x] 실행 중인 AutoCAD 프로세스 감지 (`AutoCadDiscoveryService`)
+- [x] 현재 Document(DWG 경로/저장 여부), 현재 Layout, Drawing Unit(INSUNITS→Unitless 포함) 조회 (`GetDrawingContext`)
+- [x] AutoCAD 미실행/Plugin 미로드/연결 끊김을 구분하는 8종 연결 상태 (`CadConnectionState`) + 상태 전이 단위 테스트
+- [x] Desktop UI: 기존 Mock 연결 표시를 실제 `AutoCadConnectionManager` 값으로 교체 (AutoCAD 미실행 시나리오 UI Automation으로 검증 완료)
+- [x] 자동 테스트: Core.Tests 28개 + Integration.Tests(Fake Pipe Server, 실제 Named Pipe) 6개, 전부 통과
+- [ ] **실제 AutoCAD 2024 GUI로 NETLOAD → 연결 → DWG 정보 표시 스모크 테스트** — 이 개발 PC에서는 AutoCAD GUI 구동 시 그래픽 드라이버가 불안정해져(Windows 이벤트 로그에 LiveKernelEvent 기록) 완료하지 못함. AutoCAD가 정상 동작하는 머신에서 진행 예정 (`docs/AUTOCAD_INTEGRATION.md` §8에 시나리오 11개 정리됨)
+- [ ] CWA 명령 등록 — Milestone 2(Length)에서 실제 명령이 필요해지는 시점에 추가 (지금은 조회 전용 IPC라 사용자 명령이 없음)
+- [ ] 다중 AutoCAD Instance 선택 UI — 서비스 계층(`SelectInstanceAsync`, `AvailableInstances`)은 준비됐지만 UI 셀렉터는 아직 없음
+
+**완료 기준**: Desktop App에서 AutoCAD 연결 상태와 현재 열린 DWG 이름을 실시간으로 확인할 수 있다. → 코드/아키텍처/자동 테스트 기준으로는 충족. 실제 AutoCAD 화면으로 최종 확인하는 것만 남음.
 
 ## Milestone 2 — Length (첫 실사용 가능 버전)
 

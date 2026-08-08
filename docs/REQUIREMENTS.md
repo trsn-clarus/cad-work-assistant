@@ -13,6 +13,8 @@ CAD 개발자가 아니라 **AutoCAD를 매일 사용하는 현장/설계 실무
 ### 3.1 AutoCAD 연결 상태
 - 실행 중 AutoCAD 감지, 현재 Document/DWG 경로/Layout/Drawing Unit 표시
 - 미실행/연결 끊김을 이해하기 쉬운 메시지로 안내
+- 단순 연결/미연결 두 상태가 아니라 "AutoCAD 미실행 / 감지됐지만 Plugin 미로드 / 연결 중 / 연결됨 / 재연결 중 / 끊김 / 오류"를 구분해서 보여준다 (Milestone 1에서 `CadConnectionState`로 구현, `docs/ARCHITECTURE.md` §5)
+- AutoCAD가 여러 개 실행 중이면 어떤 Instance에 연결할지 선택할 수 있어야 한다 (서비스 계층은 Milestone 1에서 구현, UI 셀렉터는 후속 작업)
 
 ### 3.2 길이 산출
 - Line/Polyline/Arc 등 선택 → 개별 길이 + 총 길이
