@@ -1,20 +1,29 @@
 using System.Collections.ObjectModel;
+using System.Windows;
 using System.Windows.Input;
+using System.Windows.Media;
+using CADWorkAssistant.Core.Cad;
 using CADWorkAssistant.Core.Models;
+using CADWorkAssistant.Desktop.Common;
+using CADWorkAssistant.Desktop.Services;
 
 namespace CADWorkAssistant.Desktop.ViewModels;
 
 public sealed class MainWindowViewModel : ObservableObject
 {
+    private readonly IAutoCadConnectionManager _connectionManager;
+
     private bool _isCommandPaletteOpen;
     private bool _isInspectorOpen = true;
     private string _commandQuery = string.Empty;
     private string _selectedTool = "Length";
     private string _statusMessage = "Ready";
-    private CadConnectionState _connectionState = CadConnectionState.Connected;
 
-    public MainWindowViewModel()
+    public MainWindowViewModel(IAutoCadConnectionManager connectionManager)
     {
+        _connectionManager = connectionManager;
+        _connectionManager.PropertyChanged += OnConnectionManagerPropertyChanged;
+
         Navigation = new ObservableCollection<NavItem>
         {
             new("PROJECT", "Dashboard", "Alt+1", true) { IsSelected = true },
@@ -33,6 +42,8 @@ public sealed class MainWindowViewModel : ObservableObject
             new("SETTINGS", "Preferences", "Ctrl+,", true)
         };
 
+        // Length/Area/Parapet 등은 Milestone 2+에서 구현한다 - 아래 데이터는 UI Shell을 보여주기 위한
+        // 더미 데이터로 남겨둔다 (Milestone 1 §38: Selection/Length/Area는 이번 범위 밖).
         Metrics = new ObservableCollection<MetricItem>
         {
             new("Selected objects", "4", "3 polylines, 1 block reference", "Stable"),
@@ -69,6 +80,8 @@ public sealed class MainWindowViewModel : ObservableObject
         SelectNavigationCommand = new RelayCommand(SelectNavigation);
         RunExtractionCommand = new RelayCommand(RunExtraction);
         CopyResultCommand = new RelayCommand(() => StatusMessage = "Copied latest quantity result to clipboard queue");
+
+        _connectionManager.Start();
     }
 
     public ObservableCollection<NavItem> Navigation { get; }
@@ -114,16 +127,65 @@ public sealed class MainWindowViewModel : ObservableObject
         set => SetProperty(ref _statusMessage, value);
     }
 
-    public CadConnectionState ConnectionState
-    {
-        get => _connectionState;
-        set => SetProperty(ref _connectionState, value);
-    }
+    // --- 아래는 전부 IAutoCadConnectionManager의 실시간 값을 그대로 노출하는 pass-through 프로퍼티다.
+    // 기존 XAML 바인딩 경로(ConnectionLabel/ActiveDrawing/Units)를 그대로 유지해 UI를 다시 그리지 않는다 (§3, §33).
 
-    public string ActiveDrawing => Drawings.FirstOrDefault(drawing => drawing.IsActive)?.FileName ?? "No drawing";
-    public string Units => Drawings.FirstOrDefault(drawing => drawing.IsActive)?.Units ?? "mm";
-    public string SelectionSummary => "4 objects selected";
-    public string ConnectionLabel => ConnectionState.ToString();
+    public CadConnectionState ConnectionState => _connectionManager.State;
+
+    public string ConnectionLabel => _connectionManager.State switch
+    {
+        CadConnectionState.NoAutoCadProcess => "AutoCAD Not Running",
+        CadConnectionState.ProcessDetected => "AutoCAD Detected · Select Instance",
+        CadConnectionState.PluginUnavailable => "AutoCAD Detected · Plugin Not Loaded",
+        CadConnectionState.Connecting => "Connecting…",
+        CadConnectionState.Connected => _connectionManager.Instance is { } info ? $"{info.Product} Connected" : "AutoCAD Connected",
+        CadConnectionState.Reconnecting => "Reconnecting…",
+        CadConnectionState.Disconnected => "AutoCAD Disconnected",
+        CadConnectionState.Faulted => "AutoCAD Connection Error",
+        _ => "Unknown"
+    };
+
+    public string ActiveDrawing => _connectionManager.Drawing?.DocumentDisplayName
+        ?? (_connectionManager.State == CadConnectionState.Connected ? "No document open" : "—");
+
+    public string Units => _connectionManager.Drawing?.Units switch
+    {
+        null => "—",
+        DrawingUnit.Unitless => "Unitless",
+        DrawingUnit.Millimeters => "mm",
+        DrawingUnit.Centimeters => "cm",
+        DrawingUnit.Decimeters => "dm",
+        DrawingUnit.Meters => "m",
+        DrawingUnit.Kilometers => "km",
+        DrawingUnit.Inches => "in",
+        DrawingUnit.Feet => "ft",
+        DrawingUnit.Yards => "yd",
+        DrawingUnit.Miles => "mi",
+        _ => "other"
+    };
+
+    public string SelectionSummary => "No selection";
+
+    public Brush ConnectionStatusBrush =>
+        (Brush?)Application.Current?.TryFindResource(ConnectionStatusBrushKey) ?? Brushes.Gray;
+
+    private string ConnectionStatusBrushKey => _connectionManager.State switch
+    {
+        CadConnectionState.Connected => "BrushSuccess",
+        CadConnectionState.Connecting or CadConnectionState.Reconnecting => "BrushWarning",
+        CadConnectionState.PluginUnavailable or CadConnectionState.Faulted or CadConnectionState.Disconnected => "BrushError",
+        _ => "BrushTextMuted"
+    };
+
+    private void OnConnectionManagerPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        // ConnectionManager는 자기 프로퍼티만 안다 (State/Instance/Drawing) - 여기서 우리 프로퍼티로 옮겨 알린다.
+        OnPropertyChanged(nameof(ConnectionState));
+        OnPropertyChanged(nameof(ConnectionLabel));
+        OnPropertyChanged(nameof(ActiveDrawing));
+        OnPropertyChanged(nameof(Units));
+        OnPropertyChanged(nameof(ConnectionStatusBrush));
+    }
 
     private void SelectNavigation(object? parameter)
     {

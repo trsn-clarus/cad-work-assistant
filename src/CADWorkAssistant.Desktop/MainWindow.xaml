@@ -112,7 +112,7 @@
                   <ColumnDefinition Width="Auto" />
                   <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
-                <Ellipse Width="9" Height="9" Fill="{StaticResource BrushSuccess}" Margin="0,0,8,0" />
+                <Ellipse Width="9" Height="9" Fill="{Binding ConnectionStatusBrush}" Margin="0,0,8,0" />
                 <TextBlock Grid.Column="1" Text="{Binding ConnectionLabel}" />
               </Grid>
               <TextBlock Text="{Binding ActiveDrawing}" Style="{StaticResource CaptionText}" Margin="0,6,0,0" />

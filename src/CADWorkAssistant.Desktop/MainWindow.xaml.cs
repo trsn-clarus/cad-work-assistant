@@ -7,10 +7,9 @@ namespace CADWorkAssistant.Desktop;
 
 public partial class MainWindow : Window
 {
-    public MainWindow()
+    public MainWindow(MainWindowViewModel viewModel)
     {
         InitializeComponent();
-        var viewModel = new MainWindowViewModel();
         viewModel.PropertyChanged += OnViewModelPropertyChanged;
         DataContext = viewModel;
         Loaded += (_, _) =>
