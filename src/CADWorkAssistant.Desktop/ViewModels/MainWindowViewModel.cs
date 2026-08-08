@@ -26,6 +26,8 @@ public sealed class MainWindowViewModel : ObservableObject
 
         Length = new LengthWorkflowViewModel(connectionManager);
         Area = new AreaWorkflowViewModel(connectionManager);
+        VerticalArea = new VerticalAreaWorkflowViewModel(connectionManager, Length);
+        Parapet = new ParapetWorkflowViewModel(connectionManager, Length);
 
         Navigation = new ObservableCollection<NavItem>
         {
@@ -37,6 +39,7 @@ public sealed class MainWindowViewModel : ObservableObject
             new("CAD", "Export", "Alt+6"),
             new("QUANTITY", "Length", "Ctrl+L", true),
             new("QUANTITY", "Area", "Ctrl+A"),
+            new("QUANTITY", "Vertical Area", "Ctrl+V"),
             new("QUANTITY", "Parapet", "Ctrl+R"),
             new("QUANTITY", "History", "Ctrl+H"),
             new("OUTPUT", "Plot", "Ctrl+P", true),
@@ -79,6 +82,8 @@ public sealed class MainWindowViewModel : ObservableObject
 
         Length.RecordAdded += (_, record) => QuantityRecords.Insert(0, record);
         Area.RecordAdded += (_, record) => QuantityRecords.Insert(0, record);
+        VerticalArea.RecordAdded += (_, record) => QuantityRecords.Insert(0, record);
+        Parapet.RecordAdded += (_, record) => QuantityRecords.Insert(0, record);
 
         OpenCommandPaletteCommand = new RelayCommand(() => IsCommandPaletteOpen = true);
         CloseCommandPaletteCommand = new RelayCommand(() => IsCommandPaletteOpen = false);
@@ -98,6 +103,8 @@ public sealed class MainWindowViewModel : ObservableObject
 
     public LengthWorkflowViewModel Length { get; }
     public AreaWorkflowViewModel Area { get; }
+    public VerticalAreaWorkflowViewModel VerticalArea { get; }
+    public ParapetWorkflowViewModel Parapet { get; }
 
     public ICommand OpenCommandPaletteCommand { get; }
     public ICommand CloseCommandPaletteCommand { get; }
@@ -133,18 +140,25 @@ public sealed class MainWindowViewModel : ObservableObject
             {
                 OnPropertyChanged(nameof(IsLengthToolSelected));
                 OnPropertyChanged(nameof(IsAreaToolSelected));
+                OnPropertyChanged(nameof(IsVerticalAreaToolSelected));
+                OnPropertyChanged(nameof(IsParapetToolSelected));
                 OnPropertyChanged(nameof(IsDashboardContentVisible));
             }
         }
     }
 
-    /// <summary>Length/Area는 각자 자기만의 패널을 갖는다 (Milestone 2 §38, Milestone 3 §5) - 나머지는
-    /// 아직 기존 Dashboard 콘텐츠를 공유한다.</summary>
+    /// <summary>Length/Area/Vertical Area/Parapet는 각자 자기만의 패널을 갖는다 (Milestone 2 §38,
+    /// Milestone 3 §5, Milestone 4 §42) - 나머지는 아직 기존 Dashboard 콘텐츠를 공유한다.</summary>
     public bool IsLengthToolSelected => _selectedTool == "Length";
 
     public bool IsAreaToolSelected => _selectedTool == "Area";
 
-    public bool IsDashboardContentVisible => !IsLengthToolSelected && !IsAreaToolSelected;
+    public bool IsVerticalAreaToolSelected => _selectedTool == "Vertical Area";
+
+    public bool IsParapetToolSelected => _selectedTool == "Parapet";
+
+    public bool IsDashboardContentVisible =>
+        !IsLengthToolSelected && !IsAreaToolSelected && !IsVerticalAreaToolSelected && !IsParapetToolSelected;
 
     public string StatusMessage
     {
