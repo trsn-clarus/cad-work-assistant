@@ -20,4 +20,9 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\CADWorkAssistant.Core\CADWorkAssistant.Core.csproj" />
+    <ProjectReference Include="..\..\src\CADWorkAssistant.Infrastructure\CADWorkAssistant.Infrastructure.csproj" />
+  </ItemGroup>
+
 </Project>
