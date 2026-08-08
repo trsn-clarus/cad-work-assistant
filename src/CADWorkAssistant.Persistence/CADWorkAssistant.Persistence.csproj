@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!--
+      net8.0만 타겟한다 - Infrastructure(net48;net8.0)와 달리 AutoCAD Plugin(net48)은 이 프로젝트를
+      전혀 참조하지 않는다. Persistence는 Desktop 전용이다(docs/PERSISTENCE.md, Milestone 6 §4 -
+      "AutoCAD Plugin → IPC → Desktop/Core → Persistence", Plugin 안에 SQLite를 넣지 않는다).
+    -->
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- EF Core가 아니라 이 raw ADO.NET Provider를 직접 쓴 이유는 docs/PERSISTENCE.md/ARCHITECTURE.md
+         의사결정 로그 참고 - 이번 규모(테이블 6개, 대부분 단순 CRUD+정렬)에서는 EF Core의 Migration
+         도구/추적 오버헤드가 이득보다 비용이 크다고 판단했다. -->
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.8" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CADWorkAssistant.Core\CADWorkAssistant.Core.csproj" />
+  </ItemGroup>
+
+</Project>
