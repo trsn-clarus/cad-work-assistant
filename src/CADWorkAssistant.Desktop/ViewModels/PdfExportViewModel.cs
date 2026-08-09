@@ -5,7 +5,7 @@ using System.Windows.Input;
 using CADWorkAssistant.Core.Drawing;
 using CADWorkAssistant.Desktop.Common;
 using CADWorkAssistant.Desktop.Services;
-using CADWorkAssistant.Documents.Excel;
+using CADWorkAssistant.Documents.Pdf;
 using CADWorkAssistant.Documents.Reports;
 using Microsoft.Win32;
 using Serilog;
@@ -13,22 +13,21 @@ using Serilog;
 namespace CADWorkAssistant.Desktop.ViewModels;
 
 /// <summary>
-/// OUTPUT > Excel 화면 (Milestone 9 §102-113). Idle/Ready/Exporting/Success/Error 상태를
-/// IsExporting/IsError/IsSuccess bool 조합으로 표현한다 - ExportWorkflowViewModel(Milestone 5)과
-/// 같은 관례를 그대로 따른다. Excel 생성 자체는 IQuantityExcelExportCoordinator에 위임하고, 이
-/// ViewModel은 ClosedXML/SQLite를 전혀 모른다.
+/// OUTPUT > PDF 화면 (Milestone 10 §70-79). ExcelExportViewModel(Milestone 9)과 완전히 같은
+/// Idle/Ready/Exporting/Success/Error bool-flag 관례를 따른다 - PDF 생성 자체는
+/// IQuantityPdfExportCoordinator에 위임하고, 이 ViewModel은 PDFsharp/MigraDoc/SQLite를 전혀 모른다.
 /// </summary>
-public sealed class ExcelExportViewModel : ObservableObject
+public sealed class PdfExportViewModel : ObservableObject
 {
     private readonly IProjectContextService _projectContext;
-    private readonly IQuantityExcelExportCoordinator _coordinator;
+    private readonly IQuantityPdfExportCoordinator _coordinator;
     private readonly RelayCommand _exportCommand;
     private readonly RelayCommand _openFileCommand;
     private readonly RelayCommand _openFolderCommand;
 
     private QuantityExportScope _scope = QuantityExportScope.All;
-    private bool _includeCalculationBasis = true;
-    private bool _includeVerificationDetail = true;
+    private bool _includeCalculationDetails = true;
+    private bool _includeVerification = true;
     private bool _includeReviewNotes = true;
     private bool _includeSourceDrawing = true;
 
@@ -40,7 +39,7 @@ public sealed class ExcelExportViewModel : ObservableObject
     private string? _statusText;
     private string? _lastExportedFile;
 
-    public ExcelExportViewModel(IProjectContextService projectContext, IQuantityExcelExportCoordinator coordinator)
+    public PdfExportViewModel(IProjectContextService projectContext, IQuantityPdfExportCoordinator coordinator)
     {
         _projectContext = projectContext;
         _coordinator = coordinator;
@@ -87,16 +86,16 @@ public sealed class ExcelExportViewModel : ObservableObject
         }
     }
 
-    public bool IncludeCalculationBasis
+    public bool IncludeCalculationDetails
     {
-        get => _includeCalculationBasis;
-        set => SetProperty(ref _includeCalculationBasis, value);
+        get => _includeCalculationDetails;
+        set => SetProperty(ref _includeCalculationDetails, value);
     }
 
-    public bool IncludeVerificationDetail
+    public bool IncludeVerification
     {
-        get => _includeVerificationDetail;
-        set => SetProperty(ref _includeVerificationDetail, value);
+        get => _includeVerification;
+        set => SetProperty(ref _includeVerification, value);
     }
 
     public bool IncludeReviewNotes
@@ -148,8 +147,8 @@ public sealed class ExcelExportViewModel : ObservableObject
         private set => SetProperty(ref _statusText, value);
     }
 
-    /// <summary>"총 42건 · 검토 완료 35 · 확인 필요 5 · 검산 오류 1" - 거대한 KPI 카드 대신 한 줄
-    /// 요약(§138, Milestone 7의 History Summary와 같은 원칙).</summary>
+    /// <summary>"총 42건 · 검토 완료 35 · 확인 필요 5 · 검산 오류 1" - Excel 화면과 같은 요약 문구
+    /// 원칙(Milestone 7의 History Summary와 같은 관례).</summary>
     public string SummaryText
     {
         get
@@ -172,7 +171,7 @@ public sealed class ExcelExportViewModel : ObservableObject
 
     public bool HasRecordsToExport => _preview is { TotalCount: > 0 };
 
-    public string ExportButtonLabel => IsExporting ? "생성 중..." : "Excel 파일 생성";
+    public string ExportButtonLabel => IsExporting ? "생성 중..." : "PDF 보고서 생성";
 
     public string? LastExportedFileName => _lastExportedFile is null ? null : Path.GetFileName(_lastExportedFile);
 
@@ -205,7 +204,7 @@ public sealed class ExcelExportViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Excel export preview failed for project {ProjectId}", project.Id);
+            Log.Error(ex, "PDF export preview failed for project {ProjectId}", project.Id);
             _preview = null;
         }
         finally
@@ -226,11 +225,11 @@ public sealed class ExcelExportViewModel : ObservableObject
             return;
         }
 
-        var suggestedName = ExportFileNameService.Sanitize(project.Name) + "_수량산출서_" + DateTime.Now.ToString("yyyyMMdd") + ".xlsx";
+        var suggestedName = ExportFileNameService.Sanitize(project.Name) + "_수량산출근거서_" + DateTime.Now.ToString("yyyyMMdd") + ".pdf";
         var dialog = new SaveFileDialog
         {
-            Title = "수량산출서 Excel로 저장",
-            Filter = "Excel Workbook (*.xlsx)|*.xlsx",
+            Title = "수량 산출근거서 PDF로 저장",
+            Filter = "PDF Document (*.pdf)|*.pdf",
             FileName = suggestedName,
             AddExtension = true,
             OverwritePrompt = true
@@ -244,13 +243,13 @@ public sealed class ExcelExportViewModel : ObservableObject
         IsExporting = true;
         IsSuccess = false;
         IsError = false;
-        StatusText = "Excel 생성 중...";
+        StatusText = "PDF 생성 중...";
 
         try
         {
             var result = await _coordinator.ExportAsync(project.Id, BuildOptions(), dialog.FileName);
             _lastExportedFile = result.FilePath;
-            StatusText = $"Excel 저장 완료\n\n{Path.GetFileName(result.FilePath)}";
+            StatusText = $"PDF 저장 완료\n\n{Path.GetFileName(result.FilePath)}";
             IsSuccess = true;
             OnPropertyChanged(nameof(LastExportedFileName));
             _openFileCommand.RaiseCanExecuteChanged();
@@ -258,14 +257,14 @@ public sealed class ExcelExportViewModel : ObservableObject
         }
         catch (IOException ex)
         {
-            Log.Warning(ex, "Excel export failed - file may be locked");
-            StatusText = "Excel 파일을 저장하지 못했습니다.\n\n다른 프로그램에서 파일을 사용 중인지 확인해주세요.";
+            Log.Warning(ex, "PDF export failed - file may be locked");
+            StatusText = "PDF 파일을 저장하지 못했습니다.\n\n다른 프로그램에서 파일을 사용 중인지 확인해주세요.";
             IsError = true;
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Excel export failed for project {ProjectId}", project.Id);
-            StatusText = "Excel 파일을 저장하지 못했습니다.\n\n잠시 후 다시 시도해주세요.";
+            Log.Error(ex, "PDF export failed for project {ProjectId}", project.Id);
+            StatusText = "PDF 파일을 저장하지 못했습니다.\n\n잠시 후 다시 시도해주세요.";
             IsError = true;
         }
         finally
@@ -274,11 +273,11 @@ public sealed class ExcelExportViewModel : ObservableObject
         }
     }
 
-    private ExcelExportOptions BuildOptions() => new()
+    private PdfExportOptions BuildOptions() => new()
     {
         Scope = _scope,
-        IncludeCalculationBasis = _includeCalculationBasis,
-        IncludeVerificationDetail = _includeVerificationDetail,
+        IncludeCalculationDetails = _includeCalculationDetails,
+        IncludeVerification = _includeVerification,
         IncludeReviewNotes = _includeReviewNotes,
         IncludeSourceDrawing = _includeSourceDrawing,
     };
@@ -290,7 +289,7 @@ public sealed class ExcelExportViewModel : ObservableObject
             return;
         }
 
-        // §44: Excel이 설치되어 있지 않아도 파일 생성 자체는 이미 성공했다 - 여는 것만 실패할 수 있고,
+        // §80: 기본 PDF 앱이 없어도 파일 생성 자체는 이미 성공했다 - 여는 것만 실패할 수 있고,
         // 그건 Export 실패로 취급하지 않는다.
         try
         {
@@ -298,7 +297,7 @@ public sealed class ExcelExportViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            Log.Warning(ex, "Failed to open exported Excel file {Path}", _lastExportedFile);
+            Log.Warning(ex, "Failed to open exported PDF file {Path}", _lastExportedFile);
         }
     }
 

@@ -1,0 +1,104 @@
+<UserControl x:Class="CADWorkAssistant.Desktop.Views.PdfExportPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="clr-namespace:CADWorkAssistant.Desktop.ViewModels"
+             xmlns:conv="clr-namespace:CADWorkAssistant.Desktop.Converters"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:PdfExportViewModel}">
+  <UserControl.Resources>
+    <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+    <conv:InverseBooleanToVisibilityConverter x:Key="InverseBoolToVisibility" />
+  </UserControl.Resources>
+  <Grid>
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+    </Grid.RowDefinitions>
+
+    <StackPanel Grid.Row="0" Margin="0,0,0,12">
+      <TextBlock Text="PDF 산출근거서" FontSize="22" FontWeight="SemiBold" />
+      <TextBlock Text="{Binding CurrentProjectName}" Style="{StaticResource CaptionText}" Margin="0,2,0,0" />
+    </StackPanel>
+
+    <StackPanel Grid.Row="1"
+                Visibility="{Binding HasCurrentProject, Converter={StaticResource BoolToVisibility}}"
+                MaxWidth="520"
+                HorizontalAlignment="Left">
+      <Border Style="{StaticResource PanelBorder}" Padding="16">
+        <StackPanel>
+          <TextBlock Text="내보내기 범위" Style="{StaticResource SectionTitle}" Margin="0,0,0,8" />
+          <RadioButton GroupName="PdfExportScope"
+                       Content="전체 수량"
+                       IsChecked="{Binding IsAllScope}"
+                       AutomationProperties.Name="전체 수량 PDF 내보내기"
+                       Margin="0,0,0,6" />
+          <RadioButton GroupName="PdfExportScope"
+                       Content="검토 완료 수량만"
+                       IsChecked="{Binding IsVerifiedOnlyScope}"
+                       AutomationProperties.Name="검토 완료 수량만 PDF 내보내기" />
+
+          <Border BorderBrush="{StaticResource BrushDivider}" BorderThickness="0,1,0,0" Margin="0,16,0,16" />
+
+          <TextBlock Text="포함 정보" Style="{StaticResource SectionTitle}" Margin="0,0,0,8" />
+          <CheckBox Content="산출근거" IsChecked="{Binding IncludeCalculationDetails}" AutomationProperties.Name="PDF 산출근거 포함" Margin="0,0,0,6" />
+          <CheckBox Content="검산결과" IsChecked="{Binding IncludeVerification}" AutomationProperties.Name="PDF 검산결과 포함" Margin="0,0,0,6" />
+          <CheckBox Content="검토메모" IsChecked="{Binding IncludeReviewNotes}" AutomationProperties.Name="PDF 검토메모 포함" Margin="0,0,0,6" />
+          <CheckBox Content="원본 DWG 파일명" IsChecked="{Binding IncludeSourceDrawing}" AutomationProperties.Name="PDF 원본 DWG 파일명 포함" />
+
+          <Border BorderBrush="{StaticResource BrushDivider}" BorderThickness="0,1,0,0" Margin="0,16,0,16" />
+
+          <TextBlock Text="{Binding SummaryText}" Style="{StaticResource CaptionText}" TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
+
+      <Border Style="{StaticResource InlineMessageBorder}"
+              Margin="0,12,0,0"
+              Visibility="{Binding IsSuccess, Converter={StaticResource BoolToVisibility}}">
+        <StackPanel>
+          <TextBlock Text="{Binding StatusText}" Style="{StaticResource InlineMessageText}" />
+          <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+            <Button Style="{StaticResource SecondaryButton}"
+                    Command="{Binding OpenFileCommand}"
+                    AutomationProperties.Name="PDF 파일 열기"
+                    Content="파일 열기"
+                    Margin="0,0,8,0" />
+            <Button Style="{StaticResource QuietButton}"
+                    Command="{Binding OpenFolderCommand}"
+                    AutomationProperties.Name="PDF 폴더 열기"
+                    Content="폴더 열기" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+      <Border Style="{StaticResource InlineMessageBorder}"
+              Margin="0,12,0,0"
+              Visibility="{Binding IsError, Converter={StaticResource BoolToVisibility}}">
+        <TextBlock Text="{Binding StatusText}" Style="{StaticResource InlineMessageText}" Foreground="{StaticResource BrushError}" />
+      </Border>
+
+      <Button Style="{StaticResource PrimaryButton}"
+              Command="{Binding ExportCommand}"
+              AutomationProperties.Name="PDF 보고서 생성"
+              Content="{Binding ExportButtonLabel}"
+              HorizontalAlignment="Left"
+              Margin="0,16,0,0" />
+    </StackPanel>
+
+    <StackPanel Grid.Row="1"
+                Visibility="{Binding HasCurrentProject, Converter={StaticResource InverseBoolToVisibility}}"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                MaxWidth="360">
+      <TextBlock Text="먼저 프로젝트를 열어주세요."
+                 HorizontalAlignment="Center"
+                 FontWeight="SemiBold" />
+      <TextBlock Text="PDF 산출근거서는 프로젝트에 저장된 산출내역을 기준으로 만들어집니다."
+                 Style="{StaticResource CaptionText}"
+                 TextWrapping="Wrap"
+                 TextAlignment="Center"
+                 Margin="0,4,0,0" />
+    </StackPanel>
+  </Grid>
+</UserControl>
