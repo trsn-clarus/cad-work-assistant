@@ -499,10 +499,64 @@ GUI 구동 시 그래픽 드라이버가 불안정해지는 이력이 있어, �
 `docs/REAL_AUTOCAD_VALIDATION_2024.md`를 채우는 것으로 이 Milestone을 재개한다 - 그때까지 RC는
 선언되지 않는다.
 
-## Milestone 9 — Excel Export
+## Milestone 9 — Excel Quantity Export + Verification-Aware Deliverable Generation
 
-- [ ] Excel 라이브러리 선정(라이선스/유지보수 확인)
-- [ ] 산출내역 → Excel/CSV 내보내기
+**상태: 코드/자동 테스트/Simulation Mode 종단간 검증/설치본 Excel smoke test 완료 (2026-08-09)**
+
+저장된 QuantityRecord(+최신 검산 결과+검토 상태)를 실무 제출/검토/적산 워크플로에 바로 쓸 수 있는
+Excel "수량산출서"로 내보낸다. 자세한 시트 구성/정밀도 정책/보안은 `docs/EXCEL_EXPORT.md`, 호출
+구조는 `docs/ARCHITECTURE.md` §8.8 참고.
+
+- [x] 라이브러리 선정: ClosedXML 0.105.1(MIT) - Microsoft.Office.Interop.Excel(COM, Excel 설치
+      필요)과 EPPlus(최신 버전 상업 라이선스 필요)를 제외하고, Excel 미설치 환경에서도 항상
+      성공하는 순수 OpenXML 라이브러리를 채택
+- [x] `CADWorkAssistant.Documents`를 netstandard2.0 → net8.0으로 재타겟(`Persistence`와 같은 이유
+      - AutoCAD Plugin이 참조하지 않으므로 멀티타겟이 필요 없다) - `Core`/`CADWorkAssistant.AutoCAD`는
+      여전히 ClosedXML을 전혀 참조하지 않는다
+- [x] Core: 표시명 정책을 `QuantityTypeDisplay`/`QuantityReviewStatusDisplay`/
+      `VerificationSeverityDisplay`로 추출해 화면(`QuantityHistoryRow`)과 Excel이 완전히 같은
+      글리프/문구를 공유하도록 통일(회귀 없이 리팩터링, 기존+신규 테스트로 확인)
+- [x] Documents: `Excel.QuantityWorkbookModel`/`QuantityWorkbookRow`(ClosedXML 비의존 순수 데이터
+      모델, 향후 PDF Export가 재사용 가능) + `QuantityWorkbookModelBuilder`(Project+QuantityRecord+
+      Verification/Review → Model, Verified-only 필터는 항상 `QuantityReviewStatus` 기준이고 자동
+      `VerificationSeverity`로는 걸러내지 않는다 - Verified인데 Error인 레코드도 그대로 노출) +
+      `QuantityWorkbookBuilder`(ClosedXML을 다루는 유일한 클래스, 4개 시트: 수량산출서/산출근거/
+      검산내역/프로젝트정보, A4 가로/1페이지 폭 맞춤/헤더 반복/쪽번호, 원자적 저장)
+- [x] 보안: 사용자 입력 문자열(프로젝트명/설명/검토메모)을 전부 `.Value=`/`.SetValue()`로만 쓰고
+      `FormulaA1`을 쓰지 않아 `=`/`+`/`-`/`@`로 시작하는 입력이 Excel 수식으로 재해석되지 않는다 -
+      4개의 실제 위험 문자열로 재오픈 검증까지 완료(추정이 아니라 실증)
+- [x] Persistence: `ExportRecord.ExportType`(`DwgSelection`/`ExcelQuantity`) 신규 -
+      `Migration003AddExportType`(user_version 3), 기존 WBLOCK 호출부는 기본 인자로 무변경
+- [x] Desktop: `QuantityExcelExportCoordinator`(Persistence에서 새로 읽음 - 캐시된 화면 상태를
+      신뢰하지 않는다, `IQuantityVerificationCoordinator` 재사용) + `ExcelExportViewModel`(scope
+      라디오/4개 포함 체크박스/실시간 요약/SaveFileDialog/Success·Error 상태) + OUTPUT 그룹에
+      "Excel" 화면(Ctrl+E) 신규 + `IProjectContextService.AddExcelExportRecordAsync`(내보내기
+      직후 Dashboard Activity Log에 즉시 반영 - 재시작/프로젝트 전환 없이도 보인다)
+- [x] Documents.Tests 신규 프로젝트(30개 테스트: Model Builder 12개 + Workbook Builder 18개) -
+      회귀값(255.940660m/3,102.43m²/25.594066m²/29.5141237m²/69.0537m²) numeric cell 검증,
+      Verified+Error 공존 노출, 한글 왕복, 10,000건 대량 내보내기, 수식 주입 방지, 원자적 저장 시
+      기존 파일 교체, 인쇄 설정
+- [x] Persistence.Tests: 실제 SQLite로 Project→QuantityRecord→Verification→Review→Excel 전체
+      흐름 E2E 2건 신규(All/Verified-only 두 scope 모두 검증) + `ExportType` round-trip 1건
+- [x] 회귀 전체 재확인: Core.Tests 182개(22개 신규) + Persistence.Tests 38개(3개 신규) +
+      Integration.Tests 54개 + Documents.Tests 30개(신규), 총 304개 전부 통과
+- [x] Simulation Mode 실제 UI 조작으로 종단간 검증 - 프로젝트 생성 → Length 측정값 산출내역 추가
+      → Excel 화면에서 실시간 요약 확인 → SaveFileDialog로 실제 저장 → Success 상태(파일명/파일
+      열기/폴더 열기) → Dashboard Activity Log 즉시 반영 → 저장된 실제 `.xlsx`를 재오픈해 4개
+      시트/수식/글리프/계산식 문자열까지 눈으로 확인
+- [x] Release 빌드/설치 프로그램 재생성 - `scripts/build-release.ps1`은 코드 변경 없이 그대로
+      ClosedXML과 그 전이 의존성(DocumentFormat.OpenXml/ExcelNumberFormat/SixLabors.Fonts 등)을
+      `dotnet publish` self-contained 출력에 자동 포함했다(Inno Setup `.iss`도 `SourceDir\*` 전체
+      글롭이라 파일 목록을 수동으로 추가할 필요가 없었다) - 설치 프로그램을 실제로 설치하고 설치된
+      EXE로 Excel Export를 다시 한번 실행해 성공을 확인(smoke test)
+
+**의도적으로 하지 않은 것**: PDF Export(Milestone 10 후보로 `QuantityWorkbookModel` 재사용 가능하게
+설계), Excel 로고 이미지 삽입(텍스트 브랜딩만), 검산 이력 append(최신 1건만 upsert하는 기존
+Verification 정책을 그대로 따름), 사용자 정의 시트/컬럼 구성.
+
+**Milestone 8.5(실제 AutoCAD 2024 실기 검증)는 이 Milestone과 무관하게 계속 BLOCKED 상태다** -
+Excel Export 검증은 전부 Simulation Mode(FakeAutoCad)로 이뤄졌고, 실제 AutoCAD GUI를 이 PC에서
+구동하지 않았다(§8.5 참고, 그래픽 드라이버 불안정 이슈가 해소되지 않았다).
 
 ## Milestone 10 — Plot / PDF
 

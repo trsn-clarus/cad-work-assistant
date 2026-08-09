@@ -52,16 +52,16 @@
 
 | 프로젝트 | TFM | 책임 | AutoCAD/WPF 의존성 |
 |---|---|---|---|
-| `CADWorkAssistant.Core` | netstandard2.0 | 단위 변환, 길이 계산(`Core/Length`), 면적 계산(`Core/Area`), 수직면적/파라펫 수량 조합(`Core/VerticalArea`, `Core/Parapet`), **수량 검산(`Core/Verification`, Milestone 7)**, 도메인 모델, IPC 프로토콜(`Core/Ipc`)과 상태머신(`Core/Cad`). **AutoCAD 타입을 절대 참조하지 않는다** → AutoCAD 없이 유닛 테스트 가능 (§32) | 없음 |
+| `CADWorkAssistant.Core` | netstandard2.0 | 단위 변환, 길이 계산(`Core/Length`), 면적 계산(`Core/Area`), 수직면적/파라펫 수량 조합(`Core/VerticalArea`, `Core/Parapet`), **수량 검산(`Core/Verification`, Milestone 7)**, 도메인 모델, 표시명 정책(`Core/Models/QuantityTypeDisplay`, `QuantityReviewStatusDisplay`, `Core/Verification/VerificationSeverityDisplay` — Milestone 9, UI와 Excel이 같은 문구를 공유), IPC 프로토콜(`Core/Ipc`)과 상태머신(`Core/Cad`). **AutoCAD 타입을 절대 참조하지 않는다** → AutoCAD 없이 유닛 테스트 가능 (§32) | 없음 |
 | `CADWorkAssistant.Infrastructure` | **net48;net8.0** (멀티타겟) | 구조화 로깅(Serilog), 설정 저장(JSON), Named Pipe 전송 계층 전체(`Ipc/PipeMessageFramer`, `AutoCadPipeClient`, `AutoCadPipeServer`) | 없음 |
-| `CADWorkAssistant.Documents` | netstandard2.0 | Excel/PDF/CSV 내보내기 (Milestone: Excel Export 단계에서 실제 구현) | 없음 |
-| `CADWorkAssistant.Persistence` | **net8.0만** (Infrastructure와 달리 net48 없음) | Project/QuantityRecord/ActivityRecord/DrawingFile/ExportRecord/RecentMeasurement/**QuantityVerificationSnapshot/QuantityReview(Milestone 7)** SQLite 영속화 (`Microsoft.Data.Sqlite`, raw ADO.NET). Migrations/(스키마 버전 관리), Repositories/(8쌍), `ProjectDataService`(교차 테이블 트랜잭션) | 없음 (Desktop만 참조, AutoCAD Plugin은 참조하지 않음 — §8.6) |
-| `CADWorkAssistant.Desktop` | net8.0-windows | WPF UI, MVVM, `Services/`(Discovery/ConnectionManager/LengthSelectionCoordinator/ProjectContextService), `ViewModels/`(LengthWorkflowViewModel, AreaWorkflowViewModel, VerticalAreaWorkflowViewModel, ParapetWorkflowViewModel, LengthSourceSelector, ProjectDialogViewModel 등) | WPF |
+| `CADWorkAssistant.Documents` | **net8.0** (Milestone 9에서 netstandard2.0 → net8.0 전환, `Persistence`와 같은 이유 — §8.8) | 수량산출서 Excel Export(`Excel/QuantityWorkbookModel`+`QuantityWorkbookModelBuilder`+`QuantityWorkbookBuilder`, ClosedXML). PDF/CSV는 여전히 미착수 | 없음 (ClosedXML만, AutoCAD/WPF 없음) |
+| `CADWorkAssistant.Persistence` | **net8.0만** (Infrastructure와 달리 net48 없음) | Project/QuantityRecord/ActivityRecord/DrawingFile/ExportRecord(**ExportType — Milestone 9**)/RecentMeasurement/**QuantityVerificationSnapshot/QuantityReview(Milestone 7)** SQLite 영속화 (`Microsoft.Data.Sqlite`, raw ADO.NET). Migrations/(스키마 버전 관리), Repositories/(8쌍), `ProjectDataService`(교차 테이블 트랜잭션) | 없음 (Desktop만 참조, AutoCAD Plugin은 참조하지 않음 — §8.6) |
+| `CADWorkAssistant.Desktop` | net8.0-windows | WPF UI, MVVM, `Services/`(Discovery/ConnectionManager/LengthSelectionCoordinator/ProjectContextService/**QuantityExcelExportCoordinator — Milestone 9**), `ViewModels/`(LengthWorkflowViewModel, AreaWorkflowViewModel, VerticalAreaWorkflowViewModel, ParapetWorkflowViewModel, LengthSourceSelector, ProjectDialogViewModel, **ExcelExportViewModel** 등) | WPF |
 | `CADWorkAssistant.AutoCAD` | net48 | AutoCAD Managed API 연동, IPC Handler(Ping/GetApplicationInfo/GetDrawingContext/SelectLengthObjects/SelectAreaObjects), 원본 DWG 보호/Undo 그룹 처리 | AutoCAD 2024 Managed API |
 | `CADWorkAssistant.FakeAutoCad` (`tools/`) | net8.0 | AutoCAD 없이 개발/테스트하기 위한 Headless Simulation Host. `AutoCAD.Ipc.Handlers`와 **똑같은 IPC 프로토콜/서버 코드**를 재사용, Handler만 Scenario 기반 canned data로 교체. 설치 프로그램에 포함 안 함 (§73) | 없음 |
-| `*.Tests` | net8.0 | Core/Infrastructure 로직 단위 테스트 + Integration.Tests는 FakeAutoCad를 실제 프로세스로 띄워 실제 Named Pipe로 검증 | 없음 (AutoCAD 미설치 환경에서도 실행 가능) |
+| `*.Tests` (`Core`/`Persistence`/`Documents`/`Integration`) | net8.0 | Core/Infrastructure/Documents 로직 단위 테스트 + Integration.Tests는 FakeAutoCad를 실제 프로세스로 띄워 실제 Named Pipe로 검증. Persistence.Tests는 실제 파일 SQLite, `ExcelExportE2ETests`(Milestone 9)는 여기에 `CADWorkAssistant.Documents` 참조를 추가해 Project→Quantity→Verification→Review→Excel 전체 흐름을 검증한다 | 없음 (AutoCAD 미설치 환경에서도 실행 가능) |
 
-Core/Documents가 `netstandard2.0`인 이유: net48(Plugin)과 net8.0(Desktop/FakeAutoCad) 양쪽에서 참조 가능한 가장 단순한 공통분모이기 때문이다. **Infrastructure만 예외적으로 `net48;net8.0` 멀티타겟이다** - Named Pipe에 현재 사용자 전용 ACL을 거는 방식이 두 런타임에서 서로 다르기 때문 (§11 의사결정 로그 참고). netstandard2.0을 기본값으로 유지하고, 실제로 막힌 경우에만 멀티타겟으로 전환한다 (§0 "불필요하게 복잡한 구조 지양").
+Core가 `netstandard2.0`인 이유: net48(Plugin)과 net8.0(Desktop/FakeAutoCad) 양쪽에서 참조 가능한 가장 단순한 공통분모이기 때문이다. **Infrastructure는 `net48;net8.0` 멀티타겟, Documents/Persistence는 net8.0 전용이다** - Documents/Persistence는 AutoCAD Plugin(net48)이 참조하지 않으므로 멀티타겟이 필요 없고, 오히려 net8.0 전용 NuGet 패키지(ClosedXML, Microsoft.Data.Sqlite)를 그대로 쓸 수 있다(§11 의사결정 로그 참고). netstandard2.0을 기본값으로 유지하고, 실제로 막힌 경우에만 net8.0 전용으로 전환한다 (§0 "불필요하게 복잡한 구조 지양").
 
 ## 4. AutoCAD 연동 계층
 
@@ -342,6 +342,49 @@ Desktop.ViewModels.QuantityHistoryViewModel + Views.HistoryPanel
 중요한 검증 대상이었다. `VerificationSeverity`(자동 판정)와 `QuantityReviewStatus`(사용자 판단)를
 분리된 두 축으로 설계한 것이 이 Milestone의 핵심 아키텍처 결정이다(§4).
 
+## 8.8 Excel Quantity Export Architecture (Milestone 9)
+
+저장된 QuantityRecord(+최신 Verification+Review)를 실무 제출/검토용 Excel 수량산출서로 내보내는
+계층. 자세한 시트 구성/정밀도 정책/보안(수식 주입 방지)/atomic save는
+[`EXCEL_EXPORT.md`](./EXCEL_EXPORT.md) 참고, 여기서는 호출 구조만 요약한다:
+
+```text
+Desktop.ViewModels.ExcelExportViewModel
+  │ SaveFileDialog로 저장 경로 선택 → ExportAsync 호출 (Project를 모르는 측정 도구들과 달리
+  │ 이 화면은 애초에 "현재 프로젝트"가 있어야만 동작한다 - IsExporting/IsSuccess/IsError는
+  │ 기존 ExportWorkflowViewModel(Milestone 5, DWG WBLOCK)과 같은 bool-flag 관례)
+  ▼
+Desktop.Services.QuantityExcelExportCoordinator (IQuantityExcelExportCoordinator)
+  │ Persistence에서 Project+QuantityRecord를 새로 읽고(캐시된 ObservableCollection을 신뢰하지
+  │ 않는다 - 내보내기 시점의 DB가 source of truth), IQuantityVerificationCoordinator를 재사용해
+  │ 최신 Verification/Review 딕셔너리를 얻는다(스냅샷 역직렬화 로직을 새로 만들지 않는다)
+  ▼
+CADWorkAssistant.Documents.Excel.QuantityWorkbookModelBuilder (AutoCAD·ClosedXML 비의존, 순수 매핑)
+  │ Project+QuantityRecord[]+Verification/Review 딕셔너리+ExcelExportOptions
+  │   → QuantityWorkbookModel/QuantityWorkbookRow (향후 PDF Export가 재사용할 수 있는 순수 데이터 모델)
+  │ 정렬은 항상 CreatedAt→Id 결정적 순서(DB 원본 순서에 의존하지 않는다), Verified-only 필터는
+  │ 항상 QuantityReviewStatus 기준(자동 VerificationSeverity로 걸러내지 않는다 - Verified인데
+  │ Error인 레코드도 그대로 노출)
+  ▼
+CADWorkAssistant.Documents.Excel.QuantityWorkbookBuilder (ClosedXML을 직접 다루는 유일한 클래스)
+  │ 4개 시트 생성(수량산출서/산출근거/검산내역/프로젝트정보) + 인쇄 설정(A4 가로/1페이지 폭
+  │ 맞춤/머리글 반복/쪽번호 바닥글) + SaveAtomically(임시 파일 → 재오픈 검증 → 원자적 교체)
+  ▼
+xlsx 파일 (사용자가 고른 경로) + Desktop.Services.IProjectContextService.AddExcelExportRecordAsync
+  └ ExportRecord(ExportType=ExcelQuantity)+ActivityRecord를 한 트랜잭션에 저장, Dashboard의
+    ObservableCollection에도 즉시 반영(재시작/프로젝트 전환 없이 Activity Log가 바로 갱신된다)
+```
+
+**다른 Milestone과 다른 점**: 이번 Milestone에서만 `CADWorkAssistant.Core`가 아닌
+`CADWorkAssistant.Documents`가 새 외부 패키지(ClosedXML)를 직접 참조한다 - Core는 여전히
+AutoCAD뿐 아니라 ClosedXML도 참조하지 않는다(§4 절대 원칙 3의 "AutoCAD API를 참조하지 않는다"를
+넘어서, Core 전체가 "무엇을 출력하는지"를 몰라야 한다는 원칙으로 확장 적용했다). 사람이 읽는
+계산식 문자열(`CalculationExpression`)은 Excel 셀에 **일반 문자열로만** 쓴다 - ClosedXML의
+`FormulaA1`/`FormulaR1C1`을 쓰지 않으므로 `=`/`+`/`-`/`@`로 시작하는 사용자 입력(프로젝트명/설명/
+검토메모)이 열렸을 때 Excel 수식으로 재해석되지 않는다. 이 성질은 4개의 실제 위험 문자열을
+재오픈한 워크북에서 `cell.HasFormula == false`/`cell.DataType == XLDataType.Text`로 직접
+검증했다(추정이 아니라 실증).
+
 ## 9. Desktop App 구조 (MVVM)
 
 - `*.xaml` — 뷰 (구조/레이아웃/스타일), `Themes/DesignTokens.xaml`에 색상·타이포·spacing 토큰 정의
@@ -401,11 +444,16 @@ Desktop.ViewModels.QuantityHistoryViewModel + Views.HistoryPanel
 | `QuantityVerificationSnapshot`/`QuantityReview`는 upsert-latest-only(이력 없음) | 재검산/재검토마다 새 행을 append(감사 이력) | 10,000건 규모 프로젝트에서 반복 재검산 시 저장 공간이 무한정 늘어날 위험(§89) - "당시 검산 결과"의 실제 필요는 "마지막으로 확인했을 때"였다(§50 Stale 판정에만 쓰인다). RecentMeasurement/DrawingFile(Milestone 6)과 같은 패턴 |
 | `QuantityVerificationContext`로 배치 검산 시 중복/비교/형상쌍 후보를 O(n) 한 번만 색인 | 레코드마다 전체 목록을 순회하며 비교(O(n²)) | 대규모 프로젝트(§89)에서 배치 검산이 느려지는 것을 피하기 위해 처음부터 이 구조로 설계했다 - "필요할 때 최적화한다"는 원칙의 예외는 성능 문제가 설계 초기부터 명백할 때다 |
 | `DataGridCheckBoxColumn` 대신 `DataGridTemplateColumn` 안에 일반 `CheckBox` | `DataGridCheckBoxColumn` 유지, 다른 우회책 시도 | 실제로 UI Automation 클릭 검증 중 `DataGridCheckBoxColumn`의 TwoWay 바인딩이 이 화면의 DataGrid 설정 조합에서 커밋되지 않는 것을 발견했다(로그에 setter 호출 자체가 안 찍힘) - 일반 `CheckBox`는 DataGrid의 셀 편집 생명주기를 타지 않고 자기 Click에서 즉시 커밋해 더 안정적이다 |
+| Excel 생성: ClosedXML(직접 OOXML 작성) | Microsoft.Office.Interop.Excel(COM), EPPlus | Interop은 실제 Excel 설치+프로세스 기동이 필요해 이 앱의 "설치형 프로그램이 스스로 문서를 만든다"는 목표와 배치되고 헤드리스 테스트가 사실상 불가능하다. EPPlus는 버전에 따라 상업 라이선스가 필요하다(NonCommercial 조건). ClosedXML은 MIT, 다운로드 수 많고 활발히 유지보수되며, Excel 설치 여부와 무관하게 파일 시스템에 직접 `.xlsx`를 쓸 수 있다 |
+| `CADWorkAssistant.Documents`를 netstandard2.0 → net8.0으로 재타겟 | netstandard2.0 유지 + ClosedXML 버전을 netstandard2.0 호환 버전으로 고정 | Documents는 AutoCAD Plugin(net48)이 참조하지 않는다(§3) - `Persistence`가 이미 같은 이유로 net8.0 전용인 선례를 그대로 따랐다. net8.0 전용이면 ClosedXML 최신 버전을 제약 없이 쓸 수 있다 |
+| Excel 셀에 사용자 입력 문자열을 `.Value=`/`.SetValue()`로만 쓰고 `FormulaA1`을 절대 쓰지 않음 | 산식 문자열(`CalculationExpression`)을 보기 좋게 만들려고 일부 셀만 수식으로 작성 | ClosedXML은 일반 값 대입에서는 OOXML `<f>` 요소를 만들지 않으므로 Excel이 열 때 재해석하지 않는다 - 프로젝트명/설명/검토메모처럼 사용자가 자유롭게 입력하는 문자열이 `=`/`+`/`-`/`@`로 시작해도 수식으로 실행되지 않는다(수식 주입 방지, §8.8). 4개 실제 위험 문자열로 재오픈 검증까지 마쳤다 |
+| Excel Export 시나리오는 새 AutoCAD IPC 명령을 추가하지 않고, Persistence에 이미 저장된 QuantityRecord만 읽음 | AutoCAD에서 다시 선택하게 하거나 Export 시점에 도면을 재조회 | Vertical Area/Parapet(Milestone 4)과 같은 판단 기준 - Excel Export는 "기존 측정값을 조합"하는 것도 아니고 아예 "이미 저장된 값을 문서화"하는 것이라 AutoCAD 연동이 전혀 필요 없다. Plugin 코드가 이번 Milestone에서 전혀 바뀌지 않는다 |
+| `ExportRecord`에 `ExportType`(DwgSelection/ExcelQuantity) 컬럼 추가, 기존 WBLOCK Export 호출부는 기본값으로 무변경 | Excel 전용 별도 테이블(`ExcelExportRecord`) 신설 | DWG 선택 내보내기(Milestone 5)와 Excel 내보내기는 둘 다 "사용자가 파일을 내보냈다"는 같은 개념이라 테이블을 분리할 이유가 없다 - 생성자 기본 인자로 기존 호출부(Migration 없이 컴파일만 다시 하면 그대로 동작)를 건드리지 않았다 |
+| Dashboard Activity Log를 Excel 저장 직후 즉시 갱신하려고 `IProjectContextService.AddExcelExportRecordAsync`를 새로 추가(내부에서 `Activity.Insert(0, ...)`까지 수행) | `ProjectDataService`로 직접 저장만 하고 Activity 갱신은 다음 프로젝트 전환/재시작에 맡김 | Desktop의 `Activity` `ObservableCollection`은 `SwitchToAsync`에서만 다시 채워진다 - 저장 성공 후 사용자가 Dashboard를 봐도 방금 만든 Excel 기록이 안 보이면 "정말 저장됐나" 혼란을 준다. `AddQuantityRecordAsync`(기존)와 같은 패턴으로 맞췄다 |
 
 ## 12. 아직 결정하지 않은 것 (의도적으로 보류)
 
-- Excel 라이브러리(ClosedXML 후보) — Excel Export 착수 시 라이선스/유지보수 재확인 후 결정
-- PDF 라이브러리 — PDF Export 착수 시 결정 (QuestPDF는 회사 규모에 따라 상업 라이선스 필요할 수 있어 확인 필요)
+- PDF 라이브러리 — PDF Export 착수 시 결정 (QuestPDF는 회사 규모에 따라 상업 라이선스 필요할 수 있어 확인 필요, `QuantityWorkbookModel`을 그대로 재사용할 수 있게 설계해뒀다 — §8.8)
 - Installer(Inno Setup vs MSIX) — 첫 배포 가능한 빌드가 나온 뒤 결정
 - AutoCAD 2025+(.NET 8) 지원 — 필요 시점에 별도 프로젝트로 추가
 - **Project/Drawing 단위 Unit Override**(§24-27, Unitless 도면에서 계산 단위를 사용자가 지정) — Milestone 3
