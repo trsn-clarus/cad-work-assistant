@@ -89,12 +89,12 @@ why color is never the only signal for connection state.
 
 ## Navigation
 
-Current sections (as of Milestone 10):
+Current sections (as of Milestone 11):
 
 - PROJECT: Dashboard
 - CAD: Drawing
 - QUANTITY: Length, Area, Vertical Area, Parapet, History
-- OUTPUT: Excel, PDF
+- OUTPUT: Excel, PDF, Plot
 - SETTINGS: Settings
 
 Only nav items with a real screen behind them appear in `Navigation` at all. Through Milestone 7
@@ -104,10 +104,10 @@ project-wide: a production first impression with five permanently-unclickable na
 than a shorter, fully-functional list. Milestone 9 was the first of those placeholders to become a
 real screen - a new OUTPUT group with one item, Excel. Milestone 10 added PDF as OUTPUT's second
 item, right below Excel (no new group header - `ShowGroupHeader` only fires once per group, the
-same rule History/Area/Vertical Area/Parapet already follow under QUANTITY). Files/Plot get real
-screens in a future Milestone (Plot is Milestone 11, and is a different kind of PDF entirely -
-drawing plot output, not this quantity report - see `pages/pdf-export.md`) and get added then -
-not before.
+same rule History/Area/Vertical Area/Parapet already follow under QUANTITY). Milestone 11 added
+"Plot" as OUTPUT's third item - a deliberately different kind of PDF entirely (real AutoCAD Plot
+engine drawing output, not the quantity report the "PDF" item makes) - see `pages/drawing-pdf-output.md`.
+Files gets a real screen in a future Milestone and gets added then - not before.
 
 ## Button hierarchy
 

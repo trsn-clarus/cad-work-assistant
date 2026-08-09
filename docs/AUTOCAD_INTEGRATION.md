@@ -65,6 +65,9 @@ Desktop(net8.0, 별도 프로세스)과 Plugin(net48, `acad.exe` in-process)은 
 | `SelectLengthObjects`(Milestone 2) | 없음 | `LengthSelectionResponse`(Objects, ExcludedObjectTypeNames, Unit) | Editor.GetSelection이 사용자 입력을 기다린다 - Command Context에서 실행 (§5.5). 집계/변환은 AutoCAD Plugin이 아니라 Core.Length가 한다 |
 | `SelectAreaObjects`(Milestone 3) | 없음 | `AreaSelectionResponse`(Objects, ExcludedObjectTypeNames, Unit) | SelectLengthObjects와 같은 Command Context 경로(§5.5, §5.6). 분류(Valid/Open/Unsupported/InvalidGeometry)/합산/변환은 AutoCAD Plugin이 아니라 Core.Area가 한다 |
 | `GetDrawingOverview`/`ZoomExtents`/`ZoomToBounds`/`SelectDrawingObjects`/`IsolateObjects`/`GetLayers`/`SetLayerVisibility`/`RestoreVisibility`/`ExportSelection`(Milestone 5) | 각각 다름 | 각각 다름 | Drawing Navigation 9개 명령 - 자세한 API/설계는 [`DRAWING_NAVIGATION.md`](./DRAWING_NAVIGATION.md) 참고. `SelectDrawingObjects`만 Command Context(GetPoint+GetCorner+SelectWindow/CrossingWindow), 나머지 8개는 ApplicationContext |
+| `GetPlotCapabilities`(Milestone 11) | 없음 | `PlotCapabilitiesResponse`(Devices, Media, ColorDependentStyleSheets, NamedStyleSheets, CurrentDrawingStyleMode, Layouts) | ApplicationContext. 실제 장치/용지/CTB·STB 목록을 조회한다 - 자세한 API는 §5.7, `DRAWING_PDF_OUTPUT.md` 참고 |
+| `AcquirePlotWindow`(Milestone 11) | 없음 | `AcquirePlotWindowResponse`(Window: MinX/MinY/MaxX/MaxY) | Command Context(GetPoint+GetCorner) - `SelectDrawingObjects`와 같은 UX, Selection은 하지 않는다 |
+| `PlotDrawingPdf`(Milestone 11) | `PlotDrawingPdfRequest`(Scope, LayoutName, Window, PaperSizeName, Orientation, ColorMode, TargetFilePath) | `PlotDrawingPdfResponse`(OutputFile, Resolved*, ElapsedMs, Warning) | ApplicationContext. 실제 `Autodesk.AutoCAD.PlottingServices` Plot 엔진 호출 - §5.7 참고 |
 
 향후 명령은 `Core/Ipc/IpcMessageTypes.cs`에 상수를 추가하고 `CADWorkAssistant.AutoCAD/Ipc/Handlers/`에 `IIpcRequestHandler` 구현을 추가하는 것으로 확장한다 — 거대한 switch문을 두지 않는다.
 
@@ -182,6 +185,97 @@ Autodesk.AutoCAD.Runtime.Exception (acdbmgd.dll)
 - Closed가 아닌 객체는 Area를 아예 읽지 않는다(`RawArea = 0`으로 응답) - 열린 Curve의 `.Area`를 읽는 것 자체가 어떤 값을 반환할지 문서화되어 있지 않고 실물로 검증할 수 없어, 애초에 접근하지 않는 쪽을 택했다.
 - `Region`은 `Closed` 프로퍼티가 없으므로 `IsClosed: true`로 고정해 응답한다 - Region이라는 타입 자체가 "닫힌 면"이라는 의미이기 때문이다.
 
+### 5.7 Plot API (Milestone 11, `GetPlotCapabilitiesHandler`/`AcquirePlotWindowHandler`/`PlotDrawingPdfHandler`)
+
+이 PC의 AutoCAD 2024 `acdbmgd.dll`/`accoremgd.dll`을 리플렉션으로 직접 확인한 결과(추측 없음,
+DeclaredOnly가 아닌 전체 멤버 포함해서 검색):
+
+```
+Autodesk.AutoCAD.DatabaseServices.PlotSettingsValidator (acdbmgd.dll)
+  static PlotSettingsValidator Current
+  void SetPlotConfigurationName(PlotSettings, string deviceName, string mediaName)
+  void SetCanonicalMediaName(PlotSettings, string mediaName)
+  void SetPlotRotation(PlotSettings, PlotRotation)
+  void SetPlotType(PlotSettings, PlotType)              // DatabaseServices.PlotType!
+  void SetPlotWindowArea(PlotSettings, Extents2d)        // Extents2d는 DatabaseServices 네임스페이스
+  void SetPlotCentered(PlotSettings, bool)
+  void SetUseStandardScale(PlotSettings, bool)
+  void SetStdScaleType(PlotSettings, StdScaleType)
+  void SetCurrentStyleSheet(PlotSettings, string)
+  void RefreshLists(PlotSettings)                        // SetPlotConfigurationName 직후 호출 관례
+  StringCollection GetCanonicalMediaNameList(PlotSettings)
+  string GetLocaleMediaName(PlotSettings, string canonicalName)
+
+Autodesk.AutoCAD.DatabaseServices.PlotSettings (acdbmgd.dll) - IDisposable, DBObject 파생
+  PlotSettings(bool modelType)                           // 생성자
+  void CopyFrom(RXObject)                                // Layout(:PlotSettings)에서 값 복사
+  bool ModelType
+
+Autodesk.AutoCAD.DatabaseServices.Layout (acdbmgd.dll) - PlotSettings 파생
+  string LayoutName
+
+Autodesk.AutoCAD.DatabaseServices.Database (acdbmgd.dll)
+  bool PlotStyleMode   // true=Named(STB), false=ColorDependent(CTB)
+  ObjectId LayoutDictionaryId
+
+Autodesk.AutoCAD.PlottingServices.PlotConfigManager (accoremgd.dll) - 전부 static
+  PlotConfigInfoCollection Devices
+  StringCollection ColorDependentPlotStyles
+  StringCollection NamedPlotStyles
+  PlotConfig CurrentConfig
+  PlotConfig SetCurrentConfig(string deviceName)         // 전역 "현재 장치"를 바꾸는 부작용 있음
+
+Autodesk.AutoCAD.PlottingServices.PlotConfig (accoremgd.dll)
+  bool IsPlotToFile
+  string DefaultFileExtension
+  StringCollection CanonicalMediaNames
+  MediaBounds GetMediaBounds(string canonicalMediaName)  // PageSize(Point2d) 등 mm 실측 물리 치수
+
+Autodesk.AutoCAD.PlottingServices.PlotFactory (accoremgd.dll) - 전부 static
+  PlotEngine CreatePublishEngine()    // ★ CreatePlotEngine()은 존재하지 않는다 - 온라인 예제 주의
+  PlotEngine CreatePreviewEngine(int)
+  ProcessPlotState ProcessPlotState   // NotPlotting/ForegroundPlotting/BackgroundPlotting
+
+Autodesk.AutoCAD.PlottingServices.PlotInfo (accoremgd.dll) - IDisposable
+  ObjectId Layout
+  PlotSettings OverrideSettings
+
+Autodesk.AutoCAD.PlottingServices.PlotInfoValidator (accoremgd.dll)
+  void Validate(PlotInfo)
+
+Autodesk.AutoCAD.PlottingServices.PlotEngine (accoremgd.dll) - IDisposable
+  void BeginPlot(PlotProgress, object)
+  void BeginDocument(PlotInfo, string documentName, object, int copies, bool plotToFile, string fileName)
+  void BeginPage(PlotPageInfo, PlotInfo, bool lastPage, object)
+  void BeginGenerateGraphics(object) / EndGenerateGraphics(object)
+  void EndPage(object) / void EndDocument(object) / void EndPlot(object)
+```
+
+실제로 확인/정정한 것들(§4 "리플렉션으로 실존 확인" 원칙의 이번 Milestone 사례):
+
+- **`PlotFactory.CreatePlotEngine()`은 존재하지 않는다** - `CreatePublishEngine()`만 있다. 일부 온라인
+  예제가 잘못 가정하는 부분.
+- **`PlotType`이라는 이름의 서로 다른 두 enum**이 있다 - `DatabaseServices.PlotType`(Display/Extents/
+  Limits/View/Window/Layout, `SetPlotType`이 받는 타입)과 `PlottingServices.PlotType`. 둘 다
+  `using`하면 `CS0104` 컴파일 에러가 나서 완전한 이름으로 구분해야 한다.
+- **`Extents2d`는 `Geometry`가 아니라 `DatabaseServices` 네임스페이스**에 있다. `(minX, minY, maxX,
+  maxY)` 4-double 생성자가 있어 `Point2d`를 따로 만들 필요가 없다.
+- `PlotConfig`/`PlotConfigManager`/`MediaBounds`/`PlotConfigInfo`는 전부 `PlottingServices`
+  네임스페이스(`DatabaseServices`가 아니다).
+- `PlotSettings`/`PlotInfo`/`PlotEngine` 모두 `IDisposable`.
+
+구현 방침:
+
+- 원본 Layout의 `PlotSettings`는 절대 변경하지 않는다 - `new PlotSettings(layout.ModelType)` +
+  `CopyFrom(layout)`으로 임시 override만 만든다(§6, CLAUDE.md 절대 원칙 1).
+- Layout(DBObject)은 조회에 쓴 Transaction이 열려 있는 동안에만 안전하다 - `CopyFrom`까지 같은
+  Transaction 안에서 끝내고, `PlotSettings`(별도 detached 객체)만 밖으로 가지고 나온다.
+- 플로터/용지/스타일 이름을 하드코딩하지 않는다 - 전부 `PlotCapabilityReader`가 실제 조회한 목록을
+  근거로 `Core.Plot`의 순수 로직(`PlotPdfDeviceSelector`/`PlotPaperMatcher`/`PlotStyleResolver`)이
+  해석한다.
+- `PlotFactory.ProcessPlotState != NotPlotting`이면 Plot을 시작하지 않는다 - AutoCAD Plot 엔진
+  자체가 동시 Plot을 지원하지 않는다.
+
 ### 5.3 마케팅 버전 이름 (AutoCadVersionMap)
 
 `Application.Version`과 `acad.exe`의 FileVersionInfo 모두 "AutoCAD 2024" 같은 마케팅 연도를 주지 않는다 (`ProductName`은 그냥 "AutoCAD", 버전은 "R24.3.119.0.0"). `AutoCadVersionMap`이 Autodesk의 공개된 릴리스 번호 체계를 바탕으로 한 매핑 표를 갖고 있으며, 매핑에 없는 버전은 절대 연도를 지어내지 않고 `AutoCAD (build {version})` 형태로 원본을 보여준다. 새 AutoCAD 버전이 나오면 이 표에 한 줄 추가하면 된다.
@@ -215,6 +309,12 @@ Milestone 1에서 이 PC의 AutoCAD 2024 GUI를 실제로 띄우자 그래픽 �
 실제 AutoCAD GUI에서만 확인 가능한 항목은 [`AUTOCAD_REAL_MACHINE_CHECKLIST.md`](./AUTOCAD_REAL_MACHINE_CHECKLIST.md)에 전부 정리되어 있다 (현재 전부 BLOCKED - 머신 가용성).
 
 **Milestone 8.5 (2026-08-09)**: Installer/Bundle까지 만든 뒤 다시 한번 이 PC에서 실제 AutoCAD 2024 GUI 검증을 시도할지 사용자에게 직접 확인했다. 이 PC 외에 접근 가능한 다른 머신이 없고, 이 PC에서 다시 시도하는 것은 §8에 기록된 그래픽 드라이버 불안정 위험을 다시 감수하는 것이라는 점을 명확히 안내한 뒤, 사용자는 "이 PC에서 시도하지 말고 준비 작업만 하라"를 선택했다. 그래서 Milestone 8.5는 실제 AutoCAD 검증을 수행하지 않고 준비 작업(체크리스트 정리, 검증용 DWG 사양, 검증 보고서 템플릿)만 완료한 상태로 남는다 - `docs/REAL_AUTOCAD_VALIDATION_2024.md` 참고.
+
+**Milestone 11B (2026-08-09)**: 같은 이유로 실제 Plot 결과물의 물리적 정확성(용지 크기/CTB·STB
+시각 결과/좌표 정확성/PlotEngine 런타임 동작 등)도 이 PC에서 검증할 수 없다 - Milestone 8.5와 동일한
+판단을 그대로 적용해 BLOCKED로 남긴다. Core/IPC/Handler 코드 자체는 실제 API를 리플렉션으로 전량
+검증했고(§5.7), FakeAutoCad+Simulation Mode로 배관 전체를 종단간 검증했다(`DRAWING_PDF_OUTPUT.md`
+§10) - "실제로 맞게 그려지는가"만 11B로 남는다.
 
 ## 9. 향후 AutoCAD 버전 추가
 

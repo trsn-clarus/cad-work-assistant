@@ -232,6 +232,53 @@ Verification 규칙 자체(Core.Verification, 9종 Rule)는 AutoCAD 없이 Core.
 
 - [BLOCKED] AutoCAD Plugin 보안/신뢰 위치 경고가 뜨는지, 뜬다면 매 실행마다 승인해야 하는 수준인지(Production UX blocker 여부 판단) - Installer가 Autodesk 보안 설정을 무단으로 낮추는 우회는 하지 않는다는 원칙 유지
 
+## Milestone 11 — AutoCAD Plot + Drawing PDF Output
+
+Core/IPC/Handler는 실제 AutoCAD 2024 DLL을 리플렉션으로 전량 검증했고(`docs/AUTOCAD_INTEGRATION.md`
+§5.7), FakeAutoCad+Simulation Mode로 IPC/파일 배관 전체를 종단간 검증했다(`docs/
+DRAWING_PDF_OUTPUT.md` §10). 여기 남는 건 "실제 AutoCAD Plot 엔진이 정확한 결과물을 만드는가"뿐이다.
+
+### Capability 조회
+
+- [BLOCKED] `GetPlotCapabilities`가 실제 설치된 Plot 장치 목록을 정확히 반환하는지(`DWG To PDF.pc3`
+  포함 여부, 프린터 드라이버가 실제로 있을 때)
+- [BLOCKED] `PlotConfigManager.SetCurrentConfig`로 장치를 순회 조회한 뒤 원래 장치로 복원하는 것이
+  실제 Plot 대화상자의 기본 장치 선택에 영향을 주지 않는지
+- [BLOCKED] 실제 장치의 `GetMediaBounds` 반환값 단위가 정말 mm인지(`CadPlotMediaDto.WidthMm/
+  HeightMm`이 이 가정 위에 만들어져 있다) - 실제 출력물 실측과 대조
+- [BLOCKED] CTB 도면과 STB 도면 각각에서 `Database.PlotStyleMode`가 문서와 일치하는 값을 주는지
+- [BLOCKED] Layout이 여러 개인 도면에서 `IsCurrent`/`IsModel` 판정이 정확한지
+
+### Window Plot (`AcquirePlotWindow`)
+
+- [BLOCKED] 회전되지 않은 표준 UCS/View에서 두 점 지정 → `PlotDrawingPdf`로 넘긴 영역이 실제로
+  선택한 영역과 일치하는 PDF가 나오는지
+- [BLOCKED] 회전된 UCS 상태에서 두 점 지정 → 좌표가 왜곡 없이 정확한지(§4의 알려진 미검증 항목)
+- [BLOCKED] Pan/Zoom 후 두 점 지정 → 화면 위치와 무관하게 WCS 기준으로 정확한지
+- [BLOCKED] Esc로 취소 → `SelectionCancelled`로 정상 처리되고 AutoCAD 명령 상태가 깨끗하게 복귀하는지
+
+### Plot 실행 정확성
+
+- [BLOCKED] A4/A3 각각 선택 → 생성된 PDF의 실제 물리 페이지 크기가 정확히 210×297mm/297×420mm인지
+  (PDF 리더의 "문서 속성"으로 실측)
+- [BLOCKED] 자동/세로/가로 방향 각각 → 실제 출력 방향이 의도와 일치하는지, `PlotRotation` 매핑이
+  옳은지
+- [BLOCKED] 컬러(기존 설정 유지) → 원본 도면 색상이 그대로 출력되는지
+- [BLOCKED] 흑백(monochrome.ctb) → 실제로 흑백톤으로 출력되는지, 선 굵기/글자 가독성이 유지되는지
+- [BLOCKED] STB 도면에서 흑백 사전 설정이 항상 Unavailable로 막히는 것이 실제로 옳은 동작인지(STB
+  환경에서 진짜로 monochrome 대응 방법이 없는지 재확인)
+- [BLOCKED] Current Layout Scope - Layout에 이미 설정된 Page Setup/뷰포트가 그대로 반영되는지
+- [BLOCKED] Model Window Scope - `PlotType.Window`+`SetPlotWindowArea`가 지정한 영역만 정확히
+  잘라 출력하는지
+- [BLOCKED] 원본 Layout의 PlotSettings가 Plot 전후로 전혀 변경되지 않았는지(CLAUDE.md 절대 원칙 1) -
+  `PLOT` 명령을 GUI에서 직접 실행했을 때와 설정이 동일한지 대조
+- [BLOCKED] Plot 중 DWG의 "수정됨" 플래그/저장 확인 프롬프트에 영향이 있는지
+- [BLOCKED] 이미 다른 Plot이 진행 중일 때(`ProcessPlotState`) 두 번째 요청이 안전하게 Busy로
+  거부되는지
+- [BLOCKED] `PlotFactory.CreatePublishEngine()`으로 만든 Begin/End 시퀀스가 실제로 진행률/취소
+  콜백 없이도 문제없이 끝까지 도는지(현재 구현은 `PlotProgress`에 `null`을 넘긴다)
+- [BLOCKED] 매우 복잡한 도면(객체 수가 많거나 Hatch/Raster 포함)에서 Plot 소요 시간과 결과 정확성
+
 ## 검증 방법 메모
 
 - 이 문서의 각 항목은 AutoCAD가 있는 머신에서 실제로 시도한 뒤 앞머리의 상태 표기를 `[BLOCKED]`에서 `[PASS]`/`[FAIL]`/`[N/A]`로 바꾸고, 특이사항(재현 조건, AutoCAD 버전, 관련 커밋)을 항목 옆에 메모로 남긴다. 실행하지 않았는데 결과를 추측해서 적지 않는다.

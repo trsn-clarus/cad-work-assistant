@@ -621,14 +621,59 @@ Export 검증은 전부 Simulation Mode(FakeAutoCad)로 이뤄졌고, 실제 Aut
 
 ## Milestone 11 — AutoCAD Plot + Drawing PDF Output
 
-Milestone 10의 PDF(수량/검산 보고서)와는 완전히 다른 기능이다 - 이건 **DWG Plot 결과물**이다.
+**상태: 11A(architecture/구현/자동 테스트/Simulation Mode 종단간 검증/설치본 smoke test) 완료,
+11B(실제 AutoCAD Plot 결과 정확성)는 BLOCKED (2026-08-09)**
 
-- [ ] Plot 설정 화면 + 프리셋 (A3/A4, 컬러/흑백)
-- [ ] 기존 CTB/STB 안전하게 확인 후 적용
+Milestone 10의 PDF(수량/검산 보고서)와는 완전히 다른 기능이다 - 이건 실제 AutoCAD Plot 엔진
+(`Autodesk.AutoCAD.PlottingServices`)으로 만드는 **DWG Plot 결과물**이다. 코드를 전혀 공유하지
+않는다. 자세한 구조/API 리플렉션 검증 결과는 `docs/DRAWING_PDF_OUTPUT.md`, 호출 구조는
+`docs/ARCHITECTURE.md` §8.10 참고.
 
-실제 AutoCAD 2024가 안정적으로 실행되는 머신이 없으면(§8.5) Plot 실행 자체는 실기 검증이
-BLOCKED될 수 있다 - 그 경우 Plot architecture + FakeAutoCad + Preset + UI까지만 개발하고, 실제
-Plot 결과 검증은 실기가 확보된 뒤로 미룬다.
+- [x] Core 도메인 모델(`Core/Plot`, AutoCAD 비의존): `CadPlotScope`/`CadPlotOrientation`/
+      `CadPlotColorMode`/`CadPlotStyleMode`/`CadPaperSize`+`CadPaperSizeCatalog`(A4/A3)/
+      `CadPlotWindowDto`(Milestone 5의 `CadBoundsDto`와 의도적으로 분리)/`CadPlotDeviceDto`/
+      `CadPlotMediaDto`/`CadPlotLayoutDto` + 순수 로직 5종(`PlotPaperMatcher`(실측 mm 매칭,
+      `ToleranceMm=2.0`)/`PlotOrientationResolver`/`PlotStyleResolver`(STB에 CTB 강제 안 함)/
+      `PlotPdfDeviceSelector`("DWG To PDF.pc3" 우선)/`PlotOutputFileNameService`) - Core.Tests
+      28개 신규
+- [x] IPC 계약: `GetPlotCapabilities`/`AcquirePlotWindow`/`PlotDrawingPdf` 3개(새 Protocol Version
+      불필요)
+- [x] AutoCAD Plugin: 실제 AutoCAD 2024 DLL(`accoremgd.dll`/`acdbmgd.dll`)을 리플렉션으로 전량
+      검증한 뒤 `GetPlotCapabilitiesHandler`/`AcquirePlotWindowHandler`/`PlotDrawingPdfHandler`
+      구현 - **`PlotFactory.CreatePlotEngine()`은 존재하지 않는다**(`CreatePublishEngine()`만
+      있다, 일부 온라인 예제가 잘못 가정하는 부분), `PlotType`이 두 네임스페이스에 각각 다른
+      의미로 존재해 완전한 이름으로 구분해야 한다, `Extents2d`는 `Geometry`가 아니라
+      `DatabaseServices` 네임스페이스에 있다 - 전부 실제 컴파일해서 발견/정정했다. 원본 Layout의
+      PlotSettings는 절대 변경하지 않고 임시 override 객체만 사용한다(CLAUDE.md 절대 원칙 1)
+- [x] FakeAutoCad: `FakePlotDrawingPdfHandler`가 Milestone 10의 `QuantityPdfBuilder`를 재사용하지
+      않고(명시적으로 다른 서브시스템) 평문 placeholder만 씀 + Scenario 12개(Capabilities
+      Normal/Ctb/Stb/NoPdfDevice/NoA3Media/NoMonochromeStyle, WindowNormal/Cancelled,
+      Success/Busy/Failure/Disconnect)
+- [x] Integration.Tests: Headless Plot E2E 9개(GetPlotCapabilities→AcquirePlotWindow→
+      PlotDrawingPdf 전체 흐름, CurrentLayout/Window Scope, NoPdfDevice/Stb 응답, Window 취소,
+      Busy/Failure/Disconnect/InvalidRequest)
+- [x] Persistence: `ExportRecord.ExportType`에 `DrawingPdf` 상수 추가(TEXT 컬럼, Migration
+      불필요) + `IProjectContextService.AddDrawingPdfExportRecordAsync`
+- [x] Desktop: `PlotCapabilityCoordinator`/`PlotWindowSelector`(static, `LengthSelectionCoordinator`와
+      같은 패턴)/`DrawingPdfExportCoordinator` + `DrawingPdfExportViewModel` + OUTPUT 그룹에 "Plot"
+      화면(Ctrl+D, Milestone 10의 "PDF"와 명확히 분리) 추가 - Ready 폼은 실제 Capability를 반영해
+      지원하지 않는 용지/흑백 옵션을 자동으로 비활성화한다
+- [x] 회귀 전체 재확인: Core.Tests 210(+28) + Persistence.Tests 40 + Integration.Tests 63(+9) +
+      Documents.Tests 49, 총 362개 전부 통과(Release 빌드에서도 동일하게 재확인)
+- [x] Simulation Mode 실제 UI 조작으로 종단간 검증 - Capability 자동 로드(용지/흑백 Preset이 실제
+      장치 Capability를 반영해 렌더링됨) → "영역 지정" 클릭으로 실제 AcquirePlotWindow 왕복 →
+      SaveFileDialog 실제 저장 → 생성된 실제 파일을 디스크에서 직접 확인 → NoPdfDevice/현재
+      Layout Scope 전환/Failure/Disconnected 상태까지 전부 화면으로 확인
+- [x] Release 빌드/설치 프로그램 재생성 - 코드 변경 없이 정상 포함, 실제로 설치하고 설치된 EXE로
+      Plot 화면 도달/동작을 확인(installer 51.3MB)
+
+**의도적으로 하지 않은 것**: Extents Plot Scope, A2/A1/A0·Custom 용지, Batch(여러 Layout 동시)
+Plot, Plot 진행률 표시/취소, 앱 내부 Plot Preview.
+
+**Milestone 11B(실제 AutoCAD Plot 결과 정확성 - 용지 물리 크기/CTB·STB 시각 결과/좌표 정확성/
+PlotEngine 런타임 동작 등)와 Milestone 8.5는 둘 다 계속 BLOCKED 상태다** - 이 PC는 AutoCAD GUI
+구동 시 그래픽 드라이버가 불안정해지는 문제가 해소되지 않았다(§8.5 참고). 세부 체크리스트는
+`docs/AUTOCAD_REAL_MACHINE_CHECKLIST.md` "Milestone 11" 참고.
 
 ## Milestone 12 — Text Tools
 

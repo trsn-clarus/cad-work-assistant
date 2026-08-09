@@ -52,12 +52,12 @@
 
 | 프로젝트 | TFM | 책임 | AutoCAD/WPF 의존성 |
 |---|---|---|---|
-| `CADWorkAssistant.Core` | netstandard2.0 | 단위 변환, 길이 계산(`Core/Length`), 면적 계산(`Core/Area`), 수직면적/파라펫 수량 조합(`Core/VerticalArea`, `Core/Parapet`), **수량 검산(`Core/Verification`, Milestone 7)**, 도메인 모델, 표시명 정책(`Core/Models/QuantityTypeDisplay`, `QuantityReviewStatusDisplay`, `Core/Verification/VerificationSeverityDisplay` — Milestone 9, UI와 Excel이 같은 문구를 공유), IPC 프로토콜(`Core/Ipc`)과 상태머신(`Core/Cad`). **AutoCAD 타입을 절대 참조하지 않는다** → AutoCAD 없이 유닛 테스트 가능 (§32) | 없음 |
+| `CADWorkAssistant.Core` | netstandard2.0 | 단위 변환, 길이 계산(`Core/Length`), 면적 계산(`Core/Area`), 수직면적/파라펫 수량 조합(`Core/VerticalArea`, `Core/Parapet`), **수량 검산(`Core/Verification`, Milestone 7)**, **AutoCAD Plot 도메인 모델/순수 로직(`Core/Plot` — Milestone 11, `PlotPaperMatcher`/`PlotOrientationResolver`/`PlotStyleResolver`/`PlotPdfDeviceSelector`/`PlotOutputFileNameService`)**, 도메인 모델, 표시명 정책(`Core/Models/QuantityTypeDisplay`, `QuantityReviewStatusDisplay`, `Core/Verification/VerificationSeverityDisplay` — Milestone 9, UI와 Excel이 같은 문구를 공유), IPC 프로토콜(`Core/Ipc`)과 상태머신(`Core/Cad`). **AutoCAD 타입을 절대 참조하지 않는다** → AutoCAD 없이 유닛 테스트 가능 (§32) | 없음 |
 | `CADWorkAssistant.Infrastructure` | **net48;net8.0** (멀티타겟) | 구조화 로깅(Serilog), 설정 저장(JSON), Named Pipe 전송 계층 전체(`Ipc/PipeMessageFramer`, `AutoCadPipeClient`, `AutoCadPipeServer`) | 없음 |
 | `CADWorkAssistant.Documents` | **net8.0** (Milestone 9에서 netstandard2.0 → net8.0 전환, `Persistence`와 같은 이유 — §8.8) | 공유 문서 모델(`Reports/QuantityReportModel`+`QuantityReportModelBuilder`+`IQuantityReportOptions`+`QuantityExportScope` — Milestone 10에서 Excel 전용이던 `QuantityWorkbookModel`을 일반화), 수량산출서 Excel Export(`Excel/QuantityWorkbookBuilder`, ClosedXML), 수량 산출근거 PDF Export(`Pdf/QuantityPdfBuilder`+`WindowsKoreanFontResolver`, PDFsharp-MigraDoc — Milestone 10, §8.9). CSV는 여전히 미착수 | 없음 (ClosedXML+PDFsharp-MigraDoc만, AutoCAD/WPF 없음) |
-| `CADWorkAssistant.Persistence` | **net8.0만** (Infrastructure와 달리 net48 없음) | Project/QuantityRecord/ActivityRecord/DrawingFile/ExportRecord(**ExportType: DwgSelection/ExcelQuantity(M9)/PdfQuantityReport(M10)**)/RecentMeasurement/**QuantityVerificationSnapshot/QuantityReview(Milestone 7)** SQLite 영속화 (`Microsoft.Data.Sqlite`, raw ADO.NET). Migrations/(스키마 버전 관리), Repositories/(8쌍), `ProjectDataService`(교차 테이블 트랜잭션) | 없음 (Desktop만 참조, AutoCAD Plugin은 참조하지 않음 — §8.6) |
-| `CADWorkAssistant.Desktop` | net8.0-windows | WPF UI, MVVM, `Services/`(Discovery/ConnectionManager/LengthSelectionCoordinator/ProjectContextService/**QuantityExcelExportCoordinator(M9)/QuantityPdfExportCoordinator(M10)/IQuantityReportSnapshotService(M10, 두 Coordinator가 공유하는 Persistence 조회)**), `ViewModels/`(LengthWorkflowViewModel, AreaWorkflowViewModel, VerticalAreaWorkflowViewModel, ParapetWorkflowViewModel, LengthSourceSelector, ProjectDialogViewModel, **ExcelExportViewModel, PdfExportViewModel** 등) | WPF |
-| `CADWorkAssistant.AutoCAD` | net48 | AutoCAD Managed API 연동, IPC Handler(Ping/GetApplicationInfo/GetDrawingContext/SelectLengthObjects/SelectAreaObjects), 원본 DWG 보호/Undo 그룹 처리 | AutoCAD 2024 Managed API |
+| `CADWorkAssistant.Persistence` | **net8.0만** (Infrastructure와 달리 net48 없음) | Project/QuantityRecord/ActivityRecord/DrawingFile/ExportRecord(**ExportType: DwgSelection/ExcelQuantity(M9)/PdfQuantityReport(M10)/DrawingPdf(M11)**)/RecentMeasurement/**QuantityVerificationSnapshot/QuantityReview(Milestone 7)** SQLite 영속화 (`Microsoft.Data.Sqlite`, raw ADO.NET). Migrations/(스키마 버전 관리), Repositories/(8쌍), `ProjectDataService`(교차 테이블 트랜잭션) | 없음 (Desktop만 참조, AutoCAD Plugin은 참조하지 않음 — §8.6) |
+| `CADWorkAssistant.Desktop` | net8.0-windows | WPF UI, MVVM, `Services/`(Discovery/ConnectionManager/LengthSelectionCoordinator/ProjectContextService/**QuantityExcelExportCoordinator(M9)/QuantityPdfExportCoordinator(M10)/IQuantityReportSnapshotService(M10)/PlotCapabilityCoordinator/PlotWindowSelector/DrawingPdfExportCoordinator(M11, §8.10)**), `ViewModels/`(LengthWorkflowViewModel, AreaWorkflowViewModel, VerticalAreaWorkflowViewModel, ParapetWorkflowViewModel, LengthSourceSelector, ProjectDialogViewModel, ExcelExportViewModel, PdfExportViewModel, **DrawingPdfExportViewModel(M11)** 등) | WPF |
+| `CADWorkAssistant.AutoCAD` | net48 | AutoCAD Managed API 연동, IPC Handler(Ping/GetApplicationInfo/GetDrawingContext/SelectLengthObjects/SelectAreaObjects/.../**GetPlotCapabilities/AcquirePlotWindow/PlotDrawingPdf(M11, `Autodesk.AutoCAD.PlottingServices` 실제 Plot 엔진)**), 원본 DWG 보호/Undo 그룹 처리 | AutoCAD 2024 Managed API |
 | `CADWorkAssistant.FakeAutoCad` (`tools/`) | net8.0 | AutoCAD 없이 개발/테스트하기 위한 Headless Simulation Host. `AutoCAD.Ipc.Handlers`와 **똑같은 IPC 프로토콜/서버 코드**를 재사용, Handler만 Scenario 기반 canned data로 교체. 설치 프로그램에 포함 안 함 (§73) | 없음 |
 | `*.Tests` (`Core`/`Persistence`/`Documents`/`Integration`) | net8.0 | Core/Infrastructure/Documents 로직 단위 테스트 + Integration.Tests는 FakeAutoCad를 실제 프로세스로 띄워 실제 Named Pipe로 검증. Persistence.Tests는 실제 파일 SQLite, `ExcelExportE2ETests`(M9)/`PdfExportE2ETests`(M10)가 여기에 `CADWorkAssistant.Documents` 참조를 추가해 Project→Quantity→Verification→Review→Excel/PDF 전체 흐름을 검증한다. Documents.Tests/Persistence.Tests는 PDF 텍스트 검증 전용으로 PdfPig(테스트 전용, Apache-2.0)도 참조한다 | 없음 (AutoCAD 미설치 환경에서도 실행 가능) |
 
@@ -418,6 +418,32 @@ Windows의 기본 한글 폰트(맑은 고딕)에 ✓(U+2713) 글리프가 없�
 것은 둘 다 실제로 빌드/렌더링해봐야 드러난 문제였다(§4-2 문서, "컴파일 성공 ≠ 동작 확인"의 이번
 Milestone 사례) - `WindowsKoreanFontResolver`와 PDF 전용 글리프 치환(`ToPdfSafeGlyph`)으로 해결했다.
 
+## 8.10 AutoCAD Plot + Drawing PDF Output Architecture (Milestone 11)
+
+Milestone 10(§8.9)의 PDF는 저장된 수량 데이터를 렌더링한 문서이고, 이 Milestone의 PDF는 완전히
+다른 것이다 - 실제 AutoCAD Plot 엔진(`Autodesk.AutoCAD.PlottingServices`)으로 도면 자체를 PDF로
+출력한다. 두 서브시스템은 코드를 전혀 공유하지 않는다. 자세한 구조/실제 API 리플렉션 검증 결과/
+FakeAutoCad 정책/Simulation Mode 검증 기록은 [`DRAWING_PDF_OUTPUT.md`](./DRAWING_PDF_OUTPUT.md) 참고:
+
+```text
+Desktop.ViewModels.DrawingPdfExportViewModel
+  ▼ (탭 활성화) PlotCapabilityCoordinator → GetPlotCapabilities IPC
+  ▼ (Window Scope) PlotWindowSelector(static, LengthSelectionCoordinator와 같은 패턴) → AcquirePlotWindow IPC(인터랙티브)
+  ▼ (저장) DrawingPdfExportCoordinator → PlotDrawingPdf IPC + 성공 시 AddDrawingPdfExportRecordAsync
+  ▼
+AutoCAD.Ipc.Handlers.{GetPlotCapabilitiesHandler,AcquirePlotWindowHandler,PlotDrawingPdfHandler}
+  │ PlotCapabilityReader(장치/용지/스타일/Layout 실측 조회, 두 Handler가 공유)
+  │ PlotDrawingPdfHandler: 임시 override PlotSettings(원본 Layout 비변경) → PlotSettingsValidator →
+  │ PlotInfoValidator → PlotFactory.CreatePublishEngine() Begin/End 시퀀스
+  ▼
+pdf 파일(원자적 저장) + ExportRecord(ExportType=DrawingPdf)+ActivityRecord
+```
+
+**Milestone 11A/11B 분리**: 이번 범위(11A)는 도메인 모델/IPC/Handler/FakeAutoCad/Desktop UI/
+Headless E2E까지 실제 AutoCAD 없이 구현하고 리플렉션으로 API를 검증했다. 실제 Plot 결과물의 물리적
+정확성(용지 크기/CTB·STB 시각 결과/좌표 정확성 등)은 실제 AutoCAD 2024 하드웨어가 필요해 11B로
+분리하고 BLOCKED로 남긴다 - Milestone 8.5(Plugin 실사용 검증)와 같은 판단이다.
+
 ## 9. Desktop App 구조 (MVVM)
 
 - `*.xaml` — 뷰 (구조/레이아웃/스타일), `Themes/DesignTokens.xaml`에 색상·타이포·spacing 토큰 정의
@@ -489,6 +515,12 @@ Milestone 사례) - `WindowsKoreanFontResolver`와 PDF 전용 글리프 치환(`
 | Windows 시스템 폰트(맑은 고딕)를 실행 시점에 읽어 PDF에 임베드하는 자체 `IFontResolver` 구현 | 폰트 파일을 설치 프로그램에 번들링, 또는 PDFsharp의 기본 폰트 사용 | 실제로 빌드해서 렌더링해보니 PDFsharp 6.x(.NET 8 비-GDI)는 `IFontResolver`를 등록하지 않으면 즉시 예외를 던진다 - 이 앱은 이미 Windows 전용이므로 사용자 PC에 항상 있는 시스템 폰트를 그때그때 읽는 것이 폰트 라이선스 재배포 문제도 피하고 가장 단순하다 |
 | PDF에서 검산 Pass 글리프를 ✓(U+2713) 대신 ○(U+25CB)로 치환(PDF 전용, Core/Excel은 무변경) | Core의 글리프 정책 자체를 바꾸거나, PDF에서 글리프를 아예 빼고 텍스트만 표시 | Simulation Mode에서 실제로 렌더링한 PDF를 육안으로 확인하다가 ✓ 글리프가 빈 사각형(tofu)으로 깨지는 것을 발견했다 - 맑은 고딕에 그 Dingbats 글리프가 없기 때문이다. 여러 후보를 실제로 렌더링해 비교한 뒤 ○가 정상 렌더링되고 한국어 문서의 ○/× 표기 관례와도 자연스러운 것을 확인해 PDF 렌더러 안에서만 치환했다 - Excel은 뷰어가 시스템 폰트로 자동 대체해 이미 문제없이 표시되므로 건드리지 않았다 |
 
+| `CadPlotWindowDto`를 Milestone 5의 `CadBoundsDto`(선택 객체 bounding box, 3D)와 별도 타입으로 유지 | `SelectionOutcome<T>`(Milestone 3)처럼 제네릭화하거나 `CadBoundsDto` 재사용 | Plot Window는 사용자가 두 점으로 직접 지정한 2D 평면 영역이지 "선택된 객체의 경계"가 아니다 - 우연히 모양(4개 double)이 비슷할 뿐 서로 다른 개념이라 합치지 않았다. `SelectionOutcome<T>`의 제네릭화는 진짜 중복(같은 개념, 같은 목적)이었던 것과 대비된다 |
+| `PlotFactory.CreatePublishEngine()`을 실제 Plot 실행에 사용, `CreatePlotEngine()`은 존재 자체를 리플렉션으로 확인 후 사용 안 함 | 온라인 예제를 그대로 따라 `CreatePlotEngine()` 호출 시도 | 실제 설치된 AutoCAD 2024 accoremgd.dll을 리플렉션으로 전수 조사한 결과 `PlotFactory`에는 `CreatePublishEngine()`/`CreatePreviewEngine(int)`만 존재했다 - 일부 오래된 온라인 샘플이 가정하는 API가 실제로는 없다는 것을 실행 전에 확인했다(§4-5, "AutoCAD 원본 API 사용 전에는 항상 리플렉션으로 실존을 확인한다") |
+| `GetPlotCapabilitiesHandler`가 `PlotConfigManager.SetCurrentConfig`로 각 장치를 순회 조회한 뒤 원래 장치로 복원 | 장치 이름 문자열만으로 PDF 가능 여부 추정(`"PDF"` 포함 여부 등) | 장치가 실제로 PDF 가능한지는 `PlotConfig.IsPlotToFile`+`DefaultFileExtension`을 실제로 로드해봐야 안다 - 이름에 의존하면 새 장치 드라이버가 추가될 때마다 깨진다. `SetCurrentConfig`가 전역 상태를 바꾸는 부작용은 조회 후 원래 값으로 복원해 최소화했다(원복이 Plot 대화상자 기본값에 영향을 주지 않는지는 11B 검증 대상) |
+| `PlotDrawingPdfHandler`가 원본 Layout의 `PlotSettings`를 절대 변경하지 않고, `new PlotSettings(modelType)` + `CopyFrom(layout)`으로 임시 override 객체만 만들어 사용 | Layout의 PlotSettings를 직접 수정 후 Plot, 끝나면 되돌림 | CLAUDE.md 절대 원칙 1(원본 DWG 임의 변경 금지)을 Plot에도 그대로 적용했다 - 이 방식이 공식 AutoCAD Managed API 샘플의 표준 패턴이기도 하다(`PlotInfo.OverrideSettings`) |
+| FakeAutoCad의 `FakePlotDrawingPdfHandler`가 Milestone 10의 `QuantityPdfBuilder`를 재사용하지 않고 평문 안내 텍스트만 씀 | 실제 PDFsharp로 그럴듯한 가짜 Plot PDF를 생성 | 마스터 프롬프트가 명시적으로 금지했다 - 수량 보고서 PDF와 도면 Plot PDF는 완전히 다른 서브시스템이고, 진짜처럼 보이는 Fake 결과물은 "이게 실제 AutoCAD Plot 결과다"라는 착각을 일으킬 위험이 있다. `FakeExportSelectionHandler`(Milestone 5)가 가짜 DWG 대신 평문을 쓰는 것과 같은 원칙 |
+
 ## 12. 아직 결정하지 않은 것 (의도적으로 보류)
 
 - Installer(Inno Setup vs MSIX) — 첫 배포 가능한 빌드가 나온 뒤 결정
@@ -503,3 +535,9 @@ Milestone 사례) - `WindowsKoreanFontResolver`와 PDF 전용 글리프 치환(`
   advanced feature로 남겨둔다
 - **다구간(multi-segment) 높이 계산**(Milestone 4 §88) — 예: `10m×1m + 5m×0.5m`처럼 구간별로 다른
   높이를 적용. Multi-segment quantity composition으로 향후 확장 가능하게만 설계해뒀다
+- **Plot Extents Scope, A2/A1/A0·Custom 용지, Batch(여러 Layout 동시) Plot, Plot 진행률/취소**
+  (Milestone 11 §9, §23) — 첫 버전은 CurrentLayout/Window Scope + A4/A3만 지원한다. 실제 필요가
+  확인되면 후속 Milestone에서 확장
+- **Milestone 11B(실제 AutoCAD 2024 하드웨어에서만 확인 가능한 Plot 정확성 항목)** — 이 PC는
+  AutoCAD GUI 실행 시 그래픽 드라이버가 불안정해지는 문제가 있어(Milestone 1) BLOCKED로 남긴다.
+  세부 체크리스트는 [`AUTOCAD_REAL_MACHINE_CHECKLIST.md`](./AUTOCAD_REAL_MACHINE_CHECKLIST.md) §Plot 참고
