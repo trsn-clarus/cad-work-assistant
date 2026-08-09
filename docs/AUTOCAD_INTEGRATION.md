@@ -22,7 +22,7 @@ AutoCAD Managed API DLL은 **NuGet으로 배포되지 않고 로컬 설치 경�
 ## 3. 로딩 방식
 
 - **개발 중**: `NETLOAD` 명령으로 빌드된 DLL을 수동 로드
-- **배포판**: `.bundle` 폴더 구조 + `PackageContents.xml` Autoloader 방식 채택 예정 (Milestone 1 이후 구체화). AutoCAD 시작 시 자동 로드되며, 설치 프로그램이 `%APPDATA%\Autodesk\ApplicationPlugins\` 아래에 배치한다.
+- **배포판**: `.bundle` 폴더 구조 + `PackageContents.xml` Autoloader 방식 (Milestone 8에서 구현 완료 - `installer/CADWorkAssistant.bundle/PackageContents.xml`, `docs/DEPLOYMENT.md` §4). AutoCAD 시작 시 `LoadOnAutoCADStartup="True"`로 자동 로드되며, Installer가 `%APPDATA%\Autodesk\ApplicationPlugins\CADWorkAssistant.bundle\`에 배치한다. **이 autoload가 실제 AutoCAD에서 동작하는지는 아직 검증하지 못했다** - `PackageContents.xml`의 Manifest 형식/파일 배치까지는 확인했지만(Installer smoke test), AutoCAD가 실제로 이걸 읽어 NETLOAD 없이 Plugin을 로드하는지는 GUI가 있는 머신에서만 확인 가능하다 (`docs/AUTOCAD_REAL_MACHINE_CHECKLIST.md` Milestone 8 섹션 참고).
 
 ## 4. 명령 이름 (CWA prefix)
 
@@ -212,7 +212,9 @@ Milestone 1에서 이 PC의 AutoCAD 2024 GUI를 실제로 띄우자 그래픽 �
 2. `CADWorkAssistant.FakeAutoCad` - 실제 AutoCAD Plugin과 동일한 IPC 코드(Infrastructure.Ipc.AutoCadPipeServer, Core.Ipc)를 그대로 쓰는 별도 프로세스. Integration.Tests가 이 프로세스를 실제로 띄워 Named Pipe로 종단간 검증한다 (Milestone 3까지 총 29개 Scenario, Length 13개 + Area 16개).
 3. Desktop을 Simulation Mode(`CWA_USE_FAKE_AUTOCAD=1`)로 FakeAutoCad에 붙여 실제 UI까지 수동으로 확인 - Length 선택 → "255.941 m" 표시, Area 선택 → "3,102.43 m²" 표시(4개 중 1개가 열려 있어 제외된 PartialSuccess 배너 포함) → 산출내역 추가까지 실제 두 프로세스 사이 통신으로 동작하는 것을 확인했다.
 
-실제 AutoCAD GUI에서만 확인 가능한 항목은 [`AUTOCAD_REAL_MACHINE_CHECKLIST.md`](./AUTOCAD_REAL_MACHINE_CHECKLIST.md)에 전부 정리되어 있다 (현재 전부 Pending).
+실제 AutoCAD GUI에서만 확인 가능한 항목은 [`AUTOCAD_REAL_MACHINE_CHECKLIST.md`](./AUTOCAD_REAL_MACHINE_CHECKLIST.md)에 전부 정리되어 있다 (현재 전부 BLOCKED - 머신 가용성).
+
+**Milestone 8.5 (2026-08-09)**: Installer/Bundle까지 만든 뒤 다시 한번 이 PC에서 실제 AutoCAD 2024 GUI 검증을 시도할지 사용자에게 직접 확인했다. 이 PC 외에 접근 가능한 다른 머신이 없고, 이 PC에서 다시 시도하는 것은 §8에 기록된 그래픽 드라이버 불안정 위험을 다시 감수하는 것이라는 점을 명확히 안내한 뒤, 사용자는 "이 PC에서 시도하지 말고 준비 작업만 하라"를 선택했다. 그래서 Milestone 8.5는 실제 AutoCAD 검증을 수행하지 않고 준비 작업(체크리스트 정리, 검증용 DWG 사양, 검증 보고서 템플릿)만 완료한 상태로 남는다 - `docs/REAL_AUTOCAD_VALIDATION_2024.md` 참고.
 
 ## 9. 향후 AutoCAD 버전 추가
 

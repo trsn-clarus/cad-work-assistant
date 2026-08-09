@@ -1,8 +1,26 @@
 # Real AutoCAD Machine Checklist
 
-Level 1(Unit)/Level 2(Headless Integration) 테스트로 커버할 수 없는, 실제 AutoCAD가 정상 동작하는 머신에서만 확인 가능한 항목을 여기에 누적한다 (`docs/TESTING_WITHOUT_AUTOCAD.md` 참고). 이 문서의 항목이 Pending이라는 이유로 Milestone을 미완료 처리하지 않는다 - 단, Pending 상태는 명확히 남긴다.
+Level 1(Unit)/Level 2(Headless Integration) 테스트로 커버할 수 없는, 실제 AutoCAD가 정상 동작하는 머신에서만 확인 가능한 항목을 여기에 누적한다 (`docs/TESTING_WITHOUT_AUTOCAD.md` 참고). 이 문서의 항목이 BLOCKED라는 이유로 Milestone을 미완료 처리하지 않는다 - 단, 상태는 명확히 남긴다.
 
-**현재 상태: 전부 Pending.** 이 프로젝트의 개발 PC는 AutoCAD GUI 구동 시 그래픽 드라이버가 불안정해지는 문제가 있어(Milestone 1에서 확인, `docs/AUTOCAD_INTEGRATION.md` §8) 아직 한 항목도 실제로 검증하지 못했다.
+## 상태 표기
+
+각 항목 앞에 실제 실행 결과를 표기한다. 이 문서를 채우는 세션은 상태를 정직하게 남긴다 - 실행하지
+않은 항목을 PASS로 표기하지 않는다.
+
+| 표기 | 의미 |
+| --- | --- |
+| `[ ]` | 아직 시도하지 않음(기본값) |
+| `[BLOCKED]` | 시도하려 했으나 머신/환경 제약으로 실행 자체가 불가능했음 |
+| `[PASS]` | 실제 AutoCAD에서 실행해 기대한 대로 동작함을 확인 |
+| `[FAIL]` | 실제 AutoCAD에서 실행했지만 기대와 다르게 동작함 - 원인/후속 조치를 항목 옆에 남긴다 |
+| `[N/A]` | 이 프로젝트의 현재 범위에서 해당 없음(예: 아직 구현 안 한 기능) |
+
+**현재 상태: 전부 `[BLOCKED]`.** 이 프로젝트의 개발 PC는 AutoCAD GUI 구동 시 그래픽 드라이버가
+불안정해지는 문제가 있어(Milestone 1에서 확인, `docs/AUTOCAD_INTEGRATION.md` §8) 아직 한 항목도
+실제로 검증하지 못했다. Milestone 8.5(2026-08-09)에서 다시 한번 이 PC에서 시도할지 검토했으나,
+이 PC 외에 접근 가능한 안정적인 AutoCAD 머신이 없었고 사용자가 이 PC에서 그래픽 드라이버 위험을
+다시 감수하지 않기로 결정해 준비 작업(이 문서 정리, 검증용 DWG 사양, 보고서 템플릿)만 진행했다 -
+`docs/REAL_AUTOCAD_VALIDATION_2024.md`가 실제 실행 결과를 기록할 자리다.
 
 ## Milestone 1 — AutoCAD Connection
 
@@ -149,7 +167,73 @@ Level 1(Unit)/Level 2(Headless Integration) 테스트로 커버할 수 없는, �
 - [ ] 같은 파일명이 이미 존재할 때 - SaveFileDialog의 덮어쓰기 확인이 정상 동작하는지(Desktop 쪽 기능이라 AutoCAD 재현 없이도 확인 가능하지만 전체 흐름에서 함께 확인)
 - [ ] 1,000개 이상 객체 Export - 응답 시간, UI 멈춤 여부
 
+## Milestone 6 — SQLite Persistence + Project Management
+
+Persistence 자체(SQLite 파일 I/O, 트랜잭션, 재시작 복원)는 `CADWorkAssistant.Persistence.Tests`가
+AutoCAD 없이 이미 완전히 검증한다. 여기 남는 건 "실제 AutoCAD에서 얻은 값"이 그 경로를 타는지뿐이다.
+
+- [BLOCKED] 실제 AutoCAD 객체를 선택해 얻은 `QuantityRecord.ObjectHandles`가 Fake Handle이 아니라 진짜 AutoCAD Handle(예: `2A3`)로 저장되는지
+- [BLOCKED] `SourceDrawing`이 실제 DWG의 파일명/경로 규칙대로 저장되는지 (전체 경로인지 파일명만인지 실제 값으로 확인)
+- [BLOCKED] 실제 AutoCAD 세션에서 여러 번 측정 → "산출내역 추가" → Desktop 재시작 → 값 유지 확인
+- [BLOCKED] 프로젝트 전환 중 AutoCAD 연결이 유지되는지 (Project Dialog가 AutoCAD 선택 흐름을 방해하지 않는지)
+
+## Milestone 7 — Quantity History + Verification + Review
+
+Verification 규칙 자체(Core.Verification, 9종 Rule)는 AutoCAD 없이 Core.Tests가 완전히 검증한다.
+여기 남는 건 "실제 AutoCAD 값"이 검산에서 기대대로 동작하는지뿐이다.
+
+- [BLOCKED] 실제 AutoCAD Line/Polyline으로 측정한 Length 기록이 Verification에서 Pass로 나오는지 (Raw-Converted Consistency 등 결정적 규칙이 실제 부동소수점 값에서도 통과하는지)
+- [BLOCKED] 동일한 실제 AutoCAD 객체(같은 Handle)로 두 번 측정 → 중복 경고(Duplicate Handles Rule)가 실제로 뜨는지
+- [BLOCKED] History에서 실제 CAD 값을 검토(리뷰 메모 작성 + "검토 완료") → 재시작 후 유지
+
+## Milestone 8 — Production Installer + Plugin Autoload
+
+이번 Milestone(8.5)의 핵심 대상. Installer/Bundle의 파일 배치 자체는 `scripts/test-release.ps1`로
+이미 검증했다(§ Installer Smoke Test) - 여기 남는 건 "AutoCAD가 실제로 그 Bundle을 읽어 자동
+로드하는지"와 그 이후 전체 실사용 워크플로다.
+
+### Plugin Autoload (가장 먼저 확인해야 할 항목)
+
+- [BLOCKED] `CADWorkAssistant-Setup-<version>-x64.exe` 설치 → AutoCAD 2024 실행 → **NETLOAD 없이** Plugin 자동 로드
+- [BLOCKED] Named Pipe Server가 Plugin 초기화 시점에 자동으로 뜨는지
+- [BLOCKED] Desktop이 별도 조작 없이 AutoCAD instance를 탐지하는지
+- [BLOCKED] Heartbeat(Ping)가 성공하고 Drawing Context를 수신하는지
+- [BLOCKED] Desktop UI가 "Connected" 상태로 전환되는지
+- [ ] (Autoload 실패 시에만) 진단 목적으로 NETLOAD - 이걸로 Autoload 테스트를 PASS 처리하지 않는다. 실패 원인(Bundle 위치/Manifest/RuntimeRequirements 버전 범위/ModuleName 경로/AutoCAD 보안 설정/Windows 파일 차단) 특정 후 수정
+
+### Connection 시나리오
+
+- [BLOCKED] Case A: AutoCAD 먼저 실행 → Desktop 실행 → 연결
+- [BLOCKED] Case B: Desktop 먼저 실행 → AutoCAD 실행 → 연결
+- [BLOCKED] Case C: 연결 상태에서 AutoCAD 종료 → Desktop이 크래시 없이 Disconnected로 전환
+- [BLOCKED] Case D: AutoCAD 재실행 → Desktop이 자동으로 재연결
+- [BLOCKED] AutoCAD 인스턴스 2개 실행 → `AvailableInstances`에 둘 다 잡히는지 (UI 셀렉터는 범위 밖, 서비스 동작만 확인)
+
+### Focus / Desktop UX (Simulation Mode로는 검증 불가능했던 항목)
+
+- [BLOCKED] Desktop에서 "CAD에서 객체 선택" 클릭 → AutoCAD 창이 적절히 foreground로 전환되는지
+- [BLOCKED] 선택 완료 후 Desktop에 결과가 뜨지만 AutoCAD 사용을 방해하는 강제 focus steal이 없는지
+- [BLOCKED] SaveFileDialog(WBLOCK Export) 등이 실제 multi-window 환경에서 AutoCAD 뒤로 숨지 않는지
+- [BLOCKED] AutoCAD가 PLINE/MOVE/PAN/ZOOM 등 다른 명령 실행 중일 때 Desktop 요청을 보내면 명령을 방해하지 않고 일관되게 처리되는지 (Lock 충돌 메시지 등)
+- [BLOCKED] CAD selection 중 Esc가 AutoCAD 명령 상태와 Desktop 워크플로 양쪽 다 정상 복귀시키는지
+
+### 한글 경로/파일명
+
+- [BLOCKED] 한글 파일명(예: `학교_실내마감표.dwg`)으로 WBLOCK Export
+- [BLOCKED] 한글 Layer 이름 조회/검색
+- [BLOCKED] 한글이 포함된 Windows 사용자 계정(`C:\Users\<한글이름>\...`)에서 LocalAppData 경로 처리 - 이 개발 PC 자체가 이미 한글 경로(`바탕 화면`)를 포함하고 있어 어느 정도는 소스 레벨에서 매 빌드마다 검증되고 있지만, 실제 설치본 기준으로는 미확인
+
+### 성능/리소스
+
+- [BLOCKED] 연결 상태에서 Desktop/Plugin이 유휴 상태일 때 불필요하게 CPU를 지속 점유하지 않는지(작업 관리자로 육안 확인 수준)
+- [BLOCKED] 기본 워크플로(측정→저장→검산)를 장시간 반복 후 메모리 증가가 뚜렷하지 않은지
+
+### Security
+
+- [BLOCKED] AutoCAD Plugin 보안/신뢰 위치 경고가 뜨는지, 뜬다면 매 실행마다 승인해야 하는 수준인지(Production UX blocker 여부 판단) - Installer가 Autodesk 보안 설정을 무단으로 낮추는 우회는 하지 않는다는 원칙 유지
+
 ## 검증 방법 메모
 
-- 이 문서의 각 항목은 AutoCAD가 있는 머신에서 확인 후 `[ ]` → `[x]`로 바꾸고, 특이사항이 있으면 항목 옆에 메모를 남긴다.
+- 이 문서의 각 항목은 AutoCAD가 있는 머신에서 실제로 시도한 뒤 앞머리의 상태 표기를 `[BLOCKED]`에서 `[PASS]`/`[FAIL]`/`[N/A]`로 바꾸고, 특이사항(재현 조건, AutoCAD 버전, 관련 커밋)을 항목 옆에 메모로 남긴다. 실행하지 않았는데 결과를 추측해서 적지 않는다.
 - 새 Milestone에서 AutoCAD API를 새로 쓸 때마다(예: Milestone 3의 Area) 이 문서에 해당 섹션을 추가한다.
+- 실제 검증을 실행한 세션은 결과를 이 문서에만 남기지 말고 `docs/REAL_AUTOCAD_VALIDATION_2024.md`에도 환경 정보와 함께 정리한다 - 이 문서는 "무엇을 확인해야 하는가"의 목록이고, 그 문서는 "언제 누가 무엇을 확인했는가"의 기록이다.

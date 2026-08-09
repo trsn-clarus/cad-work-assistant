@@ -462,6 +462,43 @@ Issues 참고).
 충족**. AutoCAD Bundle은 파일 배치까지 실제로 검증했지만 AutoCAD 실기 NETLOAD 자동 로드는 이 PC의
 GUI 불안정성 제약으로 검증하지 못했다(`docs/AUTOCAD_REAL_MACHINE_CHECKLIST.md` 다음 항목).
 
+## Milestone 8.5 — Real AutoCAD 2024 Validation + Release Candidate Stabilization
+
+**상태: 준비 완료, 실제 검증 BLOCKED (머신 가용성) (2026-08-09)**
+
+새 기능 추가 없이 Milestone 8의 설치본을 실제 AutoCAD 2024 GUI로 검증해 첫 Release Candidate를
+만드는 것이 목표였다. 시작 전 이 세션이 접근 가능한 머신을 사용자에게 확인했다 - 이 개발 PC
+외에 다른 머신이 없었고, 이 PC는 `docs/AUTOCAD_INTEGRATION.md` §8에 기록된 대로 AutoCAD 2024
+GUI 구동 시 그래픽 드라이버가 불안정해지는 이력이 있어, 사용자는 이 PC에서 위험을 다시 감수하지
+않고 **준비 작업만** 진행하기로 결정했다(§7/§143의 "머신이 없으면 PASSED로 보고하지 않는다"
+원칙을 그대로 따름).
+
+- [x] Repository 상태 재확인(git status/log clean, 9개 프로젝트 확인)
+- [x] `docs/AUTOCAD_REAL_MACHINE_CHECKLIST.md`를 PASS/FAIL/BLOCKED/N-A 명시 상태 표기로 개편,
+      Milestone 6(Persistence 실기 Handle/Source Drawing)/7(Verification 실기 값)/8(Plugin
+      Autoload, Connection 4-Case, Focus/UX, 한글 경로, 성능, Security) 섹션 신규 추가
+- [x] `docs/AUTOCAD_INTEGRATION.md` §3(Bundle Autoloader "채택 예정" → "구현 완료, 실기 미검증"으로
+      정정), §8(Milestone 8.5 결정 경위 기록)
+- [x] `docs/REAL_AUTOCAD_VALIDATION_2024.md` 신규 - 실제 검증 세션이 채울 보고서 템플릿
+      (Environment/Installation/Autoload/Connection/Length/Area/Isolation/Layer/WBLOCK/
+      Persistence/Verification/Focus/Bugs/Performance/RC Decision)
+- [x] `samples/validation/VALIDATION_DWG_SPEC.md` 신규 - `CWA_Validation_Basic.dwg`(+ Meters/
+      Unitless 단위 변형) 사양서. 실제 DWG 바이너리는 AutoCAD 없이 생성할 수 없어 사양만 준비 -
+      Arc 포함 Polyline, 자기교차 Polyline, Open/Closed 혼재, 한글 Layer/Text, Locked/Off/Current
+      Layer 조합 등 체크리스트가 요구하는 모든 형태를 명세
+- [x] 기존 249개 테스트 + 빌드 0 경고/0 오류 재확인(이번 세션은 소스 코드를 변경하지 않았으므로
+      회귀 없음을 재확인하는 성격)
+
+**의도적으로 하지 않은 것**: 실제 AutoCAD GUI 구동/NETLOAD/Autoload 실기 검증, 새 기능/Motion/UI
+재설계(§141-142, 이 Milestone의 범위 밖), RC 버전(`0.8.1-rc.1` 등) 생성 - 실제 검증 없이는 RC를
+선언하지 않는다(§7/§99/§143).
+
+**완료 기준**: 이 Milestone 자체는 "실제 검증"이 아니라 "실제 검증을 위한 준비"만 완료 기준으로
+삼는다. → **체크리스트/보고서 템플릿/DWG 사양서 준비로 완전히 충족**. 실제 AutoCAD 2024가
+안정적으로 실행되는 머신이 확보되면 `docs/AUTOCAD_REAL_MACHINE_CHECKLIST.md`와
+`docs/REAL_AUTOCAD_VALIDATION_2024.md`를 채우는 것으로 이 Milestone을 재개한다 - 그때까지 RC는
+선언되지 않는다.
+
 ## Milestone 9 — Excel Export
 
 - [ ] Excel 라이브러리 선정(라이선스/유지보수 확인)
