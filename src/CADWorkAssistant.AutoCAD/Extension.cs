@@ -43,7 +43,11 @@ public class Extension : IExtensionApplication
             new ExportSelectionHandler(dispatcher),
             new GetPlotCapabilitiesHandler(dispatcher),
             new AcquirePlotWindowHandler(dispatcher),
-            new PlotDrawingPdfHandler(dispatcher)
+            new PlotDrawingPdfHandler(dispatcher),
+            new SelectTextObjectsHandler(dispatcher),
+            new AcquireTextInsertionPointHandler(dispatcher),
+            new CreateTextHandler(dispatcher),
+            new UpdateTextObjectsHandler(dispatcher)
         };
 
         _pipeServer = new AutoCadPipeServer(new IpcRequestDispatcher(handlers), Process.GetCurrentProcess().Id);
