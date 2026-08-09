@@ -49,4 +49,8 @@ public static class ExportTypes
 {
     public const string DwgSelection = "DwgSelection";
     public const string ExcelQuantity = "ExcelQuantity";
+
+    /// <summary>Milestone 10 - PDF 산출근거 보고서. ExportType은 TEXT 컬럼(Migration003)이라 새
+    /// 값 추가에 스키마 변경(새 Migration)이 필요 없다 - 문자열 상수 하나만 늘어난다.</summary>
+    public const string PdfQuantityReport = "PdfQuantityReport";
 }

@@ -55,4 +55,8 @@ public interface IProjectContextService
     /// 늘어나도 DWG Export 경로에 영향을 주지 않기 위해서다 (AddQuantityRecordAsync가 이미
     /// 측정 종류별로 호출부가 activityTitle을 직접 정하는 것과 같은 이유).</summary>
     Task AddExcelExportRecordAsync(string targetFile, int recordCount, string scopeDescription);
+
+    /// <summary>Milestone 10 - PDF 산출근거서 저장 이력을 남긴다. AddExcelExportRecordAsync와 같은
+    /// 이유로 별도 메서드다.</summary>
+    Task AddPdfExportRecordAsync(string targetFile, int recordCount, string scopeDescription);
 }

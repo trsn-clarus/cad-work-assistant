@@ -285,6 +285,48 @@ public sealed class ProjectContextService : ObservableObject, IProjectContextSer
         Activity.Insert(0, activity);
     }
 
+    public async Task AddPdfExportRecordAsync(string targetFile, int recordCount, string scopeDescription)
+    {
+        if (_currentProject is not { } project)
+        {
+            return;
+        }
+
+        var record = new ExportRecord(
+            id: Guid.NewGuid().ToString("N"),
+            projectId: project.Id,
+            sourceDrawing: null,
+            targetFile: targetFile,
+            objectCount: recordCount,
+            description: scopeDescription,
+            createdAt: DateTimeOffset.UtcNow,
+            exportType: ExportTypes.PdfQuantityReport);
+
+        var activity = new ActivityRecord(
+            id: Guid.NewGuid().ToString("N"),
+            projectId: project.Id,
+            activityType: "PdfExportCompleted",
+            title: "수량 산출근거 PDF 저장",
+            description: $"{System.IO.Path.GetFileName(targetFile)} · {recordCount}건",
+            createdAt: record.CreatedAt);
+
+        using var connection = _dataService.Database.OpenConnection();
+        using var transaction = connection.BeginTransaction();
+        try
+        {
+            await _dataService.ExportRecords.InsertAsync(record, connection, transaction);
+            await _dataService.Activity.InsertAsync(activity, connection, transaction);
+            transaction.Commit();
+        }
+        catch
+        {
+            transaction.Rollback();
+            throw;
+        }
+
+        Activity.Insert(0, activity);
+    }
+
     private async Task SwitchToAsync(Project project)
     {
         CurrentProject = project;
