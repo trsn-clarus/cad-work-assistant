@@ -312,6 +312,11 @@
                                DataContext="{Binding PdfExport}"
                                Visibility="{Binding DataContext.IsPdfExportToolSelected, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVisibility}}" />
 
+        <views:DrawingPdfExportPanel Grid.Row="0"
+                                      Grid.RowSpan="4"
+                                      DataContext="{Binding DrawingPdfExport}"
+                                      Visibility="{Binding DataContext.IsDrawingPdfExportToolSelected, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVisibility}}" />
+
         <views:SettingsPanel Grid.Row="0"
                               Grid.RowSpan="4"
                               DataContext="{Binding Settings}"

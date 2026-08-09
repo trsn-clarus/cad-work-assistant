@@ -35,6 +35,8 @@ public sealed class MainWindowViewModel : ObservableObject
         IQuantityVerificationCoordinator verificationCoordinator,
         IQuantityExcelExportCoordinator excelExportCoordinator,
         IQuantityPdfExportCoordinator pdfExportCoordinator,
+        IPlotCapabilityCoordinator plotCapabilityCoordinator,
+        IDrawingPdfExportCoordinator drawingPdfExportCoordinator,
         string dataFolderPath)
     {
         _connectionManager = connectionManager;
@@ -50,6 +52,7 @@ public sealed class MainWindowViewModel : ObservableObject
         History = new QuantityHistoryViewModel(projectContext, verificationCoordinator);
         ExcelExport = new ExcelExportViewModel(projectContext, excelExportCoordinator);
         PdfExport = new PdfExportViewModel(projectContext, pdfExportCoordinator);
+        DrawingPdfExport = new DrawingPdfExportViewModel(connectionManager, plotCapabilityCoordinator, drawingPdfExportCoordinator);
         Settings = new SettingsViewModel(dataFolderPath);
 
         // 실제로 화면이 있는 항목만 Navigation에 올린다(Milestone 8 §29) - 이전에는 미구현 항목도
@@ -71,6 +74,7 @@ public sealed class MainWindowViewModel : ObservableObject
             new("QUANTITY", "History", "Ctrl+H"),
             new("OUTPUT", "Excel", "Ctrl+E", true),
             new("OUTPUT", "PDF", "Ctrl+P"),
+            new("OUTPUT", "Plot", "Ctrl+D"),
             new("SETTINGS", "Settings", "Ctrl+,", true)
         };
 
@@ -162,6 +166,7 @@ public sealed class MainWindowViewModel : ObservableObject
         History.PropertyChanged += (_, _) => RefreshInspector();
         ExcelExport.PropertyChanged += (_, _) => RefreshInspector();
         PdfExport.PropertyChanged += (_, _) => RefreshInspector();
+        DrawingPdfExport.PropertyChanged += (_, _) => RefreshInspector();
 
         OpenCommandPaletteCommand = new RelayCommand(() => IsCommandPaletteOpen = true);
         CloseCommandPaletteCommand = new RelayCommand(() => IsCommandPaletteOpen = false);
@@ -202,6 +207,7 @@ public sealed class MainWindowViewModel : ObservableObject
     public QuantityHistoryViewModel History { get; }
     public ExcelExportViewModel ExcelExport { get; }
     public PdfExportViewModel PdfExport { get; }
+    public DrawingPdfExportViewModel DrawingPdfExport { get; }
     public SettingsViewModel Settings { get; }
 
     public ICommand OpenCommandPaletteCommand { get; }
@@ -247,6 +253,7 @@ public sealed class MainWindowViewModel : ObservableObject
                 OnPropertyChanged(nameof(IsHistoryToolSelected));
                 OnPropertyChanged(nameof(IsExcelExportToolSelected));
                 OnPropertyChanged(nameof(IsPdfExportToolSelected));
+                OnPropertyChanged(nameof(IsDrawingPdfExportToolSelected));
                 OnPropertyChanged(nameof(IsSettingsToolSelected));
                 OnPropertyChanged(nameof(IsDashboardContentVisible));
                 RefreshInspector();
@@ -272,12 +279,14 @@ public sealed class MainWindowViewModel : ObservableObject
 
     public bool IsPdfExportToolSelected => _selectedTool == "PDF";
 
+    public bool IsDrawingPdfExportToolSelected => _selectedTool == "Plot";
+
     public bool IsSettingsToolSelected => _selectedTool == "Settings";
 
     public bool IsDashboardContentVisible =>
         !IsLengthToolSelected && !IsAreaToolSelected && !IsVerticalAreaToolSelected && !IsParapetToolSelected
         && !IsDrawingToolSelected && !IsHistoryToolSelected && !IsExcelExportToolSelected && !IsPdfExportToolSelected
-        && !IsSettingsToolSelected;
+        && !IsDrawingPdfExportToolSelected && !IsSettingsToolSelected;
 
     public string InspectorTitle => _selectedTool switch
     {
@@ -289,6 +298,7 @@ public sealed class MainWindowViewModel : ObservableObject
         "History" => "Quantity History",
         "Excel" => "Excel Export",
         "PDF" => "PDF Export",
+        "Plot" => "도면 PDF 출력",
         "Settings" => "Settings",
         _ => "Session"
     };
@@ -443,6 +453,10 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             PdfExport.OnActivated();
         }
+        else if (selected.Label == "Plot")
+        {
+            DrawingPdfExport.OnActivated();
+        }
     }
 
     private void RefreshInspector()
@@ -508,6 +522,13 @@ public sealed class MainWindowViewModel : ObservableObject
                 InspectorRows.Add(new InspectorRow("프로젝트", PdfExport.CurrentProjectName));
                 InspectorRows.Add(new InspectorRow("요약", PdfExport.SummaryText));
                 InspectorRows.Add(new InspectorRow("최근 저장", PdfExport.LastExportedFileName ?? "없음"));
+                break;
+
+            case "Plot":
+                InspectorRows.Add(new InspectorRow("연결 상태", DrawingPdfExport.IsConnected ? "연결됨" : "연결 안 됨"));
+                InspectorRows.Add(new InspectorRow("PDF 장치", DrawingPdfExport.HasPdfDevice ? "사용 가능" : "없음"));
+                InspectorRows.Add(new InspectorRow("영역", DrawingPdfExport.IsWindowScope ? DrawingPdfExport.WindowSummaryText : "현재 Layout"));
+                InspectorRows.Add(new InspectorRow("최근 저장", DrawingPdfExport.LastExportedFileName ?? "없음"));
                 break;
 
             case "Settings":
