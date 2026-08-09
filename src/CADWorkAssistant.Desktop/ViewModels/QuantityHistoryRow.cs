@@ -82,24 +82,11 @@ public sealed class QuantityHistoryRow : ObservableObject
     public bool HasVerification => Verification is not null;
 
     /// <summary>§58: ✓ 검산 완료 / ! 확인 필요 / × 오류 / — 미검산 / ? 검산 불가(Info - 기계 검증은
-    /// 안 됐지만 확실한 문제도 아님).</summary>
-    public string VerificationGlyph => Verification switch
-    {
-        null => "—",
-        { OverallSeverity: VerificationSeverity.Pass } => "✓",
-        { OverallSeverity: VerificationSeverity.Review } => "!",
-        { OverallSeverity: VerificationSeverity.Error } => "×",
-        _ => "?"
-    };
+    /// 안 됐지만 확실한 문제도 아님). Excel Export도 같은 문구를 써야 해서 Core로 옮긴 정책을
+    /// 그대로 위임한다(Milestone 9, Core.Verification.VerificationSeverityDisplay).</summary>
+    public string VerificationGlyph => VerificationSeverityDisplay.Glyph(Verification?.OverallSeverity);
 
-    public string VerificationLabel => Verification switch
-    {
-        null => "미검산",
-        { OverallSeverity: VerificationSeverity.Pass } => "검산 완료",
-        { OverallSeverity: VerificationSeverity.Review } => "확인 필요",
-        { OverallSeverity: VerificationSeverity.Error } => "오류",
-        _ => "검산 불가"
-    };
+    public string VerificationLabel => VerificationSeverityDisplay.Label(Verification?.OverallSeverity);
 
     /// <summary>저장된 Snapshot이 지금 엔진의 RuleSetVersion보다 낮은 규칙으로 만들어졌다 - "재검산
     /// 필요" 상태(§50).</summary>
@@ -108,12 +95,7 @@ public sealed class QuantityHistoryRow : ObservableObject
 
     public QuantityReviewStatus ReviewStatus => Review?.Status ?? QuantityReviewStatus.Unreviewed;
 
-    public string ReviewLabel => ReviewStatus switch
-    {
-        QuantityReviewStatus.Verified => "검토 완료",
-        QuantityReviewStatus.NeedsReview => "확인 필요",
-        _ => "미검토"
-    };
+    public string ReviewLabel => QuantityReviewStatusDisplay.Label(ReviewStatus);
 
     public string? ReviewNote => Review?.Note;
 }
