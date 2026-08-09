@@ -32,7 +32,8 @@ public sealed class MainWindowViewModel : ObservableObject
     public MainWindowViewModel(
         IAutoCadConnectionManager connectionManager,
         IProjectContextService projectContext,
-        IQuantityVerificationCoordinator verificationCoordinator)
+        IQuantityVerificationCoordinator verificationCoordinator,
+        string dataFolderPath)
     {
         _connectionManager = connectionManager;
         _projectContext = projectContext;
@@ -45,15 +46,15 @@ public sealed class MainWindowViewModel : ObservableObject
         Parapet = new ParapetWorkflowViewModel(connectionManager, Length);
         Drawing = new DrawingWorkflowViewModel(connectionManager);
         History = new QuantityHistoryViewModel(projectContext, verificationCoordinator);
+        Settings = new SettingsViewModel(dataFolderPath);
 
-        // 실제로 화면이 있는 항목만 isImplemented: true - 나머지는 자리만 예약해두고 비활성화한다
-        // (§23 "미구현 기능을 버튼으로 과도하게 노출하지 않는다" - 완전히 숨기면 향후 기능이 붙을 자리를
-        // 가늠할 수 없고, 그냥 활성화해두면 클릭했을 때 아무 일도 안 일어나거나 엉뚱한 화면이 보인다).
-        // Drawing은 Milestone 5에서 실제 화면이 생겨 isImplemented: true로 전환했다.
+        // 실제로 화면이 있는 항목만 Navigation에 올린다(Milestone 8 §29) - 이전에는 미구현 항목도
+        // 자리만 예약해 비활성 표시했지만(Milestone 4.5 §23), 상용 제품 첫인상에서는 클릭할 수 없는
+        // 항목이 5개나 보이는 쪽이 더 나쁘다는 판단으로 바꿨다. Files/Plot/PDF/Excel처럼 아직 화면이
+        // 없는 기능은 실제로 생길 때 그 Milestone에서 추가한다.
         Navigation = new ObservableCollection<NavItem>
         {
             new("PROJECT", "Dashboard", "Alt+1", true) { IsSelected = true },
-            new("PROJECT", "Files", "Alt+2", isImplemented: false),
             // Selection/Layers/Export는 별도 화면으로 쪼개지 않고 Drawing 워크스페이스 하나에 통합했다
             // (§18 "초기 구현에서 너무 많은 페이지로 쪼개지 않아도 된다") - 그래서 각각의 자리를 따로
             // 예약해두지 않는다.
@@ -62,11 +63,8 @@ public sealed class MainWindowViewModel : ObservableObject
             new("QUANTITY", "Area", "Ctrl+A"),
             new("QUANTITY", "Vertical Area", "Ctrl+V"),
             new("QUANTITY", "Parapet", "Ctrl+R"),
-            new("QUANTITY", "History", "Ctrl+H", isImplemented: true),
-            new("OUTPUT", "Plot", "Ctrl+P", true, isImplemented: false),
-            new("OUTPUT", "PDF", "Ctrl+Shift+P", isImplemented: false),
-            new("OUTPUT", "Excel", "Ctrl+E", isImplemented: false),
-            new("SETTINGS", "Preferences", "Ctrl+,", true, isImplemented: false)
+            new("QUANTITY", "History", "Ctrl+H"),
+            new("SETTINGS", "Settings", "Ctrl+,", true)
         };
 
         // 산출내역/활동은 더 이상 이 ViewModel이 직접 소유하지 않는다 - IProjectContextService가
@@ -193,6 +191,7 @@ public sealed class MainWindowViewModel : ObservableObject
     public ParapetWorkflowViewModel Parapet { get; }
     public DrawingWorkflowViewModel Drawing { get; }
     public QuantityHistoryViewModel History { get; }
+    public SettingsViewModel Settings { get; }
 
     public ICommand OpenCommandPaletteCommand { get; }
     public ICommand CloseCommandPaletteCommand { get; }
@@ -235,6 +234,7 @@ public sealed class MainWindowViewModel : ObservableObject
                 OnPropertyChanged(nameof(IsParapetToolSelected));
                 OnPropertyChanged(nameof(IsDrawingToolSelected));
                 OnPropertyChanged(nameof(IsHistoryToolSelected));
+                OnPropertyChanged(nameof(IsSettingsToolSelected));
                 OnPropertyChanged(nameof(IsDashboardContentVisible));
                 RefreshInspector();
             }
@@ -255,9 +255,11 @@ public sealed class MainWindowViewModel : ObservableObject
 
     public bool IsHistoryToolSelected => _selectedTool == "History";
 
+    public bool IsSettingsToolSelected => _selectedTool == "Settings";
+
     public bool IsDashboardContentVisible =>
         !IsLengthToolSelected && !IsAreaToolSelected && !IsVerticalAreaToolSelected && !IsParapetToolSelected
-        && !IsDrawingToolSelected && !IsHistoryToolSelected;
+        && !IsDrawingToolSelected && !IsHistoryToolSelected && !IsSettingsToolSelected;
 
     public string InspectorTitle => _selectedTool switch
     {
@@ -267,6 +269,7 @@ public sealed class MainWindowViewModel : ObservableObject
         "Parapet" => "Parapet",
         "Drawing" => "Drawing Navigation",
         "History" => "Quantity History",
+        "Settings" => "Settings",
         _ => "Session"
     };
 
@@ -465,6 +468,11 @@ public sealed class MainWindowViewModel : ObservableObject
                     ? $"{row.Type} · {row.Value:N3} {row.Unit}"
                     : "없음"));
                 InspectorRows.Add(new InspectorRow("검토 상태", History.SelectedRow?.ReviewLabel ?? "—"));
+                break;
+
+            case "Settings":
+                InspectorRows.Add(new InspectorRow("버전", Settings.VersionText));
+                InspectorRows.Add(new InspectorRow("데이터 위치", Settings.DataFolderPath));
                 break;
 
             default:

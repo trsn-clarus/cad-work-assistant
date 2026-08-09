@@ -1,0 +1,50 @@
+<UserControl x:Class="CADWorkAssistant.Desktop.Views.SettingsPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="clr-namespace:CADWorkAssistant.Desktop.ViewModels"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:SettingsViewModel}">
+  <Grid>
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+    </Grid.RowDefinitions>
+
+    <StackPanel Grid.Row="0" Margin="0,0,0,12">
+      <TextBlock Text="Settings" FontSize="22" FontWeight="SemiBold" />
+      <TextBlock Text="프로그램 정보와 데이터 위치" Style="{StaticResource CaptionText}" Margin="0,2,0,0" />
+    </StackPanel>
+
+    <Border Grid.Row="1" Style="{StaticResource PanelBorder}" Padding="20" VerticalAlignment="Top" MaxWidth="520" HorizontalAlignment="Left">
+      <StackPanel>
+        <StackPanel Orientation="Horizontal">
+          <Image Source="/Assets/AppIcon.png" Width="44" Height="44" Margin="0,0,14,0" />
+          <StackPanel VerticalAlignment="Center">
+            <TextBlock Text="{Binding AppName}" FontSize="17" FontWeight="SemiBold" />
+            <TextBlock Text="{Binding VersionText}" Style="{StaticResource CaptionText}" Margin="0,2,0,0" />
+          </StackPanel>
+        </StackPanel>
+
+        <Border BorderBrush="{StaticResource BrushDivider}" BorderThickness="0,1,0,0" Margin="0,16,0,16" />
+
+        <TextBlock Text="DATA" Style="{StaticResource SectionTitle}" Margin="0,0,0,6" />
+        <TextBlock Text="{Binding DataFolderPath}" Style="{StaticResource InspectorValue}" TextWrapping="Wrap" ToolTip="{Binding DataFolderPath}" />
+        <TextBlock Text="프로젝트/수량/검산 기록은 이 폴더의 SQLite 파일에 저장됩니다. 프로그램을 제거해도 이 폴더는 남습니다."
+                   Style="{StaticResource CaptionText}"
+                   TextWrapping="Wrap"
+                   Margin="0,4,0,10" />
+        <Button Style="{StaticResource SecondaryButton}"
+                Command="{Binding OpenDataFolderCommand}"
+                AutomationProperties.Name="데이터 폴더 열기"
+                Content="데이터 폴더 열기"
+                HorizontalAlignment="Left" />
+
+        <Border BorderBrush="{StaticResource BrushDivider}" BorderThickness="0,1,0,0" Margin="0,16,0,16" />
+
+        <TextBlock Text="{Binding CompanyText}" Style="{StaticResource CaptionText}" />
+      </StackPanel>
+    </Border>
+  </Grid>
+</UserControl>

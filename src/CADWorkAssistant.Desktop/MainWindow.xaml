@@ -4,6 +4,7 @@
         xmlns:views="clr-namespace:CADWorkAssistant.Desktop.Views"
         xmlns:conv="clr-namespace:CADWorkAssistant.Desktop.Converters"
         Title="CAD Work Assistant"
+        Icon="/Assets/AppIcon.ico"
         Width="1440"
         Height="900"
         MinWidth="960"
@@ -125,28 +126,35 @@
             </ItemsControl>
           </ScrollViewer>
 
-          <Border Grid.Row="4"
-                  Style="{StaticResource PanelBorder}"
-                  Padding="10"
-                  Margin="0,10,0,0">
-            <StackPanel>
-              <TextBlock Text="AutoCAD" Style="{StaticResource SectionTitle}" />
-              <Grid Margin="0,8,0,0">
-                <Grid.ColumnDefinitions>
-                  <ColumnDefinition Width="Auto" />
-                  <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-                <TextBlock Text="{Binding ConnectionStatusGlyph}"
-                           Foreground="{Binding ConnectionStatusBrush}"
-                           FontWeight="Bold"
-                           Width="14"
-                           Margin="0,0,6,0"
-                           AutomationProperties.Name="{Binding ConnectionLabel}" />
-                <TextBlock Grid.Column="1" Text="{Binding ConnectionLabel}" />
-              </Grid>
-              <TextBlock Text="{Binding ActiveDrawing}" Style="{StaticResource CaptionText}" Margin="0,6,0,0" />
-            </StackPanel>
-          </Border>
+          <StackPanel Grid.Row="4">
+            <Border Style="{StaticResource PanelBorder}"
+                    Padding="10"
+                    Margin="0,10,0,0">
+              <StackPanel>
+                <TextBlock Text="AutoCAD" Style="{StaticResource SectionTitle}" />
+                <Grid Margin="0,8,0,0">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                  </Grid.ColumnDefinitions>
+                  <TextBlock Text="{Binding ConnectionStatusGlyph}"
+                             Foreground="{Binding ConnectionStatusBrush}"
+                             FontWeight="Bold"
+                             Width="14"
+                             Margin="0,0,6,0"
+                             AutomationProperties.Name="{Binding ConnectionLabel}" />
+                  <TextBlock Grid.Column="1" Text="{Binding ConnectionLabel}" />
+                </Grid>
+                <TextBlock Text="{Binding ActiveDrawing}" Style="{StaticResource CaptionText}" Margin="0,6,0,0" />
+              </StackPanel>
+            </Border>
+
+            <!-- TRSN CLARUS 브랜드 크레딧 - 항상 보이되 시선을 끌지 않는 muted 한 줄 (사용자 요청). -->
+            <TextBlock Text="TRSN CLARUS"
+                       Style="{StaticResource CaptionText}"
+                       HorizontalAlignment="Center"
+                       Margin="0,10,0,0" />
+          </StackPanel>
         </Grid>
       </Border>
 
@@ -293,6 +301,11 @@
                              Grid.RowSpan="4"
                              DataContext="{Binding History}"
                              Visibility="{Binding DataContext.IsHistoryToolSelected, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVisibility}}" />
+
+        <views:SettingsPanel Grid.Row="0"
+                              Grid.RowSpan="4"
+                              DataContext="{Binding Settings}"
+                              Visibility="{Binding DataContext.IsSettingsToolSelected, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVisibility}}" />
       </Grid>
 
       <Border x:Name="InspectorPanel"
@@ -356,7 +369,7 @@
     </Border>
 
     <Grid Grid.RowSpan="2"
-          Background="#66000000"
+          Background="{StaticResource BrushScrim}"
           Visibility="{Binding IsCommandPaletteOpen, Converter={StaticResource BoolToVisibility}}">
       <Border x:Name="CommandPaletteDialog"
               Width="620"
