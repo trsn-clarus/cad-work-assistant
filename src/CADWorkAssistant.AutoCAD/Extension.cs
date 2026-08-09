@@ -40,7 +40,10 @@ public class Extension : IExtensionApplication
             new GetLayersHandler(dispatcher),
             new SetLayerVisibilityHandler(dispatcher, isolationState),
             new RestoreVisibilityHandler(dispatcher, isolationState),
-            new ExportSelectionHandler(dispatcher)
+            new ExportSelectionHandler(dispatcher),
+            new GetPlotCapabilitiesHandler(dispatcher),
+            new AcquirePlotWindowHandler(dispatcher),
+            new PlotDrawingPdfHandler(dispatcher)
         };
 
         _pipeServer = new AutoCadPipeServer(new IpcRequestDispatcher(handlers), Process.GetCurrentProcess().Id);
