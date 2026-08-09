@@ -10,7 +10,8 @@
       "tools\\CADWorkAssistant.FakeAutoCad\\CADWorkAssistant.FakeAutoCad.csproj",
       "tests\\CADWorkAssistant.Core.Tests\\CADWorkAssistant.Core.Tests.csproj",
       "tests\\CADWorkAssistant.Persistence.Tests\\CADWorkAssistant.Persistence.Tests.csproj",
-      "tests\\CADWorkAssistant.Integration.Tests\\CADWorkAssistant.Integration.Tests.csproj"
+      "tests\\CADWorkAssistant.Integration.Tests\\CADWorkAssistant.Integration.Tests.csproj",
+      "tests\\CADWorkAssistant.Documents.Tests\\CADWorkAssistant.Documents.Tests.csproj"
     ]
   }
 }

@@ -28,6 +28,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CADWorkAssistant.Persistenc
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CADWorkAssistant.Persistence.Tests", "tests\CADWorkAssistant.Persistence.Tests\CADWorkAssistant.Persistence.Tests.csproj", "{B1E3F060-F1A4-4B2F-8220-BB86E8C62CD3}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CADWorkAssistant.Documents.Tests", "tests\CADWorkAssistant.Documents.Tests\CADWorkAssistant.Documents.Tests.csproj", "{E4DD01EE-D288-43E5-B96D-B86166DB5E82}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -74,6 +76,10 @@ Global
 		{B1E3F060-F1A4-4B2F-8220-BB86E8C62CD3}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B1E3F060-F1A4-4B2F-8220-BB86E8C62CD3}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B1E3F060-F1A4-4B2F-8220-BB86E8C62CD3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E4DD01EE-D288-43E5-B96D-B86166DB5E82}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E4DD01EE-D288-43E5-B96D-B86166DB5E82}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E4DD01EE-D288-43E5-B96D-B86166DB5E82}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E4DD01EE-D288-43E5-B96D-B86166DB5E82}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{69B6B500-9C45-4698-B92D-8F7FD177C43C} = {862E4135-2290-4F80-8344-23EC7F16C5A6}
@@ -84,5 +90,6 @@ Global
 		{95C1E181-063F-44AE-80FB-BFBA46F78C18} = {6D7E934D-2FE4-4C29-B4DD-868AC9ED1D1A}
 		{CE0422EB-8905-41B5-B902-2D8DDE72443F} = {862E4135-2290-4F80-8344-23EC7F16C5A6}
 		{B1E3F060-F1A4-4B2F-8220-BB86E8C62CD3} = {B9C10562-F65C-4ED8-A370-66841F39E109}
+		{E4DD01EE-D288-43E5-B96D-B86166DB5E82} = {B9C10562-F65C-4ED8-A370-66841F39E109}
 	EndGlobalSection
 EndGlobal
