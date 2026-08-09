@@ -57,4 +57,19 @@ public static class IpcMessageTypes
     /// <summary>현재 Layout 또는 지정한 Window 영역을 PDF로 출력한다. 원본 Layout의 Page Setup은
     /// 변경하지 않는다 (Milestone 11 §6, §49-50).</summary>
     public const string PlotDrawingPdf = "PlotDrawingPdf";
+
+    /// <summary>도면에서 DBText/MText만 골라 선택한다 - Dimension/MLeader/Table/AttributeReference
+    /// 등은 제외 목록으로 돌아온다 (Milestone 12 §7-8, §17).</summary>
+    public const string SelectTextObjects = "SelectTextObjects";
+
+    /// <summary>새 문자를 만들 위치를 AutoCAD에서 점 하나로 지정받는다 (Milestone 12 §36-37).
+    /// 인터랙티브 - Command Context에서 실행된다.</summary>
+    public const string AcquireTextInsertionPoint = "AcquireTextInsertionPoint";
+
+    /// <summary>DBText 또는 MText 하나를 새로 만든다 (Milestone 12 §35, §90).</summary>
+    public const string CreateText = "CreateText";
+
+    /// <summary>선택한 문자 객체들의 내용/높이/Layer/색상을 한 번에 바꾼다 - all-or-nothing
+    /// (Milestone 12 §53, §91).</summary>
+    public const string UpdateTextObjects = "UpdateTextObjects";
 }
