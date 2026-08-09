@@ -87,3 +87,14 @@ Fixed by adding a real `bool HasVerification` property to `QuantityHistoryRow` a
 instead - the same class of fix `StringNotEmptyToVisibilityConverter` already existed to solve for
 strings (Milestone 4.5 §16-17); nullable-reference-to-bool-converter mismatches are the general
 form of that bug and worth checking for on every new empty-state binding.
+
+## Milestone 8: column width squeeze
+
+The results `DataGrid`'s DESCRIPTION column was originally a fixed `Width="150"`, and the seven
+columns' fixed widths summed to more than the list pane actually has at typical window sizes. A
+Simulation Mode screenshot showed the UNIT column's header rendered as just "UI" (WPF's normal
+ellipsis truncation on a too-narrow column, not a crash). Fixed by making DESCRIPTION `Width="*"`
+(so it absorbs whatever space is left instead of demanding a fixed 150px) and trimming the other six
+columns' fixed widths so their sum comfortably fits the pane. Headers can still abbreviate under a
+narrow pane (e.g. "U." for UNIT) - that is normal `DataGridColumn` header ellipsis, not a bug, and
+the full value is always available in the Inspector detail pane on the right.

@@ -13,6 +13,7 @@ CAD Work Assistant is a professional desktop tool for AutoCAD-connected quantity
 - Milestone 4.5 (Production UI/UX pass): ran 8 `ui-ux-pro-max` queries (`--design-system`, `--domain style/color/typography/ux`, `--stack wpf`) against the shipped UI rather than the empty shell. Adopted: density tokens (8px grid gap, 12px card padding, 36px table rows) validated the existing spacing scale almost exactly; the navy/slate/blue "B2B service" and "developer tool" color families validated the existing Accent/Background palette, so no re-theme was needed. Rejected: dark-mode-first palettes (this milestone explicitly does not add Dark Mode), Inter/JetBrains Mono font swaps (Segoe UI/Cascadia Mono already serve the desktop-native goal without a new font dependency), CommunityToolkit.Mvvm (already a settled architecture decision, out of scope), blur-only validation for numeric inputs (Vertical Area/Parapet's live-recalculate-on-keystroke behavior from Milestone 4 is intentional). No 21st MCP tool was available in this environment either (`ToolSearch` returned nothing under that name) - the documented fallback order applied for the whole pass.
 - Milestone 6 (Project Management UI): no new `ui-ux-pro-max`/21st session was run - the master prompt explicitly required reusing the Milestone 4.5 Production Design System without inventing new patterns (no new "SaaS-like" project-picker UI). The `ProjectDialog` window and sidebar project switcher reuse existing tokens/styles verbatim (`PanelBorder`, `PrimaryButton`/`SecondaryButton`, `CaptionText`/`SectionTitle`, `InlineMessageBorder`/`InlineMessageText`, the implicit `TextBox` style) - see `pages/project-management.md`.
 - Milestone 7 (Quantity History + Verification): no new session - the master prompt explicitly warned against web SaaS pill badges and floating-card verification UIs (§107, §112-114), asking instead for compact glyph+text status communication matching the existing engineering-table density. `HistoryPanel` reuses the `DrawingPanel` two-pane layout (list `*` / `GridSplitter` / detail pane, Milestone 5) verbatim rather than inventing a new "audit log" or "review queue" visual pattern, and its detail pane reuses the Inspector section-header convention (`SectionTitle` + label/value rows) instead of a new card component - see `pages/quantity-history.md`.
+- Milestone 8 (Production Packaging + Premium UI/UX Finalization): ran 5 `ui-ux-pro-max` queries (`--design-system`, `--stack wpf`, `--domain color/style/ux`) against the shipped UI as a validation pass, not a redesign - by this point the app had already been through four production UI passes (4.5/5/6/7). Adopted: nothing new (the navy/slate palette, dense spacing, empty-state pattern, checkbox+action-bar bulk selection, and active-nav highlighting the queries surfaced were all already implemented, so they served as confirmation rather than new direction). Rejected: the `--design-system` query's "Enterprise Gateway" web-landing pattern (hero/mega-menu/contact-sales - marketing structure, not a workspace), CommunityToolkit.Mvvm (settled architecture decision, same as Milestone 4.5), and all three `style`-domain results (HUD/Sci-Fi neon, Bitcoin DeFi glassmorphism+gradients, minimal landing page) - none matched this product and the neon/glassmorphism/gradient elements are this project's own documented anti-patterns. 21st.dev CLI was re-verified reachable but still requires `21st login`/`TWENTYFIRST_TOKEN` with no secret available in this session (same conclusion as every prior milestone) - reused the IA patterns already recorded in `.21st/DESIGN.md` instead. The actual UI audit was done by running the app in Simulation Mode and screenshotting it, not by researching further - see `design-system/PRODUCTION_UI_REVIEW.md` for the full findings, adopted/rejected list, and every change made.
 
 ## 21st Inputs
 
@@ -86,17 +87,19 @@ why color is never the only signal for connection state.
 
 ## Navigation
 
-Recommended sections:
+Current sections (as of Milestone 8):
 
-- PROJECT: Dashboard, Files
-- CAD: Drawing, Selection, Layers, Export
+- PROJECT: Dashboard
+- CAD: Drawing
 - QUANTITY: Length, Area, Vertical Area, Parapet, History
-- OUTPUT: Plot, PDF, Excel
-- SETTINGS: Preferences
+- SETTINGS: Settings
 
-Only nav items with a real screen behind them are enabled (`NavItem.IsImplemented=true`): Dashboard,
-Length, Area, Vertical Area, Parapet. The rest render at reduced opacity, are not clickable, and show
-a "(곧 제공됩니다)" tooltip - reserving the item's place without pretending it does something today.
+Only nav items with a real screen behind them appear in `Navigation` at all. Through Milestone 7
+this list also carried placeholder entries (Files, Plot, PDF, Excel, Preferences) rendered at
+reduced opacity and disabled, reserving their eventual place. Milestone 8 removed that pattern
+project-wide: a production first impression with five permanently-unclickable nav items reads worse
+than a shorter, fully-functional list. When Files/Plot/PDF/Excel get real screens in a future
+Milestone, they get added to `Navigation` then - not before.
 
 ## Button hierarchy
 

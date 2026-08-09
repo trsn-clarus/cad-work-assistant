@@ -386,29 +386,107 @@ Milestone 6이 산출내역을 "저장"하는 것까지 만들었다면, 이 Mil
 남아 있다. → **Core.Tests + Persistence.Tests + Simulation Mode 실제 재시작 검증으로 완전히
 충족**. 이 Milestone은 새 AutoCAD API를 쓰지 않아 Real AutoCAD 전용 검증 대상이 없다.
 
-## Milestone 8 — Excel Export
+## Milestone 8 — Production Packaging + Premium UI/UX Finalization
+
+**상태: 완료 (2026-08-09)**
+
+두 축을 동시에 완료했다: (A) 실제 설치형 Windows 제품으로 만드는 Production Packaging, (B) 기존
+7개 Milestone에서 이미 상당히 성숙해 있던 UI를 상용 제품 수준으로 마무리하는 Premium UI/UX Pass.
+새 CAD 계산 기능은 추가하지 않았다(§7) - 이 Milestone의 목표는 UI 완성도와 배포 안정성이다.
+상세 근거/발견 사항은 `docs/DEPLOYMENT.md`, `docs/RELEASE_CHECKLIST.md`,
+`design-system/PRODUCTION_UI_REVIEW.md` 참고.
+
+- [x] Simulation Mode로 Dashboard/Vertical Area/History/Settings 등 주요 화면 실제 스크린샷 Audit -
+      P1급 문제 확인: 앱 아이콘 없음, ComboBox/CheckBox가 기본 WPF Chrome(다른 컨트롤과 시각적
+      불일치), 미구현 Nav 항목 5개가 비활성 상태로 계속 노출됨, History 그리드 컬럼폭이 좁은
+      pane에서 겹침
+- [x] `ui-ux-pro-max` 스킬로 5개 Query 실행(design-system/wpf stack/color/style/ux) - 기존 방향
+      (navy-slate B2B 팔레트, 밀도, empty-state, checkbox+action bar)이 이미 대부분 부합함을
+      확인, 웹 SaaS/HUD-neon/DeFi-glassmorphism류 추천은 기각(§13)
+- [x] 21st.dev CLI 확인 - 이전 Milestone 기록과 동일하게 로그인/토큰 필요, 이 세션에도 시크릿 없어
+      실제 컴포넌트 검색은 수행하지 않음(기존 `.21st/DESIGN.md`에 이미 반영된 패턴 재사용)
+- [x] TRSN CLARUS 브랜드 마크(정밀 선택 reticle) 디자인 - GDI+로 512px 마스터 + 7-size .ico 생성,
+      Window/Taskbar 아이콘·Settings 화면·설치 프로그램 아이콘에 재사용, 사이드바 하단에 muted
+      크레딧 한 줄 추가
+- [x] Design Tokens: ComboBox/CheckBox/RadioButton을 Button/TextBox와 같은 flat/bordered 언어로
+      재템플릿, Command Palette scrim의 유일한 raw hex(`#66000000`)를 `BrushScrim` 토큰으로 정리
+- [x] Navigation: 미구현 항목(Files/Plot/PDF/Excel) 제거, 대신 실제 화면(Settings/About: 버전 +
+      데이터 위치 + "데이터 폴더 열기" + TRSN CLARUS 크레딧)을 추가 - "자리만 예약해두고
+      비활성화"(Milestone 4.5 §23) 방침을 이번엔 뒤집었다: 상용 제품 첫인상에서는 빈 자리보다
+      클릭 안 되는 항목 5개가 더 나쁘다는 판단
+- [x] History 그리드 컬럼폭 재조정 - DESCRIPTION을 `*`로, 나머지 고정폭 합계를 좁혀 좁은
+      pane에서도 겹치지 않게 함
+- [x] Version Source of Truth: `Directory.Build.props`에 `CwaVersion`/`Product`/`Company` 추가 -
+      Desktop/Plugin/Installer/Bundle Manifest 전부 이 값 하나를 읽는다
+- [x] Desktop: self-contained win-x64 publish 설정(csproj 기본값이 아니라 publish 시점에만 RID
+      지정 - `dotnet build`/`dotnet run` 일상 개발 루프가 매번 win-x64 런타임 팩을 복원하지 않게)
+- [x] AutoCAD Plugin Bundle(`installer/CADWorkAssistant.bundle/PackageContents.xml`) - 이 PC에
+      실제 설치된 AutoCAD 2024의 내부 릴리스 ID(`R24.3`)를 `C:\ProgramData\Autodesk\AutoCAD 2024\`
+      폴더명에서 직접 확인해 사용(추측 아님). `LoadOnAutoCADStartup="True"`로 NETLOAD 불필요.
+      Autodesk 호스트 DLL(acdbmgd 등)은 애초에 `Private=false`라 Bundle에 들어가지 않음(기존
+      설정을 실측으로 재확인)
+- [x] Desktop 단일 인스턴스 보호(`Global\CADWorkAssistant.SingleInstance` Mutex) 추가 - 두
+      인스턴스가 같은 SQLite 파일에 동시에 쓰는 걸 막고, Installer의 `AppMutex`가 실행 중인
+      인스턴스를 감지해 종료를 안내할 수 있게 함
+- [x] Inno Setup 6.7.3 설치(winget) + `installer/CADWorkAssistant.iss` 작성 - 관리자 권한 불필요
+      (`PrivilegesRequired=lowest`, `{localappdata}\Programs\...`), AutoCAD 실행 중이면 강제
+      종료 없이 확인 메시지만(§147), Uninstall 시 사용자 데이터(`%LOCALAPPDATA%\CADWorkAssistant\`)
+      는 절대 삭제하지 않음
+- [x] `scripts/build-release.ps1`(Clean→Restore→Build→Test→Publish→Plugin→Bundle→Runtime Audit→
+      Installer→Hash 한 커맨드), `scripts/audit-runtime.ps1`(FakeAutoCad/테스트/소스/Node/Python/
+      Autodesk 호스트 DLL이 패키지에 없는지 확인), `scripts/test-release.ps1`(설치→실행→uninstall→
+      데이터 보존까지 실제로 검증)
+- [x] 실제 Installer 빌드 3건의 real 버그 발견/수정 - (1) PowerShell 5.1이 BOM 없는 .ps1의 한글
+      주석을 잘못된 codepage로 읽어 파서가 깨짐(스크립트를 영문으로 정리해 근본 회피), (2) Inno
+      Setup에서 존재하지 않는 `createallsubdirfolders` flag를 사용해 컴파일 실패(실제 컴파일
+      에러 메시지로 확인 후 제거 - `recursesubdirs` 하나로 충분), (3) `{#BundleDir}`를 Source
+      경로와 Destination 폴더명 양쪽에 재사용해 AutoCAD ApplicationPlugins 아래에 전체 절대
+      경로가 그대로 폴더명으로 들어가려다 설치가 Access-Denied로 롤백된 문제(`BundleFolderName`을
+      따로 분리해 해결 - 설치 로그를 실제로 열어봐야 알 수 있었다)
+- [x] `CADWorkAssistant-Setup-0.8.0-x64.exe`(48.9MB, SHA256 해시 포함) 실제 생성
+- [x] 실제 설치 → Simulation Mode로 실행/DB 생성 확인 → 설치본 UI 재검수(Dashboard/Settings 등
+      스크린샷) → Uninstall → 바이너리 제거 확인 + 사용자 DB 보존 확인, 전부 9개 체크 통과
+- [x] 249개 테스트 전체 유지 통과, `CADWorkAssistant.CI.slnf`/`.sln` 양쪽 0 경고 0 오류
+
+**의도적으로 하지 않은 것**: 새 CAD 계산 기능, Telemetry/Analytics/Crash Upload/자동 업데이트
+서버(§5), Code Signing(인증서 없음 - unsigned installer로 진행, SmartScreen 경고 가능성 문서화),
+File Association/Context Menu/Windows Service/자동 시작 등록, 모든 화면·해상도·DPI 조합의
+전수 재검수(이미 Milestone 4.5/5/6/7에서 검증된 범위는 재검증하지 않고 이번 Milestone에서 새로
+바뀐 화면만 확인), "Projects" 전용 목록 페이지 신설(§29 예시에는 있었지만 기존 `ProjectDialog`가
+이미 생성+최근 목록+전환을 compact하게 처리하고 있어 중복 화면을 만들지 않기로 판단 - Remaining
+Issues 참고).
+
+**완료 기준**: `scripts/build-release.ps1` 한 커맨드로 테스트 통과 → publish → installer exe
+생성까지 재현되고, 그 installer를 실제로 설치해 Simulation Mode로 실행하고 SQLite 파일이 생기는
+것까지 확인했으며, 제거해도 그 파일이 남는 것까지 확인했다. → **실제 설치/실행/제거로 완전히
+충족**. AutoCAD Bundle은 파일 배치까지 실제로 검증했지만 AutoCAD 실기 NETLOAD 자동 로드는 이 PC의
+GUI 불안정성 제약으로 검증하지 못했다(`docs/AUTOCAD_REAL_MACHINE_CHECKLIST.md` 다음 항목).
+
+## Milestone 9 — Excel Export
 
 - [ ] Excel 라이브러리 선정(라이선스/유지보수 확인)
 - [ ] 산출내역 → Excel/CSV 내보내기
 
-## Milestone 9 — Plot / PDF
+## Milestone 10 — Plot / PDF
 
 - [ ] Plot 설정 화면 + 프리셋 (A3/A4, 컬러/흑백)
 - [ ] 기존 CTB/STB 안전하게 확인 후 적용
 
-## Milestone 10 — Text Tools
+## Milestone 11 — Text Tools
 
 - [ ] Text/MText 생성, 높이/색상/레이어 수정
 
-## Milestone 11 — Project Manager 고도화
+## Milestone 12 — Project Manager 고도화
 
 프로젝트 생성/열기/전환/최근 목록은 Milestone 6에서 이미 구현됐다(`ProjectDialog`). 여기 남는
 범위는 그 이후 고도화뿐이다.
 
 - [ ] 프로젝트 검색/필터(개수가 많아지는 시점에), Project 삭제(Milestone 6에서 스키마만 대비)
+- [ ] "Projects" 전용 목록 페이지(Milestone 8에서 보류 - Card Grid 대신 Name/Client/Site/Last
+      Opened dense list, `IProjectContextService.RecentProjects` 재사용)
 - [ ] Files/PDF/Report 연결
 
-## Milestone 12+ — Advanced Drawing Analysis (장기)
+## Milestone 13+ — Advanced Drawing Analysis (장기)
 
 - [ ] Drawing Cluster 자동 탐지(도면 영역 구분)
 - [ ] Drawing Intelligence (평면도/실내마감표/단면도 자동 구분)
