@@ -23,6 +23,9 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\CADWorkAssistant.Core\CADWorkAssistant.Core.csproj" />
     <ProjectReference Include="..\..\src\CADWorkAssistant.Persistence\CADWorkAssistant.Persistence.csproj" />
+    <!-- Milestone 9 E2E: 실제 SQLite에서 읽은 Project/QuantityRecord/Verification/Review를 실제
+         Excel 파일까지 만들어 검증한다 - Documents는 여기서만 필요하다. -->
+    <ProjectReference Include="..\..\src\CADWorkAssistant.Documents\CADWorkAssistant.Documents.csproj" />
   </ItemGroup>
 
 </Project>
