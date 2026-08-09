@@ -14,6 +14,12 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
     <PackageReference Include="xunit" Version="2.5.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.5.3" />
+    <!--
+      PdfPig - PDF 텍스트 추출/reopen 검증 전용(Milestone 10 §84-86). 테스트 프로젝트에만 두고
+      배포되는 CADWorkAssistant.Documents/Desktop에는 절대 넣지 않는다 - 제품 런타임 의존성을
+      늘리지 않으면서 "실제로 열어서 내용을 확인"하는 검증을 할 수 있다. Apache-2.0 라이선스.
+    -->
+    <PackageReference Include="PdfPig" Version="0.1.15" />
   </ItemGroup>
 
   <ItemGroup>
