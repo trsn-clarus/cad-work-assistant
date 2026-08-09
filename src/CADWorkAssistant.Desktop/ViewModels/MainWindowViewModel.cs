@@ -49,6 +49,7 @@ public sealed class MainWindowViewModel : ObservableObject
         VerticalArea = new VerticalAreaWorkflowViewModel(connectionManager, Length);
         Parapet = new ParapetWorkflowViewModel(connectionManager, Length);
         Drawing = new DrawingWorkflowViewModel(connectionManager);
+        Text = new TextWorkflowViewModel(connectionManager);
         History = new QuantityHistoryViewModel(projectContext, verificationCoordinator);
         ExcelExport = new ExcelExportViewModel(projectContext, excelExportCoordinator);
         PdfExport = new PdfExportViewModel(projectContext, pdfExportCoordinator);
@@ -67,6 +68,7 @@ public sealed class MainWindowViewModel : ObservableObject
             // (§18 "초기 구현에서 너무 많은 페이지로 쪼개지 않아도 된다") - 그래서 각각의 자리를 따로
             // 예약해두지 않는다.
             new("CAD", "Drawing", "Alt+3", true),
+            new("CAD", "Text", "Alt+4"),
             new("QUANTITY", "Length", "Ctrl+L", true),
             new("QUANTITY", "Area", "Ctrl+A"),
             new("QUANTITY", "Vertical Area", "Ctrl+V"),
@@ -163,6 +165,8 @@ public sealed class MainWindowViewModel : ObservableObject
         Parapet.Source.PropertyChanged += (_, _) => RefreshInspector();
         Drawing.PropertyChanged += (_, _) => RefreshInspector();
         Drawing.Rows.CollectionChanged += (_, _) => RefreshInspector();
+        Text.PropertyChanged += (_, _) => RefreshInspector();
+        Text.Rows.CollectionChanged += (_, _) => RefreshInspector();
         History.PropertyChanged += (_, _) => RefreshInspector();
         ExcelExport.PropertyChanged += (_, _) => RefreshInspector();
         PdfExport.PropertyChanged += (_, _) => RefreshInspector();
@@ -204,6 +208,7 @@ public sealed class MainWindowViewModel : ObservableObject
     public VerticalAreaWorkflowViewModel VerticalArea { get; }
     public ParapetWorkflowViewModel Parapet { get; }
     public DrawingWorkflowViewModel Drawing { get; }
+    public TextWorkflowViewModel Text { get; }
     public QuantityHistoryViewModel History { get; }
     public ExcelExportViewModel ExcelExport { get; }
     public PdfExportViewModel PdfExport { get; }
@@ -250,6 +255,7 @@ public sealed class MainWindowViewModel : ObservableObject
                 OnPropertyChanged(nameof(IsVerticalAreaToolSelected));
                 OnPropertyChanged(nameof(IsParapetToolSelected));
                 OnPropertyChanged(nameof(IsDrawingToolSelected));
+                OnPropertyChanged(nameof(IsTextToolSelected));
                 OnPropertyChanged(nameof(IsHistoryToolSelected));
                 OnPropertyChanged(nameof(IsExcelExportToolSelected));
                 OnPropertyChanged(nameof(IsPdfExportToolSelected));
@@ -273,6 +279,8 @@ public sealed class MainWindowViewModel : ObservableObject
 
     public bool IsDrawingToolSelected => _selectedTool == "Drawing";
 
+    public bool IsTextToolSelected => _selectedTool == "Text";
+
     public bool IsHistoryToolSelected => _selectedTool == "History";
 
     public bool IsExcelExportToolSelected => _selectedTool == "Excel";
@@ -285,7 +293,7 @@ public sealed class MainWindowViewModel : ObservableObject
 
     public bool IsDashboardContentVisible =>
         !IsLengthToolSelected && !IsAreaToolSelected && !IsVerticalAreaToolSelected && !IsParapetToolSelected
-        && !IsDrawingToolSelected && !IsHistoryToolSelected && !IsExcelExportToolSelected && !IsPdfExportToolSelected
+        && !IsDrawingToolSelected && !IsTextToolSelected && !IsHistoryToolSelected && !IsExcelExportToolSelected && !IsPdfExportToolSelected
         && !IsDrawingPdfExportToolSelected && !IsSettingsToolSelected;
 
     public string InspectorTitle => _selectedTool switch
@@ -295,6 +303,7 @@ public sealed class MainWindowViewModel : ObservableObject
         "Vertical Area" => "Vertical Area",
         "Parapet" => "Parapet",
         "Drawing" => "Drawing Navigation",
+        "Text" => "Text Tools",
         "History" => "Quantity History",
         "Excel" => "Excel Export",
         "PDF" => "PDF Export",
@@ -441,6 +450,10 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             Drawing.OnActivated();
         }
+        else if (selected.Label == "Text")
+        {
+            Text.OnActivated();
+        }
         else if (selected.Label == "History")
         {
             History.OnActivated();
@@ -502,6 +515,25 @@ public sealed class MainWindowViewModel : ObservableObject
                 InspectorRows.Add(new InspectorRow("도면 개요", Drawing.OverviewText));
                 InspectorRows.Add(new InspectorRow("선택 객체", $"{Drawing.Rows.Count}개"));
                 InspectorRows.Add(new InspectorRow("격리 상태", Drawing.IsIsolationActive ? "격리됨" : "정상"));
+                break;
+
+            case "Text":
+                if (Text.SelectedRow is { } textRow)
+                {
+                    InspectorRows.Add(new InspectorRow("형식", textRow.TypeLabel));
+                    InspectorRows.Add(new InspectorRow("내용", textRow.Source.PlainText));
+                    InspectorRows.Add(new InspectorRow("높이", $"{textRow.Height:N0}"));
+                    InspectorRows.Add(new InspectorRow("Layer", textRow.LayerName));
+                    InspectorRows.Add(new InspectorRow("색상", textRow.ColorDisplay));
+                    InspectorRows.Add(new InspectorRow("Text Style", textRow.Source.TextStyleName));
+                    InspectorRows.Add(new InspectorRow("Handle", textRow.Handle));
+                }
+                else
+                {
+                    InspectorRows.Add(new InspectorRow("상태", Text.StatusText));
+                    InspectorRows.Add(new InspectorRow("선택", Text.SelectionSummaryText));
+                }
+
                 break;
 
             case "History":

@@ -297,6 +297,11 @@
                              DataContext="{Binding Drawing}"
                              Visibility="{Binding DataContext.IsDrawingToolSelected, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVisibility}}" />
 
+        <views:TextPanel Grid.Row="0"
+                          Grid.RowSpan="4"
+                          DataContext="{Binding Text}"
+                          Visibility="{Binding DataContext.IsTextToolSelected, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVisibility}}" />
+
         <views:HistoryPanel Grid.Row="0"
                              Grid.RowSpan="4"
                              DataContext="{Binding History}"
