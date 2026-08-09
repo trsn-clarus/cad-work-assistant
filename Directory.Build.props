@@ -5,4 +5,19 @@
     <LangVersion>latest</LangVersion>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
   </PropertyGroup>
+
+  <!--
+    Version Source of Truth (Milestone 8 §124-125). scripts/build-release.ps1, installer/CADWorkAssistant.iss,
+    and the AutoCAD Bundle의 PackageContents.xml은 모두 이 값을 읽어 맞춘다 - 버전을 4곳에 따로 적지 않는다.
+    실기 AutoCAD GUI 검증이 아직 남아 있으므로(docs/AUTOCAD_REAL_MACHINE_CHECKLIST.md) 0.x beta로 시작한다.
+  -->
+  <PropertyGroup>
+    <CwaVersion>0.8.0</CwaVersion>
+    <Version>$(CwaVersion)</Version>
+    <AssemblyVersion>$(CwaVersion).0</AssemblyVersion>
+    <FileVersion>$(CwaVersion).0</FileVersion>
+    <Product>CAD Work Assistant</Product>
+    <Company>TRSN CLARUS</Company>
+    <Copyright>Copyright © TRSN CLARUS</Copyright>
+  </PropertyGroup>
 </Project>
