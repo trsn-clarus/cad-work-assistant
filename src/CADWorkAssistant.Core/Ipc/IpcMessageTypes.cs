@@ -46,6 +46,15 @@ public static class IpcMessageTypes
     /// <summary>선택한 객체들을 WBLOCK으로 새 DWG에 저장한다. 원본은 수정하지 않는다 (Milestone 5 §49-52).</summary>
     public const string ExportSelection = "ExportSelection";
 
-    // 향후 Milestone에서 추가될 예정: PlotDrawing 등.
-    // 여기 상수만 추가하고 Handlers/ 아래 새 IIpcRequestHandler 구현을 등록하면 된다.
+    /// <summary>현재 AutoCAD에서 실제 가능한 Plot 장치/용지/스타일/Layout 목록을 조회한다
+    /// (Milestone 11 §15, §51). Read-only, Plot을 실행하지 않는다.</summary>
+    public const string GetPlotCapabilities = "GetPlotCapabilities";
+
+    /// <summary>Model Space에서 사용자가 두 모서리를 지정해 Plot Window 영역을 얻는다
+    /// (Milestone 11 §13, §54-55). 인터랙티브 - Command Context에서 실행된다.</summary>
+    public const string AcquirePlotWindow = "AcquirePlotWindow";
+
+    /// <summary>현재 Layout 또는 지정한 Window 영역을 PDF로 출력한다. 원본 Layout의 Page Setup은
+    /// 변경하지 않는다 (Milestone 11 §6, §49-50).</summary>
+    public const string PlotDrawingPdf = "PlotDrawingPdf";
 }
