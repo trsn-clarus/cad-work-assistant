@@ -54,12 +54,12 @@
 |---|---|---|---|
 | `CADWorkAssistant.Core` | netstandard2.0 | 단위 변환, 길이 계산(`Core/Length`), 면적 계산(`Core/Area`), 수직면적/파라펫 수량 조합(`Core/VerticalArea`, `Core/Parapet`), **수량 검산(`Core/Verification`, Milestone 7)**, 도메인 모델, 표시명 정책(`Core/Models/QuantityTypeDisplay`, `QuantityReviewStatusDisplay`, `Core/Verification/VerificationSeverityDisplay` — Milestone 9, UI와 Excel이 같은 문구를 공유), IPC 프로토콜(`Core/Ipc`)과 상태머신(`Core/Cad`). **AutoCAD 타입을 절대 참조하지 않는다** → AutoCAD 없이 유닛 테스트 가능 (§32) | 없음 |
 | `CADWorkAssistant.Infrastructure` | **net48;net8.0** (멀티타겟) | 구조화 로깅(Serilog), 설정 저장(JSON), Named Pipe 전송 계층 전체(`Ipc/PipeMessageFramer`, `AutoCadPipeClient`, `AutoCadPipeServer`) | 없음 |
-| `CADWorkAssistant.Documents` | **net8.0** (Milestone 9에서 netstandard2.0 → net8.0 전환, `Persistence`와 같은 이유 — §8.8) | 수량산출서 Excel Export(`Excel/QuantityWorkbookModel`+`QuantityWorkbookModelBuilder`+`QuantityWorkbookBuilder`, ClosedXML). PDF/CSV는 여전히 미착수 | 없음 (ClosedXML만, AutoCAD/WPF 없음) |
-| `CADWorkAssistant.Persistence` | **net8.0만** (Infrastructure와 달리 net48 없음) | Project/QuantityRecord/ActivityRecord/DrawingFile/ExportRecord(**ExportType — Milestone 9**)/RecentMeasurement/**QuantityVerificationSnapshot/QuantityReview(Milestone 7)** SQLite 영속화 (`Microsoft.Data.Sqlite`, raw ADO.NET). Migrations/(스키마 버전 관리), Repositories/(8쌍), `ProjectDataService`(교차 테이블 트랜잭션) | 없음 (Desktop만 참조, AutoCAD Plugin은 참조하지 않음 — §8.6) |
-| `CADWorkAssistant.Desktop` | net8.0-windows | WPF UI, MVVM, `Services/`(Discovery/ConnectionManager/LengthSelectionCoordinator/ProjectContextService/**QuantityExcelExportCoordinator — Milestone 9**), `ViewModels/`(LengthWorkflowViewModel, AreaWorkflowViewModel, VerticalAreaWorkflowViewModel, ParapetWorkflowViewModel, LengthSourceSelector, ProjectDialogViewModel, **ExcelExportViewModel** 등) | WPF |
+| `CADWorkAssistant.Documents` | **net8.0** (Milestone 9에서 netstandard2.0 → net8.0 전환, `Persistence`와 같은 이유 — §8.8) | 공유 문서 모델(`Reports/QuantityReportModel`+`QuantityReportModelBuilder`+`IQuantityReportOptions`+`QuantityExportScope` — Milestone 10에서 Excel 전용이던 `QuantityWorkbookModel`을 일반화), 수량산출서 Excel Export(`Excel/QuantityWorkbookBuilder`, ClosedXML), 수량 산출근거 PDF Export(`Pdf/QuantityPdfBuilder`+`WindowsKoreanFontResolver`, PDFsharp-MigraDoc — Milestone 10, §8.9). CSV는 여전히 미착수 | 없음 (ClosedXML+PDFsharp-MigraDoc만, AutoCAD/WPF 없음) |
+| `CADWorkAssistant.Persistence` | **net8.0만** (Infrastructure와 달리 net48 없음) | Project/QuantityRecord/ActivityRecord/DrawingFile/ExportRecord(**ExportType: DwgSelection/ExcelQuantity(M9)/PdfQuantityReport(M10)**)/RecentMeasurement/**QuantityVerificationSnapshot/QuantityReview(Milestone 7)** SQLite 영속화 (`Microsoft.Data.Sqlite`, raw ADO.NET). Migrations/(스키마 버전 관리), Repositories/(8쌍), `ProjectDataService`(교차 테이블 트랜잭션) | 없음 (Desktop만 참조, AutoCAD Plugin은 참조하지 않음 — §8.6) |
+| `CADWorkAssistant.Desktop` | net8.0-windows | WPF UI, MVVM, `Services/`(Discovery/ConnectionManager/LengthSelectionCoordinator/ProjectContextService/**QuantityExcelExportCoordinator(M9)/QuantityPdfExportCoordinator(M10)/IQuantityReportSnapshotService(M10, 두 Coordinator가 공유하는 Persistence 조회)**), `ViewModels/`(LengthWorkflowViewModel, AreaWorkflowViewModel, VerticalAreaWorkflowViewModel, ParapetWorkflowViewModel, LengthSourceSelector, ProjectDialogViewModel, **ExcelExportViewModel, PdfExportViewModel** 등) | WPF |
 | `CADWorkAssistant.AutoCAD` | net48 | AutoCAD Managed API 연동, IPC Handler(Ping/GetApplicationInfo/GetDrawingContext/SelectLengthObjects/SelectAreaObjects), 원본 DWG 보호/Undo 그룹 처리 | AutoCAD 2024 Managed API |
 | `CADWorkAssistant.FakeAutoCad` (`tools/`) | net8.0 | AutoCAD 없이 개발/테스트하기 위한 Headless Simulation Host. `AutoCAD.Ipc.Handlers`와 **똑같은 IPC 프로토콜/서버 코드**를 재사용, Handler만 Scenario 기반 canned data로 교체. 설치 프로그램에 포함 안 함 (§73) | 없음 |
-| `*.Tests` (`Core`/`Persistence`/`Documents`/`Integration`) | net8.0 | Core/Infrastructure/Documents 로직 단위 테스트 + Integration.Tests는 FakeAutoCad를 실제 프로세스로 띄워 실제 Named Pipe로 검증. Persistence.Tests는 실제 파일 SQLite, `ExcelExportE2ETests`(Milestone 9)는 여기에 `CADWorkAssistant.Documents` 참조를 추가해 Project→Quantity→Verification→Review→Excel 전체 흐름을 검증한다 | 없음 (AutoCAD 미설치 환경에서도 실행 가능) |
+| `*.Tests` (`Core`/`Persistence`/`Documents`/`Integration`) | net8.0 | Core/Infrastructure/Documents 로직 단위 테스트 + Integration.Tests는 FakeAutoCad를 실제 프로세스로 띄워 실제 Named Pipe로 검증. Persistence.Tests는 실제 파일 SQLite, `ExcelExportE2ETests`(M9)/`PdfExportE2ETests`(M10)가 여기에 `CADWorkAssistant.Documents` 참조를 추가해 Project→Quantity→Verification→Review→Excel/PDF 전체 흐름을 검증한다. Documents.Tests/Persistence.Tests는 PDF 텍스트 검증 전용으로 PdfPig(테스트 전용, Apache-2.0)도 참조한다 | 없음 (AutoCAD 미설치 환경에서도 실행 가능) |
 
 Core가 `netstandard2.0`인 이유: net48(Plugin)과 net8.0(Desktop/FakeAutoCad) 양쪽에서 참조 가능한 가장 단순한 공통분모이기 때문이다. **Infrastructure는 `net48;net8.0` 멀티타겟, Documents/Persistence는 net8.0 전용이다** - Documents/Persistence는 AutoCAD Plugin(net48)이 참조하지 않으므로 멀티타겟이 필요 없고, 오히려 net8.0 전용 NuGet 패키지(ClosedXML, Microsoft.Data.Sqlite)를 그대로 쓸 수 있다(§11 의사결정 로그 참고). netstandard2.0을 기본값으로 유지하고, 실제로 막힌 경우에만 net8.0 전용으로 전환한다 (§0 "불필요하게 복잡한 구조 지양").
 
@@ -359,9 +359,10 @@ Desktop.Services.QuantityExcelExportCoordinator (IQuantityExcelExportCoordinator
   │ 않는다 - 내보내기 시점의 DB가 source of truth), IQuantityVerificationCoordinator를 재사용해
   │ 최신 Verification/Review 딕셔너리를 얻는다(스냅샷 역직렬화 로직을 새로 만들지 않는다)
   ▼
-CADWorkAssistant.Documents.Excel.QuantityWorkbookModelBuilder (AutoCAD·ClosedXML 비의존, 순수 매핑)
-  │ Project+QuantityRecord[]+Verification/Review 딕셔너리+ExcelExportOptions
-  │   → QuantityWorkbookModel/QuantityWorkbookRow (향후 PDF Export가 재사용할 수 있는 순수 데이터 모델)
+CADWorkAssistant.Documents.Reports.QuantityReportModelBuilder (AutoCAD·ClosedXML 비의존, 순수 매핑 -
+  Milestone 10에서 Excel 전용이던 QuantityWorkbookModelBuilder를 일반화, §8.9)
+  │ Project+QuantityRecord[]+Verification/Review 딕셔너리+IQuantityReportOptions
+  │   → QuantityReportModel/QuantityReportRow (Excel/PDF가 공유하는 순수 데이터 모델)
   │ 정렬은 항상 CreatedAt→Id 결정적 순서(DB 원본 순서에 의존하지 않는다), Verified-only 필터는
   │ 항상 QuantityReviewStatus 기준(자동 VerificationSeverity로 걸러내지 않는다 - Verified인데
   │ Error인 레코드도 그대로 노출)
@@ -384,6 +385,38 @@ AutoCAD뿐 아니라 ClosedXML도 참조하지 않는다(§4 절대 원칙 3의 
 검토메모)이 열렸을 때 Excel 수식으로 재해석되지 않는다. 이 성질은 4개의 실제 위험 문자열을
 재오픈한 워크북에서 `cell.HasFormula == false`/`cell.DataType == XLDataType.Text`로 직접
 검증했다(추정이 아니라 실증).
+
+## 8.9 PDF Quantity Report Architecture (Milestone 10)
+
+Excel(§8.8)이 만든 데이터 모델을 그대로 재사용해 제출/보고/보관용 고정 문서(PDF)를 만드는 계층.
+자세한 보고서 구조/폰트/atomic save/보안은 [`PDF_EXPORT.md`](./PDF_EXPORT.md) 참고:
+
+```text
+Desktop.ViewModels.PdfExportViewModel  (ExcelExportViewModel과 완전히 같은 bool-flag 관례)
+  ▼
+Desktop.Services.QuantityPdfExportCoordinator (IQuantityPdfExportCoordinator)
+  │ Desktop.Services.IQuantityReportSnapshotService를 QuantityExcelExportCoordinator와 공유한다 -
+  │ Milestone 9에서 Excel Coordinator 안에 있던 "Persistence에서 새로 읽기" 로직을 이번에
+  │ 별도 서비스로 뽑아냈다(§44) - 두 Coordinator가 정확히 같은 조회 결과를 본다(Cross-format
+  │ consistency의 전제조건)
+  ▼
+CADWorkAssistant.Documents.Reports.QuantityReportModelBuilder (Excel Coordinator와 100% 같은 호출)
+  ▼
+CADWorkAssistant.Documents.Pdf.QuantityPdfBuilder (PDFsharp-MigraDoc을 직접 다루는 유일한 클래스)
+  │ 표지/프로젝트요약/수량요약표 + 항목별 산출근거(각 QuantityReportRow를 산출식+검산+검토가
+  │ 함께 있는 한 블록으로) + Header/Footer/페이지 번호 + SaveAtomically
+  ▼
+pdf 파일 (사용자가 고른 경로) + Desktop.Services.IProjectContextService.AddPdfExportRecordAsync
+  └ ExportRecord(ExportType=PdfQuantityReport)+ActivityRecord - AddExcelExportRecordAsync와 같은 패턴
+```
+
+**다른 Milestone과 다른 점**: `Excel.QuantityWorkbookModel`을 `Documents.Reports.QuantityReportModel`로
+일반화한 것이 이 Milestone의 핵심 리팩터링이다(§8.8이 "향후 PDF Export가 재사용할 수 있는" 모델로
+이미 설계해뒀던 것을 실제로 검증한 순간이다) - Excel 회귀 테스트 49개가 이 리팩터링 전후로 전부
+그대로 통과해야 했다(실제로 통과했다). PDFsharp가 .NET 8(비-GDI)에서 폰트를 전혀 모른다는 것과,
+Windows의 기본 한글 폰트(맑은 고딕)에 ✓(U+2713) 글리프가 없어 PDF에서 빈 사각형으로 깨진다는
+것은 둘 다 실제로 빌드/렌더링해봐야 드러난 문제였다(§4-2 문서, "컴파일 성공 ≠ 동작 확인"의 이번
+Milestone 사례) - `WindowsKoreanFontResolver`와 PDF 전용 글리프 치환(`ToPdfSafeGlyph`)으로 해결했다.
 
 ## 9. Desktop App 구조 (MVVM)
 
@@ -450,10 +483,14 @@ AutoCAD뿐 아니라 ClosedXML도 참조하지 않는다(§4 절대 원칙 3의 
 | Excel Export 시나리오는 새 AutoCAD IPC 명령을 추가하지 않고, Persistence에 이미 저장된 QuantityRecord만 읽음 | AutoCAD에서 다시 선택하게 하거나 Export 시점에 도면을 재조회 | Vertical Area/Parapet(Milestone 4)과 같은 판단 기준 - Excel Export는 "기존 측정값을 조합"하는 것도 아니고 아예 "이미 저장된 값을 문서화"하는 것이라 AutoCAD 연동이 전혀 필요 없다. Plugin 코드가 이번 Milestone에서 전혀 바뀌지 않는다 |
 | `ExportRecord`에 `ExportType`(DwgSelection/ExcelQuantity) 컬럼 추가, 기존 WBLOCK Export 호출부는 기본값으로 무변경 | Excel 전용 별도 테이블(`ExcelExportRecord`) 신설 | DWG 선택 내보내기(Milestone 5)와 Excel 내보내기는 둘 다 "사용자가 파일을 내보냈다"는 같은 개념이라 테이블을 분리할 이유가 없다 - 생성자 기본 인자로 기존 호출부(Migration 없이 컴파일만 다시 하면 그대로 동작)를 건드리지 않았다 |
 | Dashboard Activity Log를 Excel 저장 직후 즉시 갱신하려고 `IProjectContextService.AddExcelExportRecordAsync`를 새로 추가(내부에서 `Activity.Insert(0, ...)`까지 수행) | `ProjectDataService`로 직접 저장만 하고 Activity 갱신은 다음 프로젝트 전환/재시작에 맡김 | Desktop의 `Activity` `ObservableCollection`은 `SwitchToAsync`에서만 다시 채워진다 - 저장 성공 후 사용자가 Dashboard를 봐도 방금 만든 Excel 기록이 안 보이면 "정말 저장됐나" 혼란을 준다. `AddQuantityRecordAsync`(기존)와 같은 패턴으로 맞췄다 |
+| PDF 생성: PDFsharp-MigraDoc(공식 PDFsharp-Team 패키지) | QuestPDF | nuget.org 패키지 페이지를 직접 확인한 결과 QuestPDF는 연매출 $1M 미만 조직에만 무료인 Community License 조건이 있다 - 배포 대상 회사 규모를 알 수 없는 이 제품에는 위험하다고 판단했다. PDFsharp-MigraDoc은 조건 없는 순수 MIT이고, MigraDoc의 문서 모델(자동 페이지 나눔 포함)이 이 보고서 구조에 잘 맞는다 |
+| `Excel.QuantityWorkbookModel`/`QuantityWorkbookModelBuilder`/`ExcelExportScope`를 `Documents.Reports.QuantityReportModel`/`QuantityReportModelBuilder`/`QuantityExportScope`로 일반화, `IQuantityReportOptions` 인터페이스 신설 | Excel 이름 그대로 유지하고 PDF가 그냥 재사용 | Milestone 9가 이미 "향후 PDF Export가 재사용할 수 있게" 설계해뒀던 모델이 실제로 두 번째 소비자(PDF)를 만나면서, Excel 전용 이름("Workbook")이 더 이상 맞지 않게 됐다 - 이름만 바꾸는 리팩터링이 아니라 네임스페이스도 렌더러 중립(`Documents.Reports`)으로 옮겨, 두 렌더러가 "같은 모델을 그대로 소비한다"는 사실이 코드 구조에서도 드러나게 했다. Excel 고유 옵션(시트 on/off)까지 억지로 공유하지는 않았다 |
+| `IQuantityReportSnapshotService`를 Desktop.Services에 신설해 Excel/PDF Coordinator가 공유 | 각 Coordinator가 각자 Persistence 조회 로직을 유지 | Milestone 9의 `QuantityExcelExportCoordinator` 안에 있던 "Project+QuantityRecord를 새로 읽고 Verification/Review를 재사용" 로직을 PDF Coordinator가 그대로 다시 필요로 했다 - 이미 존재하던 중복을 없애는 리팩터링이지, "generic mega-export framework"를 새로 만든 것이 아니다 |
+| Windows 시스템 폰트(맑은 고딕)를 실행 시점에 읽어 PDF에 임베드하는 자체 `IFontResolver` 구현 | 폰트 파일을 설치 프로그램에 번들링, 또는 PDFsharp의 기본 폰트 사용 | 실제로 빌드해서 렌더링해보니 PDFsharp 6.x(.NET 8 비-GDI)는 `IFontResolver`를 등록하지 않으면 즉시 예외를 던진다 - 이 앱은 이미 Windows 전용이므로 사용자 PC에 항상 있는 시스템 폰트를 그때그때 읽는 것이 폰트 라이선스 재배포 문제도 피하고 가장 단순하다 |
+| PDF에서 검산 Pass 글리프를 ✓(U+2713) 대신 ○(U+25CB)로 치환(PDF 전용, Core/Excel은 무변경) | Core의 글리프 정책 자체를 바꾸거나, PDF에서 글리프를 아예 빼고 텍스트만 표시 | Simulation Mode에서 실제로 렌더링한 PDF를 육안으로 확인하다가 ✓ 글리프가 빈 사각형(tofu)으로 깨지는 것을 발견했다 - 맑은 고딕에 그 Dingbats 글리프가 없기 때문이다. 여러 후보를 실제로 렌더링해 비교한 뒤 ○가 정상 렌더링되고 한국어 문서의 ○/× 표기 관례와도 자연스러운 것을 확인해 PDF 렌더러 안에서만 치환했다 - Excel은 뷰어가 시스템 폰트로 자동 대체해 이미 문제없이 표시되므로 건드리지 않았다 |
 
 ## 12. 아직 결정하지 않은 것 (의도적으로 보류)
 
-- PDF 라이브러리 — PDF Export 착수 시 결정 (QuestPDF는 회사 규모에 따라 상업 라이선스 필요할 수 있어 확인 필요, `QuantityWorkbookModel`을 그대로 재사용할 수 있게 설계해뒀다 — §8.8)
 - Installer(Inno Setup vs MSIX) — 첫 배포 가능한 빌드가 나온 뒤 결정
 - AutoCAD 2025+(.NET 8) 지원 — 필요 시점에 별도 프로젝트로 추가
 - **Project/Drawing 단위 Unit Override**(§24-27, Unitless 도면에서 계산 단위를 사용자가 지정) — Milestone 3

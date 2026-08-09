@@ -558,16 +558,83 @@ Verification 정책을 그대로 따름), 사용자 정의 시트/컬럼 구성.
 Excel Export 검증은 전부 Simulation Mode(FakeAutoCad)로 이뤄졌고, 실제 AutoCAD GUI를 이 PC에서
 구동하지 않았다(§8.5 참고, 그래픽 드라이버 불안정 이슈가 해소되지 않았다).
 
-## Milestone 10 — Plot / PDF
+## Milestone 10 — PDF Quantity + Verification Report + Shared Document Model
+
+**상태: 코드/자동 테스트/Simulation Mode 종단간 검증/설치본 PDF smoke test 완료 (2026-08-09)**
+
+Milestone 9의 Excel 수량산출서에 이어, 저장된 QuantityRecord(+최신 검산 결과+검토 상태)를 제출/
+보고/보관용 **고정 문서(PDF)** 로 만든다. Excel과 PDF가 서로 다른 데이터를 따로 조립하지 않도록,
+Milestone 9의 `Excel.QuantityWorkbookModel`을 renderer-neutral한 공유 모델로 일반화하는 것이
+이번 Milestone의 핵심 아키텍처 작업이었다. 자세한 보고서 구조/폰트/보안은
+`docs/PDF_EXPORT.md`, 호출 구조는 `docs/ARCHITECTURE.md` §8.9 참고.
+
+- [x] PDF 라이브러리 선정: PDFsharp-MigraDoc 6.2.4(공식 PDFsharp-Team, MIT) - QuestPDF는 nuget.org
+      페이지를 직접 확인한 결과 연매출 $1M 미만 조직에만 무료인 Community License 조건이 있어
+      배포 대상 회사 규모를 알 수 없는 이 제품에는 적합하지 않다고 판단해 제외했다.
+      Chromium/Playwright/wkhtmltopdf/Word Interop 등 외부 프로세스 의존 방식은 전부 배제
+- [x] 공통 Document Model 일반화: `Excel.QuantityWorkbookModel`/`QuantityWorkbookModelBuilder`/
+      `ExcelExportScope`를 `Documents.Reports.QuantityReportModel`/`QuantityReportModelBuilder`/
+      `QuantityExportScope`로 옮기고, `IQuantityReportOptions`(Scope/IncludeReviewNotes/
+      IncludeSourceDrawing) 인터페이스로 `ExcelExportOptions`/`PdfExportOptions`가 공유하게 했다 -
+      Excel 회귀 테스트 49개가 리팩터링 전후로 전부 그대로 통과했다
+- [x] Documents: `Pdf/QuantityPdfBuilder`(PDFsharp/MigraDoc을 다루는 유일한 클래스) - 표지/
+      프로젝트요약/수량요약표 + 항목별 산출근거(산출식+검산+검토가 함께 있는 한 블록) + Header/
+      Footer/페이지 번호 + SaveAtomically(임시 파일 → 재오픈 검증 → 원자적 교체)
+- [x] `Pdf/WindowsKoreanFontResolver`(internal) - PDFsharp 6.x가 .NET 8(비-GDI)에서 폰트를
+      전혀 모른다는 것을 실제로 빌드/실행해서 발견(즉시 예외) - Windows 기본 한글 폰트(맑은 고딕)를
+      실행 시점에 읽어 PDF에 임베드한다. 폰트 파일 자체는 설치 프로그램에 재배포하지 않는다
+- [x] **실제로 발견/수정한 글리프 렌더링 버그**: Simulation Mode에서 생성한 PDF를 육안으로
+      확인하다가 검산 Pass 글리프 ✓(U+2713)가 빈 사각형(tofu)으로 깨지는 것을 발견 - 맑은 고딕에
+      이 Dingbats 글리프가 없기 때문(!/×/—는 문제없었다). 여러 후보를 실제 렌더링으로 비교해
+      ○(U+25CB)로 PDF 전용 치환(`ToPdfSafeGlyph`) - Core/Excel은 무변경(Excel 뷰어는 시스템 폰트로
+      자동 대체되어 이미 정상)
+- [x] Desktop: `IQuantityReportSnapshotService`/`QuantityReportSnapshotService` 신설 - Milestone 9의
+      Excel Coordinator 안에 있던 "Persistence에서 새로 읽기" 로직을 Excel/PDF Coordinator가
+      공유하도록 추출(중복 제거, "generic mega-export framework"는 아니다). `QuantityPdfExportCoordinator`
+      + `PdfExportViewModel`(ExcelExportViewModel과 완전히 같은 bool-flag 관례) + OUTPUT 그룹에
+      "PDF" 화면(Ctrl+P) 추가
+- [x] Persistence: `ExportRecord.ExportType`에 `PdfQuantityReport` 상수 추가(TEXT 컬럼이라 Migration
+      불필요) + `IProjectContextService.AddPdfExportRecordAsync`(AddExcelExportRecordAsync와 동일 패턴)
+- [x] Documents.Tests 신규 30개(PDF 생성/회귀값/Unicode/Null 필드/원자적 저장/대량(1,000건)/글리프
+      치환 검증) + `CrossFormatConsistencyTests` 신규 1개(같은 fixture를 Excel/PDF 양쪽으로 실제
+      생성해 record count/순서/표시값/검산·검토 텍스트 일치를 확인) - PDF 텍스트 검증은 테스트
+      전용 PdfPig(Apache-2.0)를 Documents.Tests에만 추가해서 한다(제품 런타임에는 포함 안 함)
+- [x] Persistence.Tests: `PdfExportE2ETests` 신규 2건(`ExcelExportE2ETests`와 같은 fixture 스타일,
+      실제 SQLite → PDF 전체 흐름, All/Verified-only 두 scope 모두 검증)
+- [x] 회귀 전체 재확인: Core.Tests 182 + Persistence.Tests 40(+2) + Integration.Tests 54 +
+      Documents.Tests 49(+19), 총 325개 전부 통과(Release 빌드에서도 동일하게 재확인)
+- [x] Simulation Mode 실제 UI 조작으로 종단간 검증 - 프로젝트 생성 → Length 측정값 산출내역 추가 →
+      PDF 화면에서 실시간 요약 확인 → SaveFileDialog로 실제 저장(Milestone 9에서 확립한 Enter 키
+      방식 재사용) → Success 상태 → 저장된 실제 `.pdf`를 재오픈해 표지/요약표/항목별 상세까지 텍스트
+      추출로 확인. 이 과정에서 버튼의 `AutomationProperties.Name`("PDF 파일 생성")이 실제 표시
+      Content("PDF 보고서 생성")와 다른 것을 발견해 일치시켰다(접근성 문제이기도 하다)
+- [x] Release 빌드/설치 프로그램 재생성 - 코드 변경 없이 PDFsharp/MigraDoc DLL들이 `dotnet publish`
+      self-contained 출력에 자동 포함됐다(Excel의 ClosedXML과 같은 매커니즘). 설치 프로그램을 실제로
+      설치하고 설치된 EXE로 PDF Export를 다시 실행해 성공을 확인(installer 50.6MB → 51.3MB)
+
+**의도적으로 하지 않은 것**: PDF 암호화/디지털 서명, Draft Watermark, Technical Appendix(전체
+Object Handle 목록), PDF Export scope 세분화, 대형 PDF 생성 취소(Cancellation), 앱 내부 PDF Viewer.
+
+**Milestone 8.5(실제 AutoCAD 2024 실기 검증)는 이 Milestone과 무관하게 계속 BLOCKED 상태다** - PDF
+Export 검증은 전부 Simulation Mode(FakeAutoCad)로 이뤄졌고, 실제 AutoCAD GUI를 이 PC에서 구동하지
+않았다(§8.5 참고, 그래픽 드라이버 불안정 이슈가 해소되지 않았다).
+
+## Milestone 11 — AutoCAD Plot + Drawing PDF Output
+
+Milestone 10의 PDF(수량/검산 보고서)와는 완전히 다른 기능이다 - 이건 **DWG Plot 결과물**이다.
 
 - [ ] Plot 설정 화면 + 프리셋 (A3/A4, 컬러/흑백)
 - [ ] 기존 CTB/STB 안전하게 확인 후 적용
 
-## Milestone 11 — Text Tools
+실제 AutoCAD 2024가 안정적으로 실행되는 머신이 없으면(§8.5) Plot 실행 자체는 실기 검증이
+BLOCKED될 수 있다 - 그 경우 Plot architecture + FakeAutoCad + Preset + UI까지만 개발하고, 실제
+Plot 결과 검증은 실기가 확보된 뒤로 미룬다.
+
+## Milestone 12 — Text Tools
 
 - [ ] Text/MText 생성, 높이/색상/레이어 수정
 
-## Milestone 12 — Project Manager 고도화
+## Milestone 13 — Project Manager 고도화
 
 프로젝트 생성/열기/전환/최근 목록은 Milestone 6에서 이미 구현됐다(`ProjectDialog`). 여기 남는
 범위는 그 이후 고도화뿐이다.
@@ -575,9 +642,10 @@ Excel Export 검증은 전부 Simulation Mode(FakeAutoCad)로 이뤄졌고, 실�
 - [ ] 프로젝트 검색/필터(개수가 많아지는 시점에), Project 삭제(Milestone 6에서 스키마만 대비)
 - [ ] "Projects" 전용 목록 페이지(Milestone 8에서 보류 - Card Grid 대신 Name/Client/Site/Last
       Opened dense list, `IProjectContextService.RecentProjects` 재사용)
-- [ ] Files/PDF/Report 연결
+- [ ] Excel/PDF/DWG Export가 모두 쌓이는 통합 Output History 화면(Milestone 9-10에서 각자
+      ExportRecord로 남기기만 하고 화면은 만들지 않았다)
 
-## Milestone 13+ — Advanced Drawing Analysis (장기)
+## Milestone 14+ — Advanced Drawing Analysis (장기)
 
 - [ ] Drawing Cluster 자동 탐지(도면 영역 구분)
 - [ ] Drawing Intelligence (평면도/실내마감표/단면도 자동 구분)
