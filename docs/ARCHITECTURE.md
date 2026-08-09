@@ -444,6 +444,29 @@ Headless E2E까지 실제 AutoCAD 없이 구현하고 리플렉션으로 API를 
 정확성(용지 크기/CTB·STB 시각 결과/좌표 정확성 등)은 실제 AutoCAD 2024 하드웨어가 필요해 11B로
 분리하고 BLOCKED로 남긴다 - Milestone 8.5(Plugin 실사용 검증)와 같은 판단이다.
 
+## 8.11 CAD Text Tools Architecture (Milestone 12)
+
+DBText/MText를 선택/조회/편집(배치 포함)/생성한다. 자세한 구조/실제 API 리플렉션 검증 결과/오류
+분류 정책/FakeAutoCad 정책/Simulation Mode 검증 기록은 [`TEXT_TOOLS.md`](./TEXT_TOOLS.md) 참고:
+
+```text
+Desktop.ViewModels.TextWorkflowViewModel (+ 합성 TextCreateViewModel)
+  ▼ (선택) SelectTextObjects IPC(인터랙티브) → (편집) UpdateTextObjects IPC(부분 patch)
+  ▼ (작성) AcquireTextInsertionPoint IPC(인터랙티브 단일 점) → CreateText IPC
+  ▼
+AutoCAD.Ipc.Handlers.{SelectTextObjectsHandler,AcquireTextInsertionPointHandler,
+                       UpdateTextObjectsHandler,CreateTextHandler}
+  │ AutoCadTextEntityAdapter(DBText/MText 공통 읽기/쓰기 유일 접점, 서식 감지는 Contents vs Text 비교만)
+  ▼
+DBText/MText(하나의 Transaction, 한 번만 Commit = 하나의 Undo 단계 — Editor/TransactionManager에
+             별도 Undo Mark API가 없음을 리플렉션으로 확인)
+```
+
+**Milestone 12A/12B 분리**: 이번 범위(12A)는 도메인 모델/IPC/Handler(실제 API 리플렉션 검증 완료)/
+FakeAutoCad/Desktop UI/Headless E2E까지 실제 AutoCAD 없이 구현했다. 실제 DBText/MText 렌더링,
+폰트/TextStyle 동작, 실제 Undo/Redo, 잠긴 Layer 실제 동작 등은 실제 AutoCAD 2024 하드웨어가 필요해
+12B로 분리하고 BLOCKED로 남긴다 — Milestone 8.5/11B와 같은 판단이다.
+
 ## 9. Desktop App 구조 (MVVM)
 
 - `*.xaml` — 뷰 (구조/레이아웃/스타일), `Themes/DesignTokens.xaml`에 색상·타이포·spacing 토큰 정의
@@ -521,6 +544,13 @@ Headless E2E까지 실제 AutoCAD 없이 구현하고 리플렉션으로 API를 
 | `PlotDrawingPdfHandler`가 원본 Layout의 `PlotSettings`를 절대 변경하지 않고, `new PlotSettings(modelType)` + `CopyFrom(layout)`으로 임시 override 객체만 만들어 사용 | Layout의 PlotSettings를 직접 수정 후 Plot, 끝나면 되돌림 | CLAUDE.md 절대 원칙 1(원본 DWG 임의 변경 금지)을 Plot에도 그대로 적용했다 - 이 방식이 공식 AutoCAD Managed API 샘플의 표준 패턴이기도 하다(`PlotInfo.OverrideSettings`) |
 | FakeAutoCad의 `FakePlotDrawingPdfHandler`가 Milestone 10의 `QuantityPdfBuilder`를 재사용하지 않고 평문 안내 텍스트만 씀 | 실제 PDFsharp로 그럴듯한 가짜 Plot PDF를 생성 | 마스터 프롬프트가 명시적으로 금지했다 - 수량 보고서 PDF와 도면 Plot PDF는 완전히 다른 서브시스템이고, 진짜처럼 보이는 Fake 결과물은 "이게 실제 AutoCAD Plot 결과다"라는 착각을 일으킬 위험이 있다. `FakeExportSelectionHandler`(Milestone 5)가 가짜 DWG 대신 평문을 쓰는 것과 같은 원칙 |
 
+| `OptionalValue<T>`(명시적 `HasValue`/`Value`)로 배치 patch 필드를 표현 | `null` = "바꾸지 않음"으로 규약 | `null`이 "바꾸지 않음"인지 "지운다"인지가 필드마다 다르게 해석될 여지를 원천 차단한다(Milestone 12 §25) - Content/Layer는 지울 수 없는 값이라 "바꾸지 않음"만 있으면 되지만, 향후 지울 수 있는 필드가 추가돼도 같은 타입을 안전하게 재사용할 수 있다 |
+| `BatchPropertyState<T>` + 제네릭 `BatchPropertyAggregator.Aggregate<T>` | 값이 다르면 `"혼합"` 문자열을 그대로 UI에 흘려보냄 | 문자열로 뭉개면 "혼합" 자체가 실제 값과 충돌할 수 있고(예: 실제 Layer 이름이 "혼합"), Height(double)/Layer(string)/Color(CadColorDto) 세 가지 다른 타입에 각각 다른 판정 로직이 필요해진다 - 제네릭 함수 하나로 통일했다(Milestone 12 §13) |
+| 잠긴 Layer 실패를 `InvalidRequest`로 분류(`ApiExecutionFailed`가 아님) | catch 블록의 raw 예외와 같은 코드로 유지 | Desktop의 `DescribeError`는 raw AutoCAD 예외 메시지를 사용자에게 그대로 보여주면 안 된다는 CLAUDE.md 절대 원칙 4 때문에 `ApiExecutionFailed`는 항상 일반화된 문구로 대체한다 - 그런데 잠긴 Layer 메시지는 Handler가 직접 작성한 안전한 한국어 문구였다. Simulation Mode로 실제 화면을 확인하다가 "AutoCAD 연결 상태를 확인해주세요"라는 엉뚱한 일반 메시지가 뜨는 것을 발견해, invalid-handle과 같은 분류(`InvalidRequest`)로 재분류했다(Milestone 12 §55, §8) |
+| `AutoCadTextEntityAdapter`가 DBText/MText 공통 읽기/쓰기의 유일한 접점 | 각 Handler가 타입 분기(`if (entity is DBText)`)를 직접 반복 | 두 타입의 프로퍼티 이름이 다르다(`TextString`/`Height` vs `Contents`/`TextHeight`) - Handler 4개가 전부 이 분기를 반복하면 새 공통 속성이 추가될 때마다 4곳을 고쳐야 한다 |
+| MText 서식 유지 여부를 `Contents`(원본) vs `Text`(순수) 비교로만 판정, 커스텀 서식 파서를 만들지 않음 | MText 서식 코드(`\P`, `{\C1;...}`)를 직접 파싱해서 구조화 | 이 기능은 서식을 편집하지 않는다(§44-47) - 파싱 로직은 새로운 버그 표면일 뿐 어떤 요구사항도 충족시키지 않는다. "있다/없다"만 알면 충분하다 |
+| 문자 생성/수정에 `ExportRecord`/`ActivityRecord`를 기록하지 않음 | Excel/PDF/Plot Export와 같은 방식으로 이력 기록 | 마스터 프롬프트가 명시적으로 범위 밖이라고 밝혔다(§57-58) - DWG 자체가 유일한 진실의 원천이고, 값 하나하나의 변경 이력을 SQLite에 미러링할 필요가 이번 범위에서는 없다 |
+
 ## 12. 아직 결정하지 않은 것 (의도적으로 보류)
 
 - Installer(Inno Setup vs MSIX) — 첫 배포 가능한 빌드가 나온 뒤 결정
@@ -541,3 +571,9 @@ Headless E2E까지 실제 AutoCAD 없이 구현하고 리플렉션으로 API를 
 - **Milestone 11B(실제 AutoCAD 2024 하드웨어에서만 확인 가능한 Plot 정확성 항목)** — 이 PC는
   AutoCAD GUI 실행 시 그래픽 드라이버가 불안정해지는 문제가 있어(Milestone 1) BLOCKED로 남긴다.
   세부 체크리스트는 [`AUTOCAD_REAL_MACHINE_CHECKLIST.md`](./AUTOCAD_REAL_MACHINE_CHECKLIST.md) §Plot 참고
+- **Text 회전(Rotation)/TextStyle 편집, MText 서식 편집기, Annotative Scale 관리자, 프로젝트 전체
+  찾기/바꾸기**(Milestone 12 §6) — v1은 조회만 지원하거나 아예 범위 밖이다. 실사용 빈도가 확인되면
+  후속 Milestone에서 확장
+- **Milestone 12B(실제 AutoCAD 2024 하드웨어에서만 확인 가능한 Text 렌더링/Undo 정확성 항목)** —
+  같은 이유(Milestone 1)로 BLOCKED. 세부 체크리스트는
+  [`AUTOCAD_REAL_MACHINE_CHECKLIST.md`](./AUTOCAD_REAL_MACHINE_CHECKLIST.md) §Text 참고

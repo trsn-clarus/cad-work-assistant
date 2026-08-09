@@ -276,6 +276,80 @@ Autodesk.AutoCAD.PlottingServices.PlotEngine (accoremgd.dll) - IDisposable
 - `PlotFactory.ProcessPlotState != NotPlotting`이면 Plot을 시작하지 않는다 - AutoCAD Plot 엔진
   자체가 동시 Plot을 지원하지 않는다.
 
+### 5.8 Text API (Milestone 12, `SelectTextObjectsHandler`/`AcquireTextInsertionPointHandler`/`UpdateTextObjectsHandler`/`CreateTextHandler`)
+
+이 PC의 AutoCAD 2024 `acdbmgd.dll`을 리플렉션으로 직접 확인한 결과(추측 없음):
+
+```
+Autodesk.AutoCAD.DatabaseServices.DBText (acdbmgd.dll) - Entity 파생, 파라미터 없는 생성자 있음
+  Point3d Position / double Height / double Rotation / string TextString
+  ObjectId TextStyleId / TextHorizontalMode HorizontalMode / TextVerticalMode VerticalMode
+  double WidthFactor / double Oblique / double Thickness
+
+Autodesk.AutoCAD.DatabaseServices.MText (acdbmgd.dll) - Entity 파생, 파라미터 없는 생성자 있음
+  Point3d Location / double TextHeight / double Rotation
+  string Contents   // 원본, 서식 코드 포함 가능
+  string Text        // ★ 읽기 전용 - 서식이 제거된 순수 텍스트를 얻는 유일한 공식 경로
+  string ContentsRTF / ObjectId TextStyleId / double Width / Attachment Attachment
+
+Autodesk.AutoCAD.Colors.Color (Autodesk.AutoCAD.Colors.dll)
+  static Color FromColorIndex(ColorMethod, Int16) / FromRgb(byte,byte,byte) / FromEntityColor(EntityColor)
+  bool IsByLayer / IsByBlock / IsByAci / IsByColor
+  Int16 ColorIndex / byte Red,Green,Blue / string ColorNameForDisplay / ColorMethod ColorMethod
+
+Autodesk.AutoCAD.Colors.ColorMethod (enum)
+  ByLayer, ByBlock, ByColor, ByAci, ByPen, Foreground, LayerOff, LayerFrozen, None
+
+Entity(공통, 모든 DBText/MText가 상속)
+  Colors.Color Color(get/set) / int ColorIndex(get/set, 레거시 호환 별도 프로퍼티)
+  string Layer(get/set) / ObjectId LayerId(get)
+  AnnotativeStates Annotative(get, 조회 전용) - True/False/NotApplicable
+
+Database
+  ObjectId Textstyle / ObjectId TextStyleTableId
+  ObjectId CurrentSpaceId  // 현재 Model 또는 Paper Space의 BlockTableRecord - 하드코딩 금지
+  ObjectId Clayer          // 현재 Layer
+
+LayerTableRecord.IsLocked (bool)
+TransactionManager.AddNewlyCreatedDBObject(DBObject, bool)  // AppendEntity 직후 필수
+BlockTableRecord.AppendEntity(Entity) → ObjectId
+
+Autodesk.AutoCAD.DatabaseServices.TextStyleTableRecord
+  double TextSize / double XScale / double ObliquingAngle / string FileName / string BigFontFileName
+  FontDescriptor Font / bool IsVertical / bool IsShapeFile
+```
+
+실제로 확인/정정한 것들(§4 "리플렉션으로 실존 확인" 원칙의 이번 Milestone 사례):
+
+- **`Editor`에 Undo를 표시적으로 시작/종료하는 메서드가 전혀 없다** - `Autodesk.AutoCAD.EditorInput.
+  Editor`를 "Undo" 포함 이름으로 검색해도 0건. `TransactionManager`의 전체 선언 멤버
+  (`StartTransaction`/`StartOpenCloseTransaction`/`AddNewlyCreatedDBObject`/`GetObject` 오버로드/
+  `QueueForGraphicsFlush`/`NumberOfActiveTransactions`/`TopTransaction`/`GetAllObjects`)에도 "여러
+  작업을 하나의 Undo로 묶는" 전용 API가 없다. `Database.UndoRecording`/`DisableUndoRecording(bool)`
+  은 있지만 기록 자체를 껐다 켰다 하는 것일 뿐 그룹핑 기능이 아니다. 결론: **하나의 `Transaction`을
+  한 번만 Commit하는 것 자체가 이미 하나의 Undo 단계** - 별도 Undo Mark API는 필요하지도 존재하지도
+  않는다.
+- `MText.Text`는 읽기 전용이며 서식이 제거된 순수 텍스트를 주는 유일한 공식 경로 - 커스텀 서식
+  파서를 만들지 않고 `Contents`(원본)와 비교해 "서식이 있는지"만 판정하는 근거가 됐다(§46).
+- `Entity.Color`(Colors.Color, ByLayer/ByBlock/ByAci/TrueColor 전부 표현 가능)와 `Entity.ColorIndex`
+  (레거시 호환용 int)는 서로 다른 프로퍼티다 - 이 기능은 `Color`만 사용한다.
+- `Entity.Annotative`는 `AnnotativeStates`(값 3개) 열거형 - v1은 조회만 하므로(§3) `== True` 비교로
+  충분하다.
+- `TextStyleTable` 자체는 리플렉션에 선언 멤버가 보이지 않는다(제네릭 `SymbolTable` 상속 멤버만) -
+  `LayerTable`을 순회하는 기존 코드와 같은 방식으로 다루면 된다.
+
+구현 방침:
+
+- `AutoCadTextEntityAdapter`(내부 static)가 DBText/MText 공통 읽기/쓰기의 유일한 접점이다 - 두
+  타입의 프로퍼티 이름이 다르므로(`TextString`/`Height` vs `Contents`/`TextHeight`) Handler가 직접
+  타입 분기를 반복하지 않는다.
+- 문자 내용을 `SendStringToExecute`로 보내지 않는다 - Managed API 프로퍼티 대입만 사용한다(보안,
+  §48-49).
+- `UpdateTextObjectsHandler`는 전체 handle/Layer Lock 검증을 먼저 끝내고, 하나라도 실패하면 실제
+  쓰기를 시작하지 않는다(all-or-nothing) - 하나의 Transaction을 한 번만 Commit한다.
+- `CreateTextHandler`는 `Database.CurrentSpaceId`(Model/Paper Space를 하드코딩하지 않고 항상 조회)
+  의 BlockTableRecord에 Append한다.
+
 ### 5.3 마케팅 버전 이름 (AutoCadVersionMap)
 
 `Application.Version`과 `acad.exe`의 FileVersionInfo 모두 "AutoCAD 2024" 같은 마케팅 연도를 주지 않는다 (`ProductName`은 그냥 "AutoCAD", 버전은 "R24.3.119.0.0"). `AutoCadVersionMap`이 Autodesk의 공개된 릴리스 번호 체계를 바탕으로 한 매핑 표를 갖고 있으며, 매핑에 없는 버전은 절대 연도를 지어내지 않고 `AutoCAD (build {version})` 형태로 원본을 보여준다. 새 AutoCAD 버전이 나오면 이 표에 한 줄 추가하면 된다.

@@ -677,7 +677,58 @@ PlotEngine 런타임 동작 등)와 Milestone 8.5는 둘 다 계속 BLOCKED 상�
 
 ## Milestone 12 — Text Tools
 
-- [ ] Text/MText 생성, 높이/색상/레이어 수정
+**상태: 12A(architecture/구현/자동 테스트/Simulation Mode 종단간 검증/설치본 smoke test) 완료,
+12B(실제 DBText/MText 렌더링·Undo 정확성)는 BLOCKED (2026-08-09)**
+
+DBText/MText를 선택/조회/편집(배치 포함)/생성한다. `TEXT`/`MTEXT` 명령 재구현이 아니라 "높이를
+어떻게 바꾸지", "색상을 ByLayer로 되돌리려면" 같은 반복 작업의 안전한 자동화가 목표다. 자세한
+구조/API 리플렉션 검증 결과/오류 분류 정책/FakeAutoCad 정책/Simulation Mode 검증 기록은
+`docs/TEXT_TOOLS.md` 참고.
+
+- [x] Core 도메인 모델(`Core/Text`, AutoCAD 비의존): `CadTextEntityType`/`CadColorMode`/
+      `CadColorDto`(값 동등성 직접 구현, netstandard2.0에 `System.HashCode` 없어 수동 콤바이너)/
+      `CadColorPalette`(ByLayer/ByBlock+7색 ACI, 색상 7은 "White/Black" 표기)/`CadTextObjectDto`
+      (Position 필드 없음, 의도적)/`OptionalValue<T>`/`TextUpdatePatch`/`BatchPropertyState<T>`+
+      제네릭 `BatchPropertyAggregator`/`TextHeightValidator`/`TextContentValidator` - Core.Tests
+      46개 신규(총 244개)
+- [x] IPC 계약: `SelectTextObjects`/`AcquireTextInsertionPoint`(Milestone 11 `AcquirePlotWindow`와
+      같은 패턴, 두 점이 아닌 한 점)/`CreateText`/`UpdateTextObjects` 4개(새 Protocol Version 불필요)
+- [x] AutoCAD Plugin: 실제 AutoCAD 2024 DLL을 리플렉션으로 전량 검증한 뒤
+      `SelectTextObjectsHandler`/`AcquireTextInsertionPointHandler`/`UpdateTextObjectsHandler`/
+      `CreateTextHandler` 구현 - **`Editor`/`TransactionManager`에 별도 Undo Mark API가 없음을
+      확인**(하나의 Transaction 한 번 Commit = 하나의 Undo 단계), `MText.Text`(읽기 전용 순수
+      텍스트)로 서식 유지 여부만 판정하고 커스텀 서식 파서는 만들지 않음, `AutoCadTextEntityAdapter`
+      가 DBText/MText 공통 읽기/쓰기의 유일한 접점. 배치 수정은 전체 검증 → 전체 쓰기 순서로
+      all-or-nothing 보장
+- [x] FakeAutoCad: `FakeUpdateTextObjectsHandler`가 실제 데이터 patch 적용까지 진짜로 수행(렌더링은
+      절대 흉내내지 않음, §95) + Scenario 16개(Selection Normal/Mixed/Unsupported/Cancelled,
+      Update Single/BatchHeight/BatchByLayer/BatchLayer/BatchMixedProperties/InvalidHandle/
+      Locked/Error, Create DbText/MText/Cancelled, Disconnected)
+- [x] Integration.Tests: Headless Text E2E 17개(선택 혼합타입/제외타입, 배치 수정 원자성, 단일
+      선택 Content 편집, Create 전체 흐름, 잠긴 Layer/잘못된 handle 전체 실패, 취소/연결끊김)
+- [x] Desktop: `TextWorkflowViewModel`(+ 합성 `TextCreateViewModel`) - Coordinator 계층 없음(Length/
+      Area/Drawing과 같은 패턴, Plot과 달리 Persistence 연결이 없어 불필요) + CAD 그룹에 "Text"
+      화면(Alt+4) - 편집/작성 세그먼트 토글 한 화면, 체크박스 게이팅 배치 편집(§67), 단일 선택
+      전용 Content 편집(§19), 위치 지정은 항상 AutoCAD에서 실제 점을 받음(좌표 직접 입력 없음, §36)
+- [x] 회귀 전체 재확인: Core.Tests 244(+46) + Persistence.Tests 40 + Integration.Tests 80(+17) +
+      Documents.Tests 49, 총 413개 전부 통과(Release 빌드에서도 동일하게 재확인)
+- [x] Simulation Mode 실제 UI 조작으로 종단간 검증(생성/편집/잠긴 Layer 오류/연결 끊김 전부 포함)
+      - 이 과정에서 컴파일은 통과했던 실제 렌더링 버그 2건(Visibility+DataContext 동시 바인딩 충돌,
+      커스텀 ComboBox 템플릿의 DisplayMemberPath 미반영)과 오류 메시지 버그 1건(잠긴 Layer 실패
+      시 Handler가 만든 구체적 한국어 메시지가 사용자에게 전달되지 않고 일반 문구로 대체되던 문제
+      - `InvalidRequest`/`ApiExecutionFailed` 분류를 재정리해 수정)을 발견/수정하고 413개 테스트
+      재검증까지 마쳤다
+- [x] Release 빌드/설치 프로그램 재생성 - Runtime Audit 통과, 설치본 smoke test 9단계 전부 통과
+      (installer 51.3MB)
+
+**의도적으로 하지 않은 것**: OCR/AI/번역/맞춤법 검사, Dimension/Table/Attribute 편집, MText 서식
+편집기, TextStyle 관리자, Annotative Scale 관리자, 프로젝트 전체 찾기/바꾸기, Rotation/TextStyle
+편집(조회만), 문자 작업에 대한 ExportRecord/ActivityRecord 기록.
+
+**Milestone 12B(실제 DBText/MText 렌더링, 폰트/TextStyle 실제 동작, 실제 Undo/Redo, 잠긴 Layer
+실제 동작 등)는 Milestone 8.5/11B와 같은 이유로 BLOCKED다** - 이 PC는 AutoCAD GUI 구동 시 그래픽
+드라이버가 불안정해지는 문제가 해소되지 않았다. 세부 체크리스트는
+`docs/AUTOCAD_REAL_MACHINE_CHECKLIST.md` "Milestone 12" 참고.
 
 ## Milestone 13 — Project Manager 고도화
 

@@ -279,6 +279,49 @@ DRAWING_PDF_OUTPUT.md` §10). 여기 남는 건 "실제 AutoCAD Plot 엔진이 �
   콜백 없이도 문제없이 끝까지 도는지(현재 구현은 `PlotProgress`에 `null`을 넘긴다)
 - [BLOCKED] 매우 복잡한 도면(객체 수가 많거나 Hatch/Raster 포함)에서 Plot 소요 시간과 결과 정확성
 
+## Milestone 12 — Text Tools
+
+Core/IPC/Handler는 실제 AutoCAD 2024 DLL을 리플렉션으로 전량 검증했고(`docs/AUTOCAD_INTEGRATION.md`
+§5.8), FakeAutoCad+Simulation Mode로 IPC/검증/배치 patch 의미론/UI를 종단간 검증했다(`docs/
+TEXT_TOOLS.md` §12). 여기 남는 건 "실제 AutoCAD가 정확히 렌더링/기록하는가"뿐이다.
+
+### 조회 (Select/Inspect)
+
+- [BLOCKED] Dimension/MLeader/Table/AttributeReference가 섞인 선택에서 실제로 전부 제외되고, 제외된
+  타입 이름이 정확히 표시되는지
+- [BLOCKED] 실제 도면의 TextStyle이 커스텀 폰트/기울임(Oblique)/폭 비율(WidthFactor)을 쓸 때도
+  `CadTextObjectDto`가 정확한 값을 반환하는지
+- [BLOCKED] 실제 Annotative 문자에서 `Entity.Annotative == True`가 기대대로 판정되는지
+- [BLOCKED] 서식이 있는 실제 MText(굵게/색상 부분 적용 등)에서 `HasInlineFormatting` 판정이
+  실사용 서식 조합 전반에서 정확한지(현재는 `Contents != Text` 단순 비교)
+
+### 편집 (Update, 배치 포함)
+
+- [BLOCKED] 실제 DWG에서 배치 Height/Color/Layer 변경 후 화면에 즉시 정확히 반영되는지(재계산/
+  재생성 없이)
+- [BLOCKED] 색상을 ByLayer로 되돌린 문자가 실제로 Layer 색상을 따라가는지(다른 Layer로 옮긴 뒤
+  에도)
+- [BLOCKED] 잠긴 Layer의 문자를 배치에 포함했을 때 실제로 아무것도 바뀌지 않고(all-or-nothing)
+  AutoCAD 쪽에도 부분 변경 흔적이 없는지
+- [BLOCKED] 여러 속성을 한 번에 바꾼 배치 수정이 실제 Undo 스택에서 **한 번의 Ctrl+Z**로 전부
+  되돌려지는지(Editor에 별도 Undo Mark API가 없다는 리플렉션 결론이 실제로 맞는지의 최종 확인)
+- [BLOCKED] 배치 수정 중간에 AutoCAD가 다른 이유로 예외를 던졌을 때도 실제로 부분 수정이 전혀
+  남지 않는지
+- [BLOCKED] 문자 내용을 수정한 직후 DWG의 "수정됨(DBMOD)" 플래그가 정확히 서고, 저장하지 않고
+  닫을 때 저장 확인 프롬프트가 뜨는지(CLAUDE.md 절대 원칙 1과 직결)
+
+### 작성 (Create)
+
+- [BLOCKED] `AcquireTextInsertionPoint`로 지정한 점이 회전된 UCS/Pan/Zoom 상태에서도 실제 클릭
+  위치와 정확히 일치하는지(Milestone 11 §Window Plot에서 확인 못 한 것과 같은 종류의 위험)
+- [BLOCKED] 새로 만든 DBText/MText가 현재 Layer의 기본 TextStyle/글꼴로 실제로 렌더링되는지
+- [BLOCKED] Paper Space Layout이 활성 상태일 때 `Database.CurrentSpaceId`가 실제로 Paper Space를
+  가리켜 문자가 올바른 공간에 생성되는지
+- [BLOCKED] 명시한 색상(ByBlock/특정 ACI)이 실제 화면에서 정확한 색으로 보이는지, 특히 색상 7이
+  배경(검정/흰 배경)에 따라 다르게 렌더링되는지(§29에서 예상한 White/Black 양면성)
+- [BLOCKED] MText로 여러 줄 내용을 작성했을 때 자동 줄바꿈/폭 처리가 v1의 단순 구현으로도 실무에
+  허용 가능한 수준인지
+
 ## 검증 방법 메모
 
 - 이 문서의 각 항목은 AutoCAD가 있는 머신에서 실제로 시도한 뒤 앞머리의 상태 표기를 `[BLOCKED]`에서 `[PASS]`/`[FAIL]`/`[N/A]`로 바꾸고, 특이사항(재현 조건, AutoCAD 버전, 관련 커밋)을 항목 옆에 메모로 남긴다. 실행하지 않았는데 결과를 추측해서 적지 않는다.
