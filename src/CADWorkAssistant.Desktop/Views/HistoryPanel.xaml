@@ -107,7 +107,7 @@
                   AutoGenerateColumns="False"
                   AutomationProperties.Name="산출내역 목록">
           <DataGrid.Columns>
-            <DataGridTemplateColumn Header="" Width="32">
+            <DataGridTemplateColumn Header="" Width="30">
               <DataGridTemplateColumn.CellTemplate>
                 <DataTemplate>
                   <!-- DataGridCheckBoxColumn 대신 직접 CheckBox를 쓴다 - DataGridCheckBoxColumn은
@@ -122,12 +122,16 @@
                 </DataTemplate>
               </DataGridTemplateColumn.CellTemplate>
             </DataGridTemplateColumn>
-            <DataGridTextColumn Header="DATE" Binding="{Binding CreatedAt, StringFormat=yyyy-MM-dd}" Width="90" />
-            <DataGridTextColumn Header="TYPE" Binding="{Binding Type}" Width="100" />
-            <DataGridTextColumn Header="DESCRIPTION" Binding="{Binding Description}" Width="150" />
-            <DataGridTextColumn Header="QTY" Binding="{Binding Value, StringFormat=N3}" Width="90" />
-            <DataGridTextColumn Header="UNIT" Binding="{Binding Unit}" Width="50" />
-            <DataGridTemplateColumn Header="VERIFICATION" Width="110" SortMemberPath="VerificationLabel">
+            <DataGridTextColumn Header="DATE" Binding="{Binding CreatedAt, StringFormat=yyyy-MM-dd}" Width="82" />
+            <DataGridTextColumn Header="TYPE" Binding="{Binding Type}" Width="80" />
+            <!-- 나머지 6개 컬럼이 고정폭 합계 약 480px - 좁은 목록 pane(≈650-700px)에서도 DESCRIPTION이
+                 압축될지언정 UNIT/VERIFICATION 같은 뒤쪽 고정폭 컬럼이 안 보이게 밀려나지 않는다
+                 (Milestone 8 UI Audit에서 실제 스크린샷으로 확인 - 이전엔 DESCRIPTION=150(고정)이라
+                 합계가 pane보다 넓어 UNIT 헤더가 "UI" 두 글자만 보이도록 잘렸었다). -->
+            <DataGridTextColumn Header="DESCRIPTION" Binding="{Binding Description}" Width="*" MinWidth="80" />
+            <DataGridTextColumn Header="QTY" Binding="{Binding Value, StringFormat=N3}" Width="76" />
+            <DataGridTextColumn Header="UNIT" Binding="{Binding Unit}" Width="44" />
+            <DataGridTemplateColumn Header="VERIFICATION" Width="126" SortMemberPath="VerificationLabel">
               <DataGridTemplateColumn.CellTemplate>
                 <DataTemplate>
                   <StackPanel Orientation="Horizontal">
@@ -139,7 +143,7 @@
                 </DataTemplate>
               </DataGridTemplateColumn.CellTemplate>
             </DataGridTemplateColumn>
-            <DataGridTextColumn Header="REVIEW" Binding="{Binding ReviewLabel}" Width="80" />
+            <DataGridTextColumn Header="REVIEW" Binding="{Binding ReviewLabel}" Width="64" />
           </DataGrid.Columns>
         </DataGrid>
       </Border>
