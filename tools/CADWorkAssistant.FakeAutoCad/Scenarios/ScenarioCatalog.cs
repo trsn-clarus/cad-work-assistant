@@ -5,6 +5,7 @@ using CADWorkAssistant.Core.Area;
 using CADWorkAssistant.Core.Cad;
 using CADWorkAssistant.Core.Drawing;
 using CADWorkAssistant.Core.Length;
+using CADWorkAssistant.Core.Plot;
 
 namespace CADWorkAssistant.FakeAutoCad.Scenarios;
 
@@ -307,6 +308,174 @@ public static class ScenarioCatalog
             DrawingObjects = normalDrawingObjects,
             Layers = normalLayers,
             ExportShouldFail = true
+        };
+
+        // --- AutoCAD Plot (Milestone 11 §95) ---
+        var normalPlotDevices = new[]
+        {
+            new CadPlotDeviceDto("DWG To PDF.pc3", isPdfCapable: true),
+            new CadPlotDeviceDto("HP LaserJet M404-M405", isPdfCapable: false)
+        };
+
+        var noPdfPlotDevices = new[]
+        {
+            new CadPlotDeviceDto("HP LaserJet M404-M405", isPdfCapable: false)
+        };
+
+        var fullPlotMedia = new[]
+        {
+            new CadPlotMediaDto("ISO_A4_(210.00_x_297.00_MM)", "ISO A4 (210.00 x 297.00 MM)", 210, 297),
+            new CadPlotMediaDto("ISO_A3_(297.00_x_420.00_MM)", "ISO A3 (297.00 x 420.00 MM)", 297, 420)
+        };
+
+        var a4OnlyPlotMedia = new[]
+        {
+            new CadPlotMediaDto("ISO_A4_(210.00_x_297.00_MM)", "ISO A4 (210.00 x 297.00 MM)", 210, 297)
+        };
+
+        var fullCtbStyles = new[] { "acad.ctb", "monochrome.ctb", "Screening 50%.ctb" };
+        var noMonochromeCtbStyles = new[] { "acad.ctb", "Screening 50%.ctb" };
+        var stbStyles = new[] { "acad.stb", "Standard.stb" };
+
+        var normalPlotLayouts = new[]
+        {
+            new CadPlotLayoutDto("Model", isModel: true, isCurrent: false),
+            new CadPlotLayoutDto("Layout1", isModel: false, isCurrent: true),
+            new CadPlotLayoutDto("Layout2", isModel: false, isCurrent: false)
+        };
+
+        yield return new SimulationScenario
+        {
+            Name = "PlotCapabilitiesNormal",
+            PlotDevices = normalPlotDevices,
+            PlotMedia = fullPlotMedia,
+            PlotColorDependentStyleSheets = fullCtbStyles,
+            PlotNamedStyleSheets = Array.Empty<string>(),
+            PlotCurrentStyleMode = CadPlotStyleMode.ColorDependent,
+            PlotLayouts = normalPlotLayouts
+        };
+
+        yield return new SimulationScenario
+        {
+            Name = "PlotCapabilitiesCtb",
+            PlotDevices = normalPlotDevices,
+            PlotMedia = fullPlotMedia,
+            PlotColorDependentStyleSheets = fullCtbStyles,
+            PlotNamedStyleSheets = Array.Empty<string>(),
+            PlotCurrentStyleMode = CadPlotStyleMode.ColorDependent,
+            PlotLayouts = normalPlotLayouts
+        };
+
+        yield return new SimulationScenario
+        {
+            Name = "PlotCapabilitiesStb",
+            PlotDevices = normalPlotDevices,
+            PlotMedia = fullPlotMedia,
+            PlotColorDependentStyleSheets = fullCtbStyles,
+            PlotNamedStyleSheets = stbStyles,
+            PlotCurrentStyleMode = CadPlotStyleMode.Named,
+            PlotLayouts = normalPlotLayouts
+        };
+
+        yield return new SimulationScenario
+        {
+            Name = "PlotCapabilitiesNoPdfDevice",
+            PlotDevices = noPdfPlotDevices,
+            PlotMedia = Array.Empty<CadPlotMediaDto>(),
+            PlotColorDependentStyleSheets = fullCtbStyles,
+            PlotNamedStyleSheets = Array.Empty<string>(),
+            PlotCurrentStyleMode = CadPlotStyleMode.ColorDependent,
+            PlotLayouts = normalPlotLayouts
+        };
+
+        yield return new SimulationScenario
+        {
+            Name = "PlotCapabilitiesNoA3Media",
+            PlotDevices = normalPlotDevices,
+            PlotMedia = a4OnlyPlotMedia,
+            PlotColorDependentStyleSheets = fullCtbStyles,
+            PlotNamedStyleSheets = Array.Empty<string>(),
+            PlotCurrentStyleMode = CadPlotStyleMode.ColorDependent,
+            PlotLayouts = normalPlotLayouts
+        };
+
+        yield return new SimulationScenario
+        {
+            Name = "PlotCapabilitiesNoMonochromeStyle",
+            PlotDevices = normalPlotDevices,
+            PlotMedia = fullPlotMedia,
+            PlotColorDependentStyleSheets = noMonochromeCtbStyles,
+            PlotNamedStyleSheets = Array.Empty<string>(),
+            PlotCurrentStyleMode = CadPlotStyleMode.ColorDependent,
+            PlotLayouts = normalPlotLayouts
+        };
+
+        yield return new SimulationScenario
+        {
+            Name = "PlotWindowNormal",
+            PlotDevices = normalPlotDevices,
+            PlotMedia = fullPlotMedia,
+            PlotColorDependentStyleSheets = fullCtbStyles,
+            PlotCurrentStyleMode = CadPlotStyleMode.ColorDependent,
+            PlotLayouts = normalPlotLayouts,
+            PlotWindowBehavior = SelectionBehavior.ReturnObjects,
+            PlotWindow = new CadPlotWindowDto(0, 0, 18000, 12500)
+        };
+
+        yield return new SimulationScenario
+        {
+            Name = "PlotWindowCancelled",
+            PlotDevices = normalPlotDevices,
+            PlotMedia = fullPlotMedia,
+            PlotColorDependentStyleSheets = fullCtbStyles,
+            PlotCurrentStyleMode = CadPlotStyleMode.ColorDependent,
+            PlotLayouts = normalPlotLayouts,
+            PlotWindowBehavior = SelectionBehavior.Cancelled
+        };
+
+        yield return new SimulationScenario
+        {
+            Name = "PlotSuccess",
+            PlotDevices = normalPlotDevices,
+            PlotMedia = fullPlotMedia,
+            PlotColorDependentStyleSheets = fullCtbStyles,
+            PlotCurrentStyleMode = CadPlotStyleMode.ColorDependent,
+            PlotLayouts = normalPlotLayouts,
+            PlotWindow = new CadPlotWindowDto(0, 0, 18000, 12500),
+            PlotDrawingPdfBehavior = PlotDrawingBehavior.Succeed
+        };
+
+        yield return new SimulationScenario
+        {
+            Name = "PlotBusy",
+            PlotDevices = normalPlotDevices,
+            PlotMedia = fullPlotMedia,
+            PlotColorDependentStyleSheets = fullCtbStyles,
+            PlotCurrentStyleMode = CadPlotStyleMode.ColorDependent,
+            PlotLayouts = normalPlotLayouts,
+            PlotDrawingPdfBehavior = PlotDrawingBehavior.Busy
+        };
+
+        yield return new SimulationScenario
+        {
+            Name = "PlotFailure",
+            PlotDevices = normalPlotDevices,
+            PlotMedia = fullPlotMedia,
+            PlotColorDependentStyleSheets = fullCtbStyles,
+            PlotCurrentStyleMode = CadPlotStyleMode.ColorDependent,
+            PlotLayouts = normalPlotLayouts,
+            PlotDrawingPdfBehavior = PlotDrawingBehavior.Failure
+        };
+
+        yield return new SimulationScenario
+        {
+            Name = "PlotDisconnect",
+            PlotDevices = normalPlotDevices,
+            PlotMedia = fullPlotMedia,
+            PlotColorDependentStyleSheets = fullCtbStyles,
+            PlotCurrentStyleMode = CadPlotStyleMode.ColorDependent,
+            PlotLayouts = normalPlotLayouts,
+            PlotDrawingPdfBehavior = PlotDrawingBehavior.DisconnectBeforeResponding
         };
     }
 }

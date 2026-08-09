@@ -3,8 +3,21 @@ using CADWorkAssistant.Core.Area;
 using CADWorkAssistant.Core.Cad;
 using CADWorkAssistant.Core.Drawing;
 using CADWorkAssistant.Core.Length;
+using CADWorkAssistant.Core.Plot;
 
 namespace CADWorkAssistant.FakeAutoCad.Scenarios;
+
+/// <summary>
+/// Milestone 11 §95 - PlotDrawingPdf 전용 결과 종류. SelectionBehavior와 겹치지 않는 "Busy"가 있고
+/// Cancel/Hang 개념이 없어(비인터랙티브 호출) 별도 enum으로 둔다.
+/// </summary>
+public enum PlotDrawingBehavior
+{
+    Succeed,
+    Busy,
+    Failure,
+    DisconnectBeforeResponding
+}
 
 /// <summary>
 /// 어떤 IPC 요청에 대해 SelectLengthObjects/SelectAreaObjects Handler가 어떻게 행동할지 정의한다
@@ -77,4 +90,26 @@ public sealed class SimulationScenario
 
     /// <summary>ExportSelection이 AutoCAD 내부 오류로 실패한 것처럼 흉내낸다 (§68 ExportSelectionError).</summary>
     public bool ExportShouldFail { get; init; }
+
+    // --- AutoCAD Plot (Milestone 11) ---
+
+    public IReadOnlyList<CadPlotDeviceDto> PlotDevices { get; init; } = System.Array.Empty<CadPlotDeviceDto>();
+
+    public IReadOnlyList<CadPlotMediaDto> PlotMedia { get; init; } = System.Array.Empty<CadPlotMediaDto>();
+
+    public IReadOnlyList<string> PlotColorDependentStyleSheets { get; init; } = System.Array.Empty<string>();
+
+    public IReadOnlyList<string> PlotNamedStyleSheets { get; init; } = System.Array.Empty<string>();
+
+    public CadPlotStyleMode PlotCurrentStyleMode { get; init; } = CadPlotStyleMode.ColorDependent;
+
+    public IReadOnlyList<CadPlotLayoutDto> PlotLayouts { get; init; } = System.Array.Empty<CadPlotLayoutDto>();
+
+    /// <summary>AcquirePlotWindow 결과. SelectDrawingObjects와 같은 SelectionBehavior를 재사용한다
+    /// (§13 - Model Space에서 두 점을 받는 것도 결국 인터랙티브 Selection의 한 형태다).</summary>
+    public SelectionBehavior PlotWindowBehavior { get; init; } = SelectionBehavior.ReturnObjects;
+
+    public CadPlotWindowDto PlotWindow { get; init; } = new(0, 0, 20000, 15000);
+
+    public PlotDrawingBehavior PlotDrawingPdfBehavior { get; init; } = PlotDrawingBehavior.Succeed;
 }

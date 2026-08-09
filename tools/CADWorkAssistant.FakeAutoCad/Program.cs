@@ -48,7 +48,10 @@ public static class Program
             new FakeGetLayersHandler(drawingState),
             new FakeSetLayerVisibilityHandler(drawingState),
             new FakeRestoreVisibilityHandler(drawingState),
-            new FakeExportSelectionHandler(scenario)
+            new FakeExportSelectionHandler(scenario),
+            new FakeGetPlotCapabilitiesHandler(scenario),
+            new FakeAcquirePlotWindowHandler(scenario),
+            new FakePlotDrawingPdfHandler(scenario)
         };
 
         var server = new AutoCadPipeServer(new IpcRequestDispatcher(handlers), processId);
