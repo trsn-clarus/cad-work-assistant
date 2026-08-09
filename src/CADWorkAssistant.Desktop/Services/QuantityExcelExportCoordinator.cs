@@ -2,28 +2,25 @@ using System;
 using System.Reflection;
 using System.Threading.Tasks;
 using CADWorkAssistant.Documents.Excel;
-using CADWorkAssistant.Persistence;
+using CADWorkAssistant.Documents.Reports;
 using Serilog;
 
 namespace CADWorkAssistant.Desktop.Services;
 
 public sealed class QuantityExcelExportCoordinator : IQuantityExcelExportCoordinator
 {
-    private readonly ProjectDataService _dataService;
-    private readonly IQuantityVerificationCoordinator _verificationCoordinator;
+    private readonly IQuantityReportSnapshotService _snapshotService;
     private readonly IProjectContextService _projectContext;
 
     public QuantityExcelExportCoordinator(
-        ProjectDataService dataService,
-        IQuantityVerificationCoordinator verificationCoordinator,
+        IQuantityReportSnapshotService snapshotService,
         IProjectContextService projectContext)
     {
-        _dataService = dataService;
-        _verificationCoordinator = verificationCoordinator;
+        _snapshotService = snapshotService;
         _projectContext = projectContext;
     }
 
-    public async Task<QuantityWorkbookModel> BuildPreviewAsync(string projectId, ExcelExportOptions options)
+    public async Task<QuantityReportModel> BuildPreviewAsync(string projectId, ExcelExportOptions options)
     {
         var model = await BuildModelAsync(projectId, options);
         return model;
@@ -41,7 +38,7 @@ public sealed class QuantityExcelExportCoordinator : IQuantityExcelExportCoordin
 
         try
         {
-            var scopeText = options.Scope == ExcelExportScope.VerifiedOnly ? "검토 완료만" : "전체";
+            var scopeText = options.Scope == QuantityExportScope.VerifiedOnly ? "검토 완료만" : "전체";
             await _projectContext.AddExcelExportRecordAsync(targetPath, result.RecordCount, $"{scopeText} · {result.RecordCount}건");
         }
         catch (Exception ex)
@@ -54,23 +51,17 @@ public sealed class QuantityExcelExportCoordinator : IQuantityExcelExportCoordin
         return result;
     }
 
-    private async Task<QuantityWorkbookModel> BuildModelAsync(string projectId, ExcelExportOptions options)
+    private async Task<QuantityReportModel> BuildModelAsync(string projectId, ExcelExportOptions options)
     {
-        using var connection = _dataService.Database.OpenConnection();
-        var project = await _dataService.Projects.FindByIdAsync(projectId, connection)
-            ?? throw new InvalidOperationException($"Project {projectId} not found.");
-        var records = await _dataService.QuantityRecords.GetByProjectAsync(projectId, connection);
-        connection.Dispose();
+        // Milestone 10 §44: Project+QuantityRecord+Verification/Review 조회는 PDF Coordinator와
+        // 완전히 같은 스냅샷 서비스를 공유한다 - 두 포맷이 같은 시점의 같은 데이터를 본다.
+        var snapshot = await _snapshotService.LoadAsync(projectId);
 
-        // Verification/Review는 이미 같은 정책(fresh read, 캐시 없음)으로 동작하는 기존 Coordinator를
-        // 재사용한다(Milestone 7) - 검산 Snapshot 역직렬화 로직을 여기서 다시 만들지 않는다.
-        var snapshotSet = await _verificationCoordinator.LoadForProjectAsync(projectId);
-
-        return QuantityWorkbookModelBuilder.Build(
-            project,
-            records,
-            snapshotSet.Verifications,
-            snapshotSet.Reviews,
+        return QuantityReportModelBuilder.Build(
+            snapshot.Project,
+            snapshot.Records,
+            snapshot.Verifications,
+            snapshot.Reviews,
             options,
             DateTimeOffset.Now,
             AppVersion);
