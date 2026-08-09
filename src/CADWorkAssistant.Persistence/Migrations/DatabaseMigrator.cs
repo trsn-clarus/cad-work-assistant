@@ -17,6 +17,7 @@ internal static class DatabaseMigrator
     {
         new Migration001InitialSchema(),
         new Migration002AddVerificationAndReview(),
+        new Migration003AddExportType(),
     }.OrderBy(m => m.Version).ToArray();
 
     public static void MigrateToLatest(SqliteConnection connection)

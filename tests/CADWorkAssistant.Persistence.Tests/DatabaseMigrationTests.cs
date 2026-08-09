@@ -22,8 +22,8 @@ public sealed class DatabaseMigrationTests : IClassFixture<TestDatabaseFixture>
         {
             pragma.CommandText = "PRAGMA user_version;";
             var version = (long)pragma.ExecuteScalar()!;
-            // Migration001(v1, Milestone 6) + Migration002(v2, Milestone 7 Verification/Review) 둘 다 적용.
-            Assert.Equal(2, version);
+            // Migration001(v1, M6) + Migration002(v2, M7 Verification/Review) + Migration003(v3, M9 ExportType) 전부 적용.
+            Assert.Equal(3, version);
         }
 
         var expectedTables = new[]

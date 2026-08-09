@@ -41,6 +41,31 @@ public sealed class ExportRecordRepositoryTests : IClassFixture<TestDatabaseFixt
         Assert.Equal(record.TargetFile, found.TargetFile);
         Assert.Equal(record.ObjectCount, found.ObjectCount);
         Assert.Equal(record.Description, found.Description);
+        Assert.Equal(ExportTypes.DwgSelection, found.ExportType);
+    }
+
+    [Fact]
+    public async Task InsertAsync_ExcelQuantityExportType_RoundTrips()
+    {
+        var database = _fixture.CreateDatabase();
+        using var connection = database.OpenConnection();
+        var project = await InsertProjectAsync(connection);
+
+        var record = new ExportRecord(
+            id: Guid.NewGuid().ToString("N"),
+            projectId: project.Id,
+            sourceDrawing: null,
+            targetFile: @"C:\exports\OO초등학교_옥상방수_수량산출서_20260809.xlsx",
+            objectCount: 42,
+            description: "전체 42건",
+            createdAt: DateTimeOffset.UtcNow,
+            exportType: ExportTypes.ExcelQuantity);
+
+        await _exportRecords.InsertAsync(record, connection);
+        var found = (await _exportRecords.GetByProjectAsync(project.Id, connection)).Single();
+
+        Assert.Equal(ExportTypes.ExcelQuantity, found.ExportType);
+        Assert.Null(found.SourceDrawing);
     }
 
     private async Task<Project> InsertProjectAsync(SqliteConnection connection)

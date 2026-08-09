@@ -12,8 +12,8 @@ public sealed class SqliteExportRecordRepository : IExportRecordRepository
         using var command = connection.CreateCommand();
         command.Transaction = transaction;
         command.CommandText = """
-            INSERT INTO ExportRecord (Id, ProjectId, SourceDrawing, TargetFile, ObjectCount, Description, CreatedAt)
-            VALUES ($id, $projectId, $sourceDrawing, $targetFile, $objectCount, $description, $createdAt);
+            INSERT INTO ExportRecord (Id, ProjectId, SourceDrawing, TargetFile, ObjectCount, Description, CreatedAt, ExportType)
+            VALUES ($id, $projectId, $sourceDrawing, $targetFile, $objectCount, $description, $createdAt, $exportType);
             """;
         command.Parameters.AddWithValue("$id", record.Id);
         command.Parameters.AddWithValue("$projectId", record.ProjectId);
@@ -22,6 +22,7 @@ public sealed class SqliteExportRecordRepository : IExportRecordRepository
         command.Parameters.AddWithValue("$objectCount", record.ObjectCount);
         command.Parameters.AddWithValue("$description", (object?)record.Description ?? System.DBNull.Value);
         command.Parameters.AddWithValue("$createdAt", SqliteValueConverters.ToDbText(record.CreatedAt));
+        command.Parameters.AddWithValue("$exportType", record.ExportType);
         await command.ExecuteNonQueryAsync();
     }
 
@@ -44,7 +45,8 @@ public sealed class SqliteExportRecordRepository : IExportRecordRepository
                 targetFile: reader.GetString(reader.GetOrdinal("TargetFile")),
                 objectCount: reader.GetInt32(reader.GetOrdinal("ObjectCount")),
                 description: reader.IsDBNull(descriptionOrdinal) ? null : reader.GetString(descriptionOrdinal),
-                createdAt: SqliteValueConverters.ParseDateTimeOffset(reader.GetString(reader.GetOrdinal("CreatedAt")))));
+                createdAt: SqliteValueConverters.ParseDateTimeOffset(reader.GetString(reader.GetOrdinal("CreatedAt"))),
+                exportType: reader.GetString(reader.GetOrdinal("ExportType"))));
         }
 
         return results;
