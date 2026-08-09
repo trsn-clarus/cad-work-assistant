@@ -1,0 +1,26 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Autodesk ApplicationPlugin bundle manifest (Milestone 8 sections 115-116).
+  Installed to %APPDATA%\Autodesk\ApplicationPlugins\CADWorkAssistant.bundle\ and autoloaded by
+  AutoCAD on startup via LoadOnAutoCADStartup="True" - the user never has to type NETLOAD.
+  SeriesMin/SeriesMax="R24.3" is the real internal release ID of the AutoCAD 2024 installed on this
+  dev machine, read directly from C:\ProgramData\Autodesk\AutoCAD 2024\ (not guessed - matches
+  CLAUDE.md's "verify against the real product before assuming an AutoCAD API/value" rule). This
+  build has only been validated against that one confirmed version (Milestone 8 section 114).
+-->
+<ApplicationPackage SchemaVersion="1.0"
+                     Name="CAD Work Assistant"
+                     AppVersion="0.8.0"
+                     Description="AutoCAD quantity takeoff and verification automation tool"
+                     Author="TRSN CLARUS"
+                     ProductCode="{DF475DF2-1225-4303-A6CB-94FFB224A0AE}"
+                     UpgradeCode="{17C9B42A-6F66-4B61-8A5B-2AEA41B1771B}">
+  <CompanyDetails Name="TRSN CLARUS" />
+  <Components Description="CAD Work Assistant AutoCAD Plugin">
+    <RuntimeRequirements OS="Win64" Platform="AutoCAD" SeriesMin="R24.3" SeriesMax="R24.3" />
+    <ComponentEntry AppName="CADWorkAssistant"
+                     ModuleName="./Contents/Windows/CADWorkAssistant.AutoCAD.dll"
+                     AppDescription="CAD Work Assistant - quantity takeoff and verification"
+                     LoadOnAutoCADStartup="True" />
+  </Components>
+</ApplicationPackage>
