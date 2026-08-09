@@ -53,4 +53,8 @@ public static class ExportTypes
     /// <summary>Milestone 10 - PDF 산출근거 보고서. ExportType은 TEXT 컬럼(Migration003)이라 새
     /// 값 추가에 스키마 변경(새 Migration)이 필요 없다 - 문자열 상수 하나만 늘어난다.</summary>
     public const string PdfQuantityReport = "PdfQuantityReport";
+
+    /// <summary>Milestone 11 - AutoCAD Plot 엔진으로 만든 도면 PDF(Layout/Window). Milestone 10의
+    /// PdfQuantityReport(수량 보고서)와 완전히 다른 서브시스템의 산출물이라 값을 공유하지 않는다.</summary>
+    public const string DrawingPdf = "DrawingPdf";
 }

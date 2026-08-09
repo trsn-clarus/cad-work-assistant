@@ -327,6 +327,48 @@ public sealed class ProjectContextService : ObservableObject, IProjectContextSer
         Activity.Insert(0, activity);
     }
 
+    public async Task AddDrawingPdfExportRecordAsync(string targetFile, int pageCount, string scopeDescription)
+    {
+        if (_currentProject is not { } project)
+        {
+            return;
+        }
+
+        var record = new ExportRecord(
+            id: Guid.NewGuid().ToString("N"),
+            projectId: project.Id,
+            sourceDrawing: null,
+            targetFile: targetFile,
+            objectCount: pageCount,
+            description: scopeDescription,
+            createdAt: DateTimeOffset.UtcNow,
+            exportType: ExportTypes.DrawingPdf);
+
+        var activity = new ActivityRecord(
+            id: Guid.NewGuid().ToString("N"),
+            projectId: project.Id,
+            activityType: "DrawingPdfExportCompleted",
+            title: "도면 PDF 출력 완료",
+            description: $"{System.IO.Path.GetFileName(targetFile)} · {scopeDescription}",
+            createdAt: record.CreatedAt);
+
+        using var connection = _dataService.Database.OpenConnection();
+        using var transaction = connection.BeginTransaction();
+        try
+        {
+            await _dataService.ExportRecords.InsertAsync(record, connection, transaction);
+            await _dataService.Activity.InsertAsync(activity, connection, transaction);
+            transaction.Commit();
+        }
+        catch
+        {
+            transaction.Rollback();
+            throw;
+        }
+
+        Activity.Insert(0, activity);
+    }
+
     private async Task SwitchToAsync(Project project)
     {
         CurrentProject = project;

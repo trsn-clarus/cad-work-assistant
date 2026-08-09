@@ -59,4 +59,9 @@ public interface IProjectContextService
     /// <summary>Milestone 10 - PDF 산출근거서 저장 이력을 남긴다. AddExcelExportRecordAsync와 같은
     /// 이유로 별도 메서드다.</summary>
     Task AddPdfExportRecordAsync(string targetFile, int recordCount, string scopeDescription);
+
+    /// <summary>Milestone 11 - AutoCAD Plot으로 만든 도면 PDF 저장 이력을 남긴다. 수량 보고서
+    /// PDF(AddPdfExportRecordAsync)와 완전히 다른 서브시스템의 산출물이라 ExportType과 Activity
+    /// 제목을 분리한다(§166).</summary>
+    Task AddDrawingPdfExportRecordAsync(string targetFile, int pageCount, string scopeDescription);
 }
