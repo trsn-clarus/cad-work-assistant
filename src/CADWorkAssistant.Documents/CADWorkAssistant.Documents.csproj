@@ -1,7 +1,29 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netstandard2.0</TargetFramework>
+    <!--
+      net8.0만 타겟한다 - Persistence(net8.0, docs/PERSISTENCE.md)와 같은 이유다. AutoCAD Plugin(net48)은
+      이 프로젝트를 절대 참조하지 않는다(Milestone 9 §6, §159-162) - Documents는 Desktop 전용이다.
+      원래 netstandard2.0이었으나 실제로 참조하는 프로젝트가 아직 없었고(빈 프로젝트), ClosedXML을
+      추가하면서 Persistence와 같은 근거로 net8.0으로 확정했다.
+    -->
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      ClosedXML - .xlsx를 OpenXML 형식으로 직접 생성한다. Microsoft Excel/Interop/COM Automation을
+      쓰지 않는다(Milestone 9 §4) - Excel 설치 여부와 무관하게 동작해야 하고, 서버/헤드리스 테스트에서
+      COM lifetime 문제를 피해야 한다. MIT 라이선스, 상업적 사용 제약 없음, 활발히 유지보수됨
+      (2억+ 다운로드). `docs/EXCEL_EXPORT.md` §Library Choice에 선택 근거를 기록한다.
+    -->
+    <PackageReference Include="ClosedXML" Version="0.105.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CADWorkAssistant.Core\CADWorkAssistant.Core.csproj" />
+  </ItemGroup>
 
 </Project>
