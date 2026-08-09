@@ -14,6 +14,8 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
     <PackageReference Include="xunit" Version="2.5.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.5.3" />
+    <!-- Milestone 10 PDF E2E: PDF 텍스트 추출 검증 전용(테스트 프로젝트에만, Documents.Tests와 같은 이유). -->
+    <PackageReference Include="PdfPig" Version="0.1.15" />
   </ItemGroup>
 
   <ItemGroup>
