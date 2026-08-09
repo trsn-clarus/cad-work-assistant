@@ -4,6 +4,7 @@ using CADWorkAssistant.Core.Cad;
 using CADWorkAssistant.Core.Drawing;
 using CADWorkAssistant.Core.Length;
 using CADWorkAssistant.Core.Plot;
+using CADWorkAssistant.Core.Text;
 
 namespace CADWorkAssistant.FakeAutoCad.Scenarios;
 
@@ -16,6 +17,17 @@ public enum PlotDrawingBehavior
     Succeed,
     Busy,
     Failure,
+    DisconnectBeforeResponding
+}
+
+/// <summary>Milestone 12 §95 - CreateText/UpdateTextObjects 전용 결과 종류. 둘 다 비인터랙티브
+/// 호출이라 Cancel 개념이 없다 - InvalidHandle/LockedLayer는 UpdateTextObjects에서만 의미가 있다.</summary>
+public enum TextWriteBehavior
+{
+    Succeed,
+    InvalidHandle,
+    LockedLayer,
+    Error,
     DisconnectBeforeResponding
 }
 
@@ -112,4 +124,23 @@ public sealed class SimulationScenario
     public CadPlotWindowDto PlotWindow { get; init; } = new(0, 0, 20000, 15000);
 
     public PlotDrawingBehavior PlotDrawingPdfBehavior { get; init; } = PlotDrawingBehavior.Succeed;
+
+    // --- Text Tools (Milestone 12) ---
+
+    public IReadOnlyList<CadTextObjectDto> TextObjects { get; init; } = System.Array.Empty<CadTextObjectDto>();
+
+    public IReadOnlyList<string> TextExcludedObjectTypeNames { get; init; } = System.Array.Empty<string>();
+
+    /// <summary>SelectTextObjects 결과 - Length/Area/Drawing과 같은 SelectionBehavior를
+    /// 재사용한다(§94, 결국 인터랙티브 Selection의 한 형태).</summary>
+    public SelectionBehavior TextSelectionBehavior { get; init; } = SelectionBehavior.ReturnObjects;
+
+    /// <summary>AcquireTextInsertionPoint 결과.</summary>
+    public SelectionBehavior TextInsertionPointBehavior { get; init; } = SelectionBehavior.ReturnObjects;
+
+    public CadPointDto TextInsertionPoint { get; init; } = new(1000, 1000, 0);
+
+    public TextWriteBehavior TextCreateBehavior { get; init; } = TextWriteBehavior.Succeed;
+
+    public TextWriteBehavior TextUpdateBehavior { get; init; } = TextWriteBehavior.Succeed;
 }

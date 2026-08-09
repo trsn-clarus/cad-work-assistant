@@ -6,6 +6,7 @@ using CADWorkAssistant.Core.Cad;
 using CADWorkAssistant.Core.Drawing;
 using CADWorkAssistant.Core.Length;
 using CADWorkAssistant.Core.Plot;
+using CADWorkAssistant.Core.Text;
 
 namespace CADWorkAssistant.FakeAutoCad.Scenarios;
 
@@ -476,6 +477,149 @@ public static class ScenarioCatalog
             PlotCurrentStyleMode = CadPlotStyleMode.ColorDependent,
             PlotLayouts = normalPlotLayouts,
             PlotDrawingPdfBehavior = PlotDrawingBehavior.DisconnectBeforeResponding
+        };
+
+        // --- Text Tools (Milestone 12 §94) ---
+        var normalTextObjects = new[]
+        {
+            new CadTextObjectDto(
+                "8A01", CadTextEntityType.SingleLine, "옥상 방수공사", "옥상 방수공사", "A-TEXT",
+                250, 0, CadColorPalette.ByLayer, "Standard", isLocked: false, isAnnotative: false, hasInlineFormatting: false),
+            new CadTextObjectDto(
+                "8A02", CadTextEntityType.SingleLine, "실내마감표", "실내마감표", "A-TEXT",
+                250, 0, CadColorPalette.ByLayer, "Standard", isLocked: false, isAnnotative: false, hasInlineFormatting: false),
+            new CadTextObjectDto(
+                "8A03", CadTextEntityType.SingleLine, "1층 평면도", "1층 평면도", "A-TEXT",
+                250, 0, CadColorPalette.ByLayer, "Standard", isLocked: false, isAnnotative: false, hasInlineFormatting: false)
+        };
+
+        // §38, §94: DBText + MText가 한 선택에 섞인 경우 - 두 타입이 같은 목록/Batch UI에서 정상
+        // 동작하는지 검증한다(속성 값 자체는 의도적으로 균일하게 둬서 "타입만 다른" 경우를 따로
+        // 검증한다 - 값이 섞인 경우는 TextBatchMixedProperties가 별도로 담당한다).
+        var mixedTypeTextObjects = new[]
+        {
+            new CadTextObjectDto(
+                "8B01", CadTextEntityType.SingleLine, "단일행 샘플", "단일행 샘플", "A-TEXT",
+                250, 0, CadColorPalette.ByLayer, "Standard", isLocked: false, isAnnotative: false, hasInlineFormatting: false),
+            new CadTextObjectDto(
+                "8B02", CadTextEntityType.MultiLine, "여러행 샘플\n둘째 줄", "여러행 샘플\n둘째 줄", "A-TEXT",
+                250, 0, CadColorPalette.ByLayer, "Standard", isLocked: false, isAnnotative: false, hasInlineFormatting: false)
+        };
+
+        // §12-13, §94: 높이/Layer/색상이 전부 다른 3개 - BatchPropertyAggregator의 "혼합" 판정을
+        // 실제 IPC 응답으로 검증한다.
+        var mixedPropertyTextObjects = new[]
+        {
+            new CadTextObjectDto(
+                "8C01", CadTextEntityType.SingleLine, "실내마감표", "실내마감표", "A-TEXT",
+                250, 0, CadColorPalette.ByLayer, "Standard", isLocked: false, isAnnotative: false, hasInlineFormatting: false),
+            new CadTextObjectDto(
+                "8C02", CadTextEntityType.SingleLine, "옥상 방수공사", "옥상 방수공사", "A-DIM",
+                300, 0, new CadColorDto(CadColorMode.Aci, 1, 0, 0, 0, "빨강 (색상 1)"), "Standard",
+                isLocked: false, isAnnotative: false, hasInlineFormatting: false),
+            new CadTextObjectDto(
+                "8C03", CadTextEntityType.MultiLine, "1층 평면도\n축척 1:100", "1층 평면도\n축척 1:100", "A-NOTE",
+                180, 0, CadColorPalette.ByBlock, "Standard", isLocked: false, isAnnotative: false, hasInlineFormatting: false)
+        };
+
+        yield return new SimulationScenario { Name = "TextSelectionNormal", TextObjects = normalTextObjects };
+
+        yield return new SimulationScenario { Name = "TextSelectionMixed", TextObjects = mixedTypeTextObjects };
+
+        yield return new SimulationScenario
+        {
+            Name = "TextSelectionUnsupported",
+            TextObjects = new[] { normalTextObjects[0] },
+            TextExcludedObjectTypeNames = new[] { "Dimension", "MLeader" }
+        };
+
+        yield return new SimulationScenario { Name = "TextSelectionCancelled", TextSelectionBehavior = SelectionBehavior.Cancelled };
+
+        yield return new SimulationScenario
+        {
+            Name = "TextUpdateSingle",
+            TextObjects = new[] { normalTextObjects[0] }
+        };
+
+        yield return new SimulationScenario { Name = "TextBatchHeight", TextObjects = normalTextObjects };
+
+        yield return new SimulationScenario
+        {
+            Name = "TextBatchByLayer",
+            TextObjects = new[]
+            {
+                normalTextObjects[0],
+                new CadTextObjectDto(
+                    "8A04", CadTextEntityType.SingleLine, "구조 평면도", "구조 평면도", "A-TEXT",
+                    250, 0, new CadColorDto(CadColorMode.Aci, 2, 0, 0, 0, "노랑 (색상 2)"), "Standard",
+                    isLocked: false, isAnnotative: false, hasInlineFormatting: false)
+            }
+        };
+
+        yield return new SimulationScenario
+        {
+            Name = "TextBatchLayer",
+            TextObjects = new[]
+            {
+                normalTextObjects[0],
+                new CadTextObjectDto(
+                    "8A05", CadTextEntityType.SingleLine, "전기 평면도", "전기 평면도", "A-NOTE",
+                    250, 0, CadColorPalette.ByLayer, "Standard", isLocked: false, isAnnotative: false, hasInlineFormatting: false)
+            }
+        };
+
+        yield return new SimulationScenario { Name = "TextBatchMixedProperties", TextObjects = mixedPropertyTextObjects };
+
+        yield return new SimulationScenario
+        {
+            Name = "TextUpdateInvalidHandle",
+            TextObjects = normalTextObjects,
+            TextUpdateBehavior = TextWriteBehavior.InvalidHandle
+        };
+
+        yield return new SimulationScenario
+        {
+            Name = "TextUpdateLocked",
+            TextObjects = new[]
+            {
+                new CadTextObjectDto(
+                    "8D01", CadTextEntityType.SingleLine, "고정 문구", "고정 문구", "A-LOCKED",
+                    250, 0, CadColorPalette.ByLayer, "Standard", isLocked: true, isAnnotative: false, hasInlineFormatting: false)
+            },
+            TextUpdateBehavior = TextWriteBehavior.LockedLayer
+        };
+
+        yield return new SimulationScenario
+        {
+            Name = "TextCreateDbText",
+            TextInsertionPoint = new CadPointDto(12000, 8500, 0),
+            TextCreateBehavior = TextWriteBehavior.Succeed
+        };
+
+        yield return new SimulationScenario
+        {
+            Name = "TextCreateMText",
+            TextInsertionPoint = new CadPointDto(12000, 8500, 0),
+            TextCreateBehavior = TextWriteBehavior.Succeed
+        };
+
+        yield return new SimulationScenario
+        {
+            Name = "TextCreateCancelled",
+            TextInsertionPointBehavior = SelectionBehavior.Cancelled
+        };
+
+        yield return new SimulationScenario
+        {
+            Name = "TextDisconnected",
+            TextSelectionBehavior = SelectionBehavior.DisconnectBeforeResponding
+        };
+
+        yield return new SimulationScenario
+        {
+            Name = "TextUpdateError",
+            TextObjects = normalTextObjects,
+            TextUpdateBehavior = TextWriteBehavior.Error
         };
     }
 }

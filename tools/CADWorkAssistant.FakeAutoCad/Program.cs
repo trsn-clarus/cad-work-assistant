@@ -51,7 +51,11 @@ public static class Program
             new FakeExportSelectionHandler(scenario),
             new FakeGetPlotCapabilitiesHandler(scenario),
             new FakeAcquirePlotWindowHandler(scenario),
-            new FakePlotDrawingPdfHandler(scenario)
+            new FakePlotDrawingPdfHandler(scenario),
+            new FakeSelectTextObjectsHandler(scenario),
+            new FakeAcquireTextInsertionPointHandler(scenario),
+            new FakeCreateTextHandler(scenario),
+            new FakeUpdateTextObjectsHandler(scenario)
         };
 
         var server = new AutoCadPipeServer(new IpcRequestDispatcher(handlers), processId);
