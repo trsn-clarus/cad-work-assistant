@@ -56,12 +56,13 @@ public partial class App : Application
         var projectDataService = new ProjectDataService(database);
         var projectContext = new ProjectContextService(projectDataService);
         var verificationCoordinator = new QuantityVerificationCoordinator(projectDataService);
+        var excelExportCoordinator = new QuantityExcelExportCoordinator(projectDataService, verificationCoordinator, projectContext);
 
         // Settings 화면의 "데이터 폴더 열기"용 - DB 파일이 아니라 그 상위(data/의 부모) 폴더를 보여준다.
         // Simulation/Real이 서로 다른 db 파일을 쓰지만(CadWorkAssistantDatabase) 상위 폴더는 같다.
         var dataFolderPath = Path.GetDirectoryName(Path.GetDirectoryName(database.DatabasePath)) ?? database.DatabasePath;
 
-        var mainWindowViewModel = new MainWindowViewModel(_connectionManager, projectContext, verificationCoordinator, dataFolderPath);
+        var mainWindowViewModel = new MainWindowViewModel(_connectionManager, projectContext, verificationCoordinator, excelExportCoordinator, dataFolderPath);
         var mainWindow = new MainWindow(mainWindowViewModel, projectContext);
         mainWindow.Show();
     }

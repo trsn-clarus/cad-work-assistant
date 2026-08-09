@@ -15,6 +15,7 @@
     <ProjectReference Include="..\CADWorkAssistant.Core\CADWorkAssistant.Core.csproj" />
     <ProjectReference Include="..\CADWorkAssistant.Infrastructure\CADWorkAssistant.Infrastructure.csproj" />
     <ProjectReference Include="..\CADWorkAssistant.Persistence\CADWorkAssistant.Persistence.csproj" />
+    <ProjectReference Include="..\CADWorkAssistant.Documents\CADWorkAssistant.Documents.csproj" />
   </ItemGroup>
   <ItemGroup>
     <!-- ApplicationIcon(위)은 exe의 Win32 리소스 아이콘만 담당한다 - WPF Window.Icon은 별도로 pack URI로

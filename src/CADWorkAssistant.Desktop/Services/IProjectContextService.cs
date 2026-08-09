@@ -49,4 +49,10 @@ public interface IProjectContextService
     Task RegisterDrawingFileAsync(string fullPath, string fileName, string? drawingUnit);
 
     Task AddExportRecordAsync(string? sourceDrawing, string targetFile, int objectCount, string? description);
+
+    /// <summary>Milestone 9 - Excel 수량산출서 저장 이력을 남긴다. AddExportRecordAsync와 별도 메서드로
+    /// 둔 이유는 ExportRecord.ExportType/Activity 제목이 서로 다르고, 나중에 Excel만의 필드가
+    /// 늘어나도 DWG Export 경로에 영향을 주지 않기 위해서다 (AddQuantityRecordAsync가 이미
+    /// 측정 종류별로 호출부가 activityTitle을 직접 정하는 것과 같은 이유).</summary>
+    Task AddExcelExportRecordAsync(string targetFile, int recordCount, string scopeDescription);
 }

@@ -33,6 +33,7 @@ public sealed class MainWindowViewModel : ObservableObject
         IAutoCadConnectionManager connectionManager,
         IProjectContextService projectContext,
         IQuantityVerificationCoordinator verificationCoordinator,
+        IQuantityExcelExportCoordinator excelExportCoordinator,
         string dataFolderPath)
     {
         _connectionManager = connectionManager;
@@ -46,12 +47,14 @@ public sealed class MainWindowViewModel : ObservableObject
         Parapet = new ParapetWorkflowViewModel(connectionManager, Length);
         Drawing = new DrawingWorkflowViewModel(connectionManager);
         History = new QuantityHistoryViewModel(projectContext, verificationCoordinator);
+        ExcelExport = new ExcelExportViewModel(projectContext, excelExportCoordinator);
         Settings = new SettingsViewModel(dataFolderPath);
 
         // 실제로 화면이 있는 항목만 Navigation에 올린다(Milestone 8 §29) - 이전에는 미구현 항목도
         // 자리만 예약해 비활성 표시했지만(Milestone 4.5 §23), 상용 제품 첫인상에서는 클릭할 수 없는
-        // 항목이 5개나 보이는 쪽이 더 나쁘다는 판단으로 바꿨다. Files/Plot/PDF/Excel처럼 아직 화면이
-        // 없는 기능은 실제로 생길 때 그 Milestone에서 추가한다.
+        // 항목이 5개나 보이는 쪽이 더 나쁘다는 판단으로 바꿨다. Files/Plot처럼 아직 화면이 없는 기능은
+        // 실제로 생길 때 그 Milestone에서 추가한다. OUTPUT 그룹은 Milestone 9(Excel)에서 처음 실제
+        // 기능을 갖는다 - Milestone 10(PDF)/11(Plot)이 여기 이어서 추가될 자리다.
         Navigation = new ObservableCollection<NavItem>
         {
             new("PROJECT", "Dashboard", "Alt+1", true) { IsSelected = true },
@@ -64,6 +67,7 @@ public sealed class MainWindowViewModel : ObservableObject
             new("QUANTITY", "Vertical Area", "Ctrl+V"),
             new("QUANTITY", "Parapet", "Ctrl+R"),
             new("QUANTITY", "History", "Ctrl+H"),
+            new("OUTPUT", "Excel", "Ctrl+E", true),
             new("SETTINGS", "Settings", "Ctrl+,", true)
         };
 
@@ -153,6 +157,7 @@ public sealed class MainWindowViewModel : ObservableObject
         Drawing.PropertyChanged += (_, _) => RefreshInspector();
         Drawing.Rows.CollectionChanged += (_, _) => RefreshInspector();
         History.PropertyChanged += (_, _) => RefreshInspector();
+        ExcelExport.PropertyChanged += (_, _) => RefreshInspector();
 
         OpenCommandPaletteCommand = new RelayCommand(() => IsCommandPaletteOpen = true);
         CloseCommandPaletteCommand = new RelayCommand(() => IsCommandPaletteOpen = false);
@@ -191,6 +196,7 @@ public sealed class MainWindowViewModel : ObservableObject
     public ParapetWorkflowViewModel Parapet { get; }
     public DrawingWorkflowViewModel Drawing { get; }
     public QuantityHistoryViewModel History { get; }
+    public ExcelExportViewModel ExcelExport { get; }
     public SettingsViewModel Settings { get; }
 
     public ICommand OpenCommandPaletteCommand { get; }
@@ -234,6 +240,7 @@ public sealed class MainWindowViewModel : ObservableObject
                 OnPropertyChanged(nameof(IsParapetToolSelected));
                 OnPropertyChanged(nameof(IsDrawingToolSelected));
                 OnPropertyChanged(nameof(IsHistoryToolSelected));
+                OnPropertyChanged(nameof(IsExcelExportToolSelected));
                 OnPropertyChanged(nameof(IsSettingsToolSelected));
                 OnPropertyChanged(nameof(IsDashboardContentVisible));
                 RefreshInspector();
@@ -255,11 +262,13 @@ public sealed class MainWindowViewModel : ObservableObject
 
     public bool IsHistoryToolSelected => _selectedTool == "History";
 
+    public bool IsExcelExportToolSelected => _selectedTool == "Excel";
+
     public bool IsSettingsToolSelected => _selectedTool == "Settings";
 
     public bool IsDashboardContentVisible =>
         !IsLengthToolSelected && !IsAreaToolSelected && !IsVerticalAreaToolSelected && !IsParapetToolSelected
-        && !IsDrawingToolSelected && !IsHistoryToolSelected && !IsSettingsToolSelected;
+        && !IsDrawingToolSelected && !IsHistoryToolSelected && !IsExcelExportToolSelected && !IsSettingsToolSelected;
 
     public string InspectorTitle => _selectedTool switch
     {
@@ -269,6 +278,7 @@ public sealed class MainWindowViewModel : ObservableObject
         "Parapet" => "Parapet",
         "Drawing" => "Drawing Navigation",
         "History" => "Quantity History",
+        "Excel" => "Excel Export",
         "Settings" => "Settings",
         _ => "Session"
     };
@@ -415,6 +425,10 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             History.OnActivated();
         }
+        else if (selected.Label == "Excel")
+        {
+            ExcelExport.OnActivated();
+        }
     }
 
     private void RefreshInspector()
@@ -468,6 +482,12 @@ public sealed class MainWindowViewModel : ObservableObject
                     ? $"{row.Type} · {row.Value:N3} {row.Unit}"
                     : "없음"));
                 InspectorRows.Add(new InspectorRow("검토 상태", History.SelectedRow?.ReviewLabel ?? "—"));
+                break;
+
+            case "Excel":
+                InspectorRows.Add(new InspectorRow("프로젝트", ExcelExport.CurrentProjectName));
+                InspectorRows.Add(new InspectorRow("요약", ExcelExport.SummaryText));
+                InspectorRows.Add(new InspectorRow("최근 저장", ExcelExport.LastExportedFileName ?? "없음"));
                 break;
 
             case "Settings":

@@ -302,6 +302,11 @@
                              DataContext="{Binding History}"
                              Visibility="{Binding DataContext.IsHistoryToolSelected, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVisibility}}" />
 
+        <views:ExcelExportPanel Grid.Row="0"
+                                 Grid.RowSpan="4"
+                                 DataContext="{Binding ExcelExport}"
+                                 Visibility="{Binding DataContext.IsExcelExportToolSelected, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVisibility}}" />
+
         <views:SettingsPanel Grid.Row="0"
                               Grid.RowSpan="4"
                               DataContext="{Binding Settings}"
