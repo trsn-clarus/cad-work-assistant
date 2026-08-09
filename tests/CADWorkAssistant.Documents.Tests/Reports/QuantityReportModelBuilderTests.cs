@@ -1,10 +1,11 @@
 using CADWorkAssistant.Core.Models;
 using CADWorkAssistant.Core.Verification;
 using CADWorkAssistant.Documents.Excel;
+using CADWorkAssistant.Documents.Reports;
 
-namespace CADWorkAssistant.Documents.Tests.Excel;
+namespace CADWorkAssistant.Documents.Tests.Reports;
 
-public class QuantityWorkbookModelBuilderTests
+public class QuantityReportModelBuilderTests
 {
     private static Project MakeProject() => new(
         id: "P-1",
@@ -35,11 +36,11 @@ public class QuantityWorkbookModelBuilderTests
             MakeRecord("Q-2", "VerticalArea", 25.594066m, DateTimeOffset.Parse("2026-08-01T10:05:00+09:00")),
         };
 
-        var model = QuantityWorkbookModelBuilder.Build(
+        var model = QuantityReportModelBuilder.Build(
             project, records,
             new Dictionary<string, QuantityVerificationResult>(),
             new Dictionary<string, QuantityReview>(),
-            new ExcelExportOptions { Scope = ExcelExportScope.All },
+            new ExcelExportOptions { Scope = QuantityExportScope.All },
             DateTimeOffset.Parse("2026-08-09T12:00:00+09:00"),
             "0.9.0");
 
@@ -69,11 +70,11 @@ public class QuantityWorkbookModelBuilderTests
             ["Q-4"] = new("R-4", "P-1", "Q-4", QuantityReviewStatus.Verified, null, now),
         };
 
-        var model = QuantityWorkbookModelBuilder.Build(
+        var model = QuantityReportModelBuilder.Build(
             project, records,
             new Dictionary<string, QuantityVerificationResult>(),
             reviews,
-            new ExcelExportOptions { Scope = ExcelExportScope.VerifiedOnly },
+            new ExcelExportOptions { Scope = QuantityExportScope.VerifiedOnly },
             now,
             "0.9.0");
 
@@ -101,9 +102,9 @@ public class QuantityWorkbookModelBuilderTests
             }),
         };
 
-        var model = QuantityWorkbookModelBuilder.Build(
+        var model = QuantityReportModelBuilder.Build(
             project, new[] { record }, verifications, reviews,
-            new ExcelExportOptions { Scope = ExcelExportScope.VerifiedOnly },
+            new ExcelExportOptions { Scope = QuantityExportScope.VerifiedOnly },
             now, "0.9.0");
 
         Assert.Single(model.Rows);
@@ -116,7 +117,7 @@ public class QuantityWorkbookModelBuilderTests
     [Fact]
     public void Build_NoRecords_ReturnsEmptyModel()
     {
-        var model = QuantityWorkbookModelBuilder.Build(
+        var model = QuantityReportModelBuilder.Build(
             MakeProject(), Array.Empty<QuantityRecord>(),
             new Dictionary<string, QuantityVerificationResult>(),
             new Dictionary<string, QuantityReview>(),
@@ -132,7 +133,7 @@ public class QuantityWorkbookModelBuilderTests
     {
         var record = MakeRecord("Q-1", "Length", 10m, DateTimeOffset.UtcNow);
 
-        var model = QuantityWorkbookModelBuilder.Build(
+        var model = QuantityReportModelBuilder.Build(
             MakeProject(), new[] { record },
             new Dictionary<string, QuantityVerificationResult>(),
             new Dictionary<string, QuantityReview>(),
@@ -147,7 +148,7 @@ public class QuantityWorkbookModelBuilderTests
     {
         var record = MakeRecord("Q-1", "Length", 10m, DateTimeOffset.UtcNow);
 
-        var model = QuantityWorkbookModelBuilder.Build(
+        var model = QuantityReportModelBuilder.Build(
             MakeProject(), new[] { record },
             new Dictionary<string, QuantityVerificationResult>(),
             new Dictionary<string, QuantityReview>(),
@@ -169,7 +170,7 @@ public class QuantityWorkbookModelBuilderTests
             MakeRecord("Q-2", "Length", 2m, now.AddMinutes(1)),
         };
 
-        var model = QuantityWorkbookModelBuilder.Build(
+        var model = QuantityReportModelBuilder.Build(
             MakeProject(), records,
             new Dictionary<string, QuantityVerificationResult>(),
             new Dictionary<string, QuantityReview>(),
@@ -188,7 +189,7 @@ public class QuantityWorkbookModelBuilderTests
     {
         var record = MakeRecord("Q-1", type, 1.23456m, DateTimeOffset.UtcNow);
 
-        var model = QuantityWorkbookModelBuilder.Build(
+        var model = QuantityReportModelBuilder.Build(
             MakeProject(), new[] { record },
             new Dictionary<string, QuantityVerificationResult>(),
             new Dictionary<string, QuantityReview>(),

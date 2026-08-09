@@ -2,6 +2,7 @@ using ClosedXML.Excel;
 using CADWorkAssistant.Core.Models;
 using CADWorkAssistant.Core.Verification;
 using CADWorkAssistant.Documents.Excel;
+using CADWorkAssistant.Documents.Reports;
 
 namespace CADWorkAssistant.Documents.Tests.Excel;
 
@@ -60,7 +61,7 @@ public class QuantityWorkbookBuilderTests : IDisposable
     [Fact]
     public void BuildAndSave_CreatesFileWithFourSheets()
     {
-        var model = QuantityWorkbookModelBuilder.Build(
+        var model = QuantityReportModelBuilder.Build(
             MakeProject(),
             new[] { MakeRecord("Q-1", "Area", 3102.43m, "m²", DateTimeOffset.Parse("2026-08-01T10:00:00+09:00")) },
             new Dictionary<string, QuantityVerificationResult>(),
@@ -82,7 +83,7 @@ public class QuantityWorkbookBuilderTests : IDisposable
     [Fact]
     public void BuildAndSave_OptionalSheetsOff_OmitsThem()
     {
-        var model = QuantityWorkbookModelBuilder.Build(
+        var model = QuantityReportModelBuilder.Build(
             MakeProject(),
             new[] { MakeRecord("Q-1", "Area", 100m, "m²", DateTimeOffset.UtcNow) },
             new Dictionary<string, QuantityVerificationResult>(),
@@ -101,7 +102,7 @@ public class QuantityWorkbookBuilderTests : IDisposable
     [Fact]
     public void BuildAndSave_ProjectName_WrittenToProjectInfoSheet()
     {
-        var model = QuantityWorkbookModelBuilder.Build(
+        var model = QuantityReportModelBuilder.Build(
             MakeProject(name: "서울의료원 옥상 방수공사"),
             new[] { MakeRecord("Q-1", "Area", 100m, "m²", DateTimeOffset.UtcNow) },
             new Dictionary<string, QuantityVerificationResult>(),
@@ -130,7 +131,7 @@ public class QuantityWorkbookBuilderTests : IDisposable
     public void BuildAndSave_RegressionValue_StoredAsNumericCell(string type, double rawDouble, string unit, int expectedDecimalPlaces)
     {
         var value = (decimal)rawDouble;
-        var model = QuantityWorkbookModelBuilder.Build(
+        var model = QuantityReportModelBuilder.Build(
             MakeProject(),
             new[] { MakeRecord("Q-1", type, value, unit, DateTimeOffset.UtcNow) },
             new Dictionary<string, QuantityVerificationResult>(),
@@ -172,7 +173,7 @@ public class QuantityWorkbookBuilderTests : IDisposable
             ["Q-error"] = new("Q-error", 1, now, new[] { new VerificationCheckResult("R", VerificationSeverity.Error, "단위 불일치", "msg") }),
         };
 
-        var model = QuantityWorkbookModelBuilder.Build(
+        var model = QuantityReportModelBuilder.Build(
             MakeProject(), records, verifications, new Dictionary<string, QuantityReview>(),
             new ExcelExportOptions(), now, "0.9.0");
 
@@ -198,7 +199,7 @@ public class QuantityWorkbookBuilderTests : IDisposable
             ["Q-1"] = new("R-1", "P-1", "Q-1", QuantityReviewStatus.Verified, "현장 확인 완료. ㄱ자 평면으로 정상.", now),
         };
 
-        var model = QuantityWorkbookModelBuilder.Build(
+        var model = QuantityReportModelBuilder.Build(
             MakeProject(), new[] { record }, new Dictionary<string, QuantityVerificationResult>(), reviews,
             new ExcelExportOptions(), now, "0.9.0");
 
@@ -225,7 +226,7 @@ public class QuantityWorkbookBuilderTests : IDisposable
         var record = MakeRecord("Q-1", "Area", 100m, "m²", now);
         record.Description = dangerousText;
 
-        var model = QuantityWorkbookModelBuilder.Build(
+        var model = QuantityReportModelBuilder.Build(
             MakeProject(name: dangerousText), new[] { record },
             new Dictionary<string, QuantityVerificationResult>(), new Dictionary<string, QuantityReview>(),
             new ExcelExportOptions(), now, "0.9.0");
@@ -249,7 +250,7 @@ public class QuantityWorkbookBuilderTests : IDisposable
         var now = DateTimeOffset.UtcNow;
         var record = MakeRecord("Q-1", "Area", 100m, "m²", now, sourceDrawing: @"C:\Sensitive\Company\Path\School_Roof.dwg");
 
-        var model = QuantityWorkbookModelBuilder.Build(
+        var model = QuantityReportModelBuilder.Build(
             MakeProject(), new[] { record }, new Dictionary<string, QuantityVerificationResult>(),
             new Dictionary<string, QuantityReview>(), new ExcelExportOptions { IncludeSourceDrawing = true },
             now, "0.9.0");
@@ -272,7 +273,7 @@ public class QuantityWorkbookBuilderTests : IDisposable
     [Fact]
     public void BuildAndSave_ZeroRecords_StillProducesValidWorkbook()
     {
-        var model = QuantityWorkbookModelBuilder.Build(
+        var model = QuantityReportModelBuilder.Build(
             MakeProject(), Array.Empty<QuantityRecord>(),
             new Dictionary<string, QuantityVerificationResult>(), new Dictionary<string, QuantityReview>(),
             new ExcelExportOptions(), DateTimeOffset.UtcNow, "0.9.0");
@@ -295,7 +296,7 @@ public class QuantityWorkbookBuilderTests : IDisposable
             records.Add(MakeRecord($"Q-{i}", "Area", 100m + i, "m²", now.AddSeconds(i)));
         }
 
-        var model = QuantityWorkbookModelBuilder.Build(
+        var model = QuantityReportModelBuilder.Build(
             MakeProject(), records, new Dictionary<string, QuantityVerificationResult>(),
             new Dictionary<string, QuantityReview>(), new ExcelExportOptions(), now, "0.9.0");
 
@@ -324,7 +325,7 @@ public class QuantityWorkbookBuilderTests : IDisposable
         var path = TargetPath("overwrite.xlsx");
         File.WriteAllText(path, "not a real xlsx");
 
-        var model = QuantityWorkbookModelBuilder.Build(
+        var model = QuantityReportModelBuilder.Build(
             MakeProject(), new[] { MakeRecord("Q-1", "Area", 100m, "m²", DateTimeOffset.UtcNow) },
             new Dictionary<string, QuantityVerificationResult>(), new Dictionary<string, QuantityReview>(),
             new ExcelExportOptions(), DateTimeOffset.UtcNow, "0.9.0");
@@ -341,7 +342,7 @@ public class QuantityWorkbookBuilderTests : IDisposable
     [Fact]
     public void BuildAndSave_PrintSetup_IsLandscapeA4FitToOnePageWide()
     {
-        var model = QuantityWorkbookModelBuilder.Build(
+        var model = QuantityReportModelBuilder.Build(
             MakeProject(), new[] { MakeRecord("Q-1", "Area", 100m, "m²", DateTimeOffset.UtcNow) },
             new Dictionary<string, QuantityVerificationResult>(), new Dictionary<string, QuantityReview>(),
             new ExcelExportOptions(), DateTimeOffset.UtcNow, "0.9.0");

@@ -1,14 +1,16 @@
 using System;
 using System.Globalization;
 using System.IO;
+using CADWorkAssistant.Documents.Reports;
 using ClosedXML.Excel;
 
 namespace CADWorkAssistant.Documents.Excel;
 
 /// <summary>
-/// QuantityWorkbookModel -> 실제 .xlsx (Milestone 9). ClosedXML을 직접 다루는 유일한 클래스다 - Core/
-/// AutoCAD는 이 타입을 참조하지 않는다(§6, §161-162). Microsoft Excel/Interop/COM을 쓰지 않는다(§4) -
-/// OpenXML 파일을 직접 만들기 때문에 Excel 설치 여부와 무관하게 항상 성공한다.
+/// QuantityReportModel(Documents.Reports, Milestone 10에서 QuantityWorkbookModel을 renderer-neutral로
+/// 일반화) -> 실제 .xlsx (Milestone 9). ClosedXML을 직접 다루는 유일한 클래스다 - Core/AutoCAD는 이
+/// 타입을 참조하지 않는다(§6, §161-162). Microsoft Excel/Interop/COM을 쓰지 않는다(§4) - OpenXML
+/// 파일을 직접 만들기 때문에 Excel 설치 여부와 무관하게 항상 성공한다.
 /// </summary>
 public sealed class QuantityWorkbookBuilder
 {
@@ -20,7 +22,7 @@ public sealed class QuantityWorkbookBuilder
     private static readonly XLColor MutedTextColor = XLColor.FromHtml("#526170");
     private static readonly XLColor AccentColor = XLColor.FromHtml("#1D6F8F");
 
-    public ExcelExportResult BuildAndSave(QuantityWorkbookModel model, ExcelExportOptions options, string targetPath)
+    public ExcelExportResult BuildAndSave(QuantityReportModel model, ExcelExportOptions options, string targetPath)
     {
         using var workbook = new XLWorkbook();
         // §65: 실제 작성자(사람)를 알 수 없으니 지어내지 않는다 - Title/Subject/Company만 채운다.
@@ -49,7 +51,7 @@ public sealed class QuantityWorkbookBuilder
     // ------------------------------------------------------------------
     // Sheet 1 - 수량산출서
     // ------------------------------------------------------------------
-    private void BuildQuantitySheet(XLWorkbook workbook, QuantityWorkbookModel model)
+    private void BuildQuantitySheet(XLWorkbook workbook, QuantityReportModel model)
     {
         var ws = workbook.Worksheets.Add("수량산출서");
         var row = 1;
@@ -108,7 +110,7 @@ public sealed class QuantityWorkbookBuilder
     // ------------------------------------------------------------------
     // Sheet 2 - 산출근거
     // ------------------------------------------------------------------
-    private void BuildCalculationBasisSheet(XLWorkbook workbook, QuantityWorkbookModel model)
+    private void BuildCalculationBasisSheet(XLWorkbook workbook, QuantityReportModel model)
     {
         var ws = workbook.Worksheets.Add("산출근거");
         var row = 1;
@@ -175,7 +177,7 @@ public sealed class QuantityWorkbookBuilder
     // ------------------------------------------------------------------
     // Sheet 3 - 검산내역
     // ------------------------------------------------------------------
-    private void BuildVerificationSheet(XLWorkbook workbook, QuantityWorkbookModel model)
+    private void BuildVerificationSheet(XLWorkbook workbook, QuantityReportModel model)
     {
         var ws = workbook.Worksheets.Add("검산내역");
         var row = 1;
@@ -224,7 +226,7 @@ public sealed class QuantityWorkbookBuilder
     // ------------------------------------------------------------------
     // Sheet 4 - 프로젝트정보
     // ------------------------------------------------------------------
-    private void BuildProjectInfoSheet(XLWorkbook workbook, QuantityWorkbookModel model)
+    private void BuildProjectInfoSheet(XLWorkbook workbook, QuantityReportModel model)
     {
         var ws = workbook.Worksheets.Add("프로젝트정보");
         var row = 1;
@@ -271,7 +273,7 @@ public sealed class QuantityWorkbookBuilder
     // ------------------------------------------------------------------
     // Shared helpers
     // ------------------------------------------------------------------
-    private static int WriteProjectHeaderBlock(IXLWorksheet ws, QuantityWorkbookModel model, int row)
+    private static int WriteProjectHeaderBlock(IXLWorksheet ws, QuantityReportModel model, int row)
     {
         ws.Cell(row, 1).Value = $"프로젝트명: {model.ProjectName}";
         ws.Cell(row, 1).Style.Font.Bold = true;
@@ -343,7 +345,7 @@ public sealed class QuantityWorkbookBuilder
         cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
     }
 
-    private static string VerificationCellText(QuantityWorkbookRow line) =>
+    private static string VerificationCellText(QuantityReportRow line) =>
         $"{Core.Verification.VerificationSeverityDisplay.Glyph(line.VerificationSeverity)} " +
         $"{Core.Verification.VerificationSeverityDisplay.Label(line.VerificationSeverity)}";
 

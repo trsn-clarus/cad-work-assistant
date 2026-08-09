@@ -8,6 +8,7 @@ using CADWorkAssistant.Core.Ipc;
 using CADWorkAssistant.Core.Models;
 using CADWorkAssistant.Core.Verification;
 using CADWorkAssistant.Documents.Excel;
+using CADWorkAssistant.Documents.Reports;
 using ClosedXML.Excel;
 
 namespace CADWorkAssistant.Persistence.Tests;
@@ -15,7 +16,7 @@ namespace CADWorkAssistant.Persistence.Tests;
 /// <summary>
 /// Milestone 9 §183-188: 실제 SQLite 파일에 Project/QuantityRecord/QuantityVerificationSnapshot/
 /// QuantityReview를 실제로 저장한 뒤, Desktop의 QuantityExcelExportCoordinator가 하는 것과 정확히
-/// 같은 순서(Repository에서 fresh read -> QuantityWorkbookModelBuilder -> QuantityWorkbookBuilder)로
+/// 같은 순서(Repository에서 fresh read -> QuantityReportModelBuilder -> QuantityWorkbookBuilder)로
 /// 진짜 .xlsx까지 만들어 검증한다. Desktop 프로젝트 자체는 여기서 참조하지 않는다 - Coordinator는
 /// 이미 검증된 조각들(Repository, QuantityVerificationService 스냅샷 직렬화 규칙, Documents Excel
 /// Builder)을 조립하기만 하므로, 그 조립 순서를 이 테스트가 그대로 재현하는 것으로 충분하다.
@@ -88,7 +89,7 @@ public sealed class ExcelExportE2ETests : IClassFixture<TestDatabaseFixture>, ID
 
         // ---- All scope ----
         var allPath = Path.Combine(_tempDir, "all-scope.xlsx");
-        await ExportAsync(service, projectId, new ExcelExportOptions { Scope = ExcelExportScope.All }, allPath);
+        await ExportAsync(service, projectId, new ExcelExportOptions { Scope = QuantityExportScope.All }, allPath);
 
         using (var workbook = new XLWorkbook(allPath))
         {
@@ -125,7 +126,7 @@ public sealed class ExcelExportE2ETests : IClassFixture<TestDatabaseFixture>, ID
 
         // ---- Verified-only scope (§184: 2 Verified만 포함) ----
         var verifiedOnlyPath = Path.Combine(_tempDir, "verified-only.xlsx");
-        var verifiedOnlyResult = await ExportAsync(service, projectId, new ExcelExportOptions { Scope = ExcelExportScope.VerifiedOnly }, verifiedOnlyPath);
+        var verifiedOnlyResult = await ExportAsync(service, projectId, new ExcelExportOptions { Scope = QuantityExportScope.VerifiedOnly }, verifiedOnlyPath);
         Assert.Equal(2, verifiedOnlyResult.RecordCount);
 
         using (var workbook = new XLWorkbook(verifiedOnlyPath))
@@ -190,13 +191,13 @@ public sealed class ExcelExportE2ETests : IClassFixture<TestDatabaseFixture>, ID
         var verifications = snapshots.ToDictionary(s => s.QuantityRecordId, ToResult);
         var reviewMap = reviews.ToDictionary(r => r.QuantityRecordId);
 
-        var model = QuantityWorkbookModelBuilder.Build(
+        var model = QuantityReportModelBuilder.Build(
             project, records, verifications, reviewMap, options, DateTimeOffset.Now, "0.9.0");
 
         var result = new QuantityWorkbookBuilder().BuildAndSave(model, options, targetPath);
 
         // Coordinator가 하는 것과 같은 순서: 파일이 성공적으로 만들어진 뒤에만 이력을 남긴다(§83).
-        var scopeText = options.Scope == ExcelExportScope.VerifiedOnly ? "검토 완료만" : "전체";
+        var scopeText = options.Scope == QuantityExportScope.VerifiedOnly ? "검토 완료만" : "전체";
         var exportRecord = new ExportRecord(
             Guid.NewGuid().ToString("N"), projectId, null, targetPath, result.RecordCount,
             $"{scopeText} · {result.RecordCount}건", DateTimeOffset.UtcNow, ExportTypes.ExcelQuantity);

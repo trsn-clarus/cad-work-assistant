@@ -1,12 +1,17 @@
+using CADWorkAssistant.Documents.Reports;
+
 namespace CADWorkAssistant.Documents.Excel;
 
 /// <summary>
 /// Milestone 9 §66, §104-106 - 첫 화면에 필요한 정도로만 옵션을 둔다. font size/색상/여백 같은
-/// 세부 조정은 넣지 않는다(§106) - 전부 useful default로 시작한다(§105).
+/// 세부 조정은 넣지 않는다(§106) - 전부 useful default로 시작한다(§105). Scope/IncludeReviewNotes/
+/// IncludeSourceDrawing은 PDF와 의미가 완전히 같아 <see cref="IQuantityReportOptions"/>로 공유하고
+/// (Milestone 10 §68), Excel 고유의 시트 구성 옵션(IncludeCalculationBasis/IncludeVerificationDetail)은
+/// 억지로 공유하지 않는다(§69).
 /// </summary>
-public sealed class ExcelExportOptions
+public sealed class ExcelExportOptions : IQuantityReportOptions
 {
-    public ExcelExportScope Scope { get; init; } = ExcelExportScope.All;
+    public QuantityExportScope Scope { get; init; } = QuantityExportScope.All;
 
     /// <summary>Sheet 2(산출근거) 포함 여부.</summary>
     public bool IncludeCalculationBasis { get; init; } = true;
