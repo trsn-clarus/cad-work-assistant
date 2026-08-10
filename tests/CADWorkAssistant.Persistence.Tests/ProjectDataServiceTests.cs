@@ -128,6 +128,61 @@ public sealed class ProjectDataServiceTests : IClassFixture<TestDatabaseFixture>
         Assert.Single(activities);
     }
 
+    [Fact]
+    public async Task RelinkDrawingFileAsync_WithActivity_PersistsBothInOneTransaction()
+    {
+        var database = _fixture.CreateDatabase();
+        var service = new ProjectDataService(database);
+        var project = await CreateProjectAsync(database, service);
+
+        var now = DateTimeOffset.UtcNow;
+        var drawingFile = new DrawingFile(Guid.NewGuid().ToString("N"), project.Id, "Old.dwg", @"C:\old\Old.dwg", null, now, now, isMissing: true);
+        using (var setupConnection = database.OpenConnection())
+        {
+            await service.DrawingFiles.UpsertAsync(drawingFile, setupConnection);
+        }
+
+        var activity = new ActivityRecord(Guid.NewGuid().ToString("N"), project.Id, "DrawingFileRelinked", "도면 파일 다시 연결", "New.dwg", now);
+        await service.RelinkDrawingFileAsync(drawingFile.Id, @"C:\new\New.dwg", "New.dwg", "mm", now.AddMinutes(1), activity);
+
+        using var connection = database.OpenConnection();
+        var found = (await service.DrawingFiles.GetByProjectAsync(project.Id, connection)).Single();
+        var activities = await service.Activity.GetByProjectAsync(project.Id, limit: 10, connection);
+
+        Assert.Equal(@"C:\new\New.dwg", found.FullPath);
+        Assert.False(found.IsMissing);
+        // CreateProjectAsync가 이미 활동 1건을 남기므로 +1건 = 2건이어야 한다.
+        Assert.Equal(2, activities.Count);
+        Assert.Contains(activities, a => a.ActivityType == "DrawingFileRelinked");
+    }
+
+    [Fact]
+    public async Task RelinkDrawingFileAsync_ActivityInsertFails_DrawingFileUpdateIsRolledBackToo()
+    {
+        var database = _fixture.CreateDatabase();
+        var service = new ProjectDataService(database);
+        var project = await CreateProjectAsync(database, service);
+
+        var now = DateTimeOffset.UtcNow;
+        var drawingFile = new DrawingFile(Guid.NewGuid().ToString("N"), project.Id, "Old.dwg", @"C:\old\Old.dwg", null, now, now);
+        using (var setupConnection = database.OpenConnection())
+        {
+            await service.DrawingFiles.UpsertAsync(drawingFile, setupConnection);
+        }
+
+        // 존재하지 않는 ProjectId를 써서 ActivityRecord INSERT가 FK 위반으로 실패하게 만든다 - 그 앞의
+        // DrawingFile UPDATE도 롤백되어야 한다(§53 all-or-nothing과 같은 기준).
+        var missingProjectId = Guid.NewGuid().ToString("N");
+        var activity = new ActivityRecord(Guid.NewGuid().ToString("N"), missingProjectId, "DrawingFileRelinked", "실패해야 함", null, now);
+
+        await Assert.ThrowsAsync<SqliteException>(() =>
+            service.RelinkDrawingFileAsync(drawingFile.Id, @"C:\new\New.dwg", "New.dwg", null, now.AddMinutes(1), activity));
+
+        using var connection = database.OpenConnection();
+        var found = (await service.DrawingFiles.GetByProjectAsync(project.Id, connection)).Single();
+        Assert.Equal(@"C:\old\Old.dwg", found.FullPath);
+    }
+
     private static async Task<QuantityRecord> AddQuantityRecordAsync(CadWorkAssistantDatabase database, ProjectDataService service, string projectId)
     {
         var record = new QuantityRecord(Guid.NewGuid().ToString("N"), "Length", "A-WALL", 1, 10m, "m", "test.dwg", DateTimeOffset.UtcNow)

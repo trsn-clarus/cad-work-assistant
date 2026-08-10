@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using CADWorkAssistant.Core.Models;
@@ -130,6 +131,32 @@ public sealed class ProjectDataService
         try
         {
             await _quantityRecords.InsertAsync(record, connection, transaction);
+            await _activity.InsertAsync(activity, connection, transaction);
+            transaction.Commit();
+        }
+        catch
+        {
+            transaction.Rollback();
+            throw;
+        }
+    }
+
+    /// <summary>Milestone 13 §23-25 - DrawingFile의 FullPath를 새 경로로 갱신 + "다시 연결" 활동
+    /// 기록을 하나의 트랜잭션으로 묶는다. QuantityRecord의 SourceDrawing snapshot은 건드리지
+    /// 않는다(과거 산출내역은 당시 경로를 그대로 보존).</summary>
+    public async Task RelinkDrawingFileAsync(string drawingFileId, string newFullPath, string newFileName, string? newDrawingUnit, DateTimeOffset relinkedAt, ActivityRecord? activity)
+    {
+        using var connection = _database.OpenConnection();
+        if (activity is null)
+        {
+            await _drawingFiles.RelinkAsync(drawingFileId, newFullPath, newFileName, newDrawingUnit, relinkedAt, connection);
+            return;
+        }
+
+        using var transaction = connection.BeginTransaction();
+        try
+        {
+            await _drawingFiles.RelinkAsync(drawingFileId, newFullPath, newFileName, newDrawingUnit, relinkedAt, connection, transaction);
             await _activity.InsertAsync(activity, connection, transaction);
             transaction.Commit();
         }

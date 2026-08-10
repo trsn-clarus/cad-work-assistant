@@ -100,6 +100,31 @@ public sealed class ProjectRepositoryTests : IClassFixture<TestDatabaseFixture>
     }
 
     [Fact]
+    public async Task GetAllAsync_ReturnsEveryProject_OrderedByNameCaseInsensitive()
+    {
+        var database = _fixture.CreateDatabase();
+        using var connection = database.OpenConnection();
+
+        // 고유 접두어로 이 테스트가 만든 프로젝트만 골라낸다 - TestDatabaseFixture는 같은 테스트
+        // 클래스의 모든 테스트가 파일을 공유하므로(GetRecentAsync 테스트와 같은 이유), GetAllAsync는
+        // 다른 테스트가 넣은 프로젝트도 함께 반환한다.
+        var prefix = Guid.NewGuid().ToString("N")[..8];
+        var baseline = DateTimeOffset.UtcNow;
+        var b = new Project(Guid.NewGuid().ToString("N"), $"{prefix} banana 프로젝트", baseline, baseline, baseline);
+        var a = new Project(Guid.NewGuid().ToString("N"), $"{prefix} Apple 프로젝트", baseline, baseline, baseline);
+        var c = new Project(Guid.NewGuid().ToString("N"), $"{prefix} cherry 프로젝트", baseline, baseline, baseline);
+
+        await _repository.InsertAsync(b, connection);
+        await _repository.InsertAsync(a, connection);
+        await _repository.InsertAsync(c, connection);
+
+        var all = await _repository.GetAllAsync(connection);
+
+        var ids = all.Where(p => p.Name.StartsWith(prefix, StringComparison.Ordinal)).Select(p => p.Id).ToArray();
+        Assert.Equal(new[] { a.Id, b.Id, c.Id }, ids);
+    }
+
+    [Fact]
     public async Task TouchLastOpenedAsync_UpdatesOnlyLastOpenedAt()
     {
         var database = _fixture.CreateDatabase();

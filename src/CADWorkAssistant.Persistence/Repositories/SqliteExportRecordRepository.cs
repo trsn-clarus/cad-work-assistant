@@ -31,7 +31,20 @@ public sealed class SqliteExportRecordRepository : IExportRecordRepository
         using var command = connection.CreateCommand();
         command.CommandText = "SELECT * FROM ExportRecord WHERE ProjectId = $projectId ORDER BY CreatedAt DESC;";
         command.Parameters.AddWithValue("$projectId", projectId);
+        return await ReadAllAsync(command);
+    }
 
+    public async Task<IReadOnlyList<ExportRecord>> GetByProjectAsync(string projectId, int limit, SqliteConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT * FROM ExportRecord WHERE ProjectId = $projectId ORDER BY CreatedAt DESC LIMIT $limit;";
+        command.Parameters.AddWithValue("$projectId", projectId);
+        command.Parameters.AddWithValue("$limit", limit);
+        return await ReadAllAsync(command);
+    }
+
+    private static async Task<IReadOnlyList<ExportRecord>> ReadAllAsync(SqliteCommand command)
+    {
         var results = new List<ExportRecord>();
         using var reader = await command.ExecuteReaderAsync();
         while (await reader.ReadAsync())

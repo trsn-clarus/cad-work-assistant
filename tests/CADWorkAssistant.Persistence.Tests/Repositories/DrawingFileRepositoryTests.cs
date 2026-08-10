@@ -57,6 +57,47 @@ public sealed class DrawingFileRepositoryTests : IClassFixture<TestDatabaseFixtu
         Assert.True(found.IsMissing);
     }
 
+    [Fact]
+    public async Task RelinkAsync_UpdatesPathAndClearsMissingFlag()
+    {
+        var database = _fixture.CreateDatabase();
+        using var connection = database.OpenConnection();
+        var project = await InsertProjectAsync(connection);
+        var now = DateTimeOffset.UtcNow;
+
+        var drawingFile = new DrawingFile(
+            Guid.NewGuid().ToString("N"), project.Id, "School_A.dwg", @"C:\old\School_A.dwg", "mm", now, now, isMissing: true);
+        await _drawingFiles.UpsertAsync(drawingFile, connection);
+
+        var relinkedAt = now.AddMinutes(5);
+        await _drawingFiles.RelinkAsync(drawingFile.Id, @"C:\new\School_Final.dwg", "School_Final.dwg", "mm", relinkedAt, connection);
+
+        var found = (await _drawingFiles.GetByProjectAsync(project.Id, connection)).Single();
+        Assert.Equal(@"C:\new\School_Final.dwg", found.FullPath);
+        Assert.Equal("School_Final.dwg", found.FileName);
+        Assert.False(found.IsMissing);
+        Assert.True(Math.Abs((found.LastSeenAt - relinkedAt).TotalSeconds) < 1);
+    }
+
+    [Fact]
+    public async Task GetCountsByProjectAsync_ReturnsCorrectCountsPerProject()
+    {
+        var database = _fixture.CreateDatabase();
+        using var connection = database.OpenConnection();
+        var projectA = await InsertProjectAsync(connection);
+        var projectB = await InsertProjectAsync(connection);
+        var now = DateTimeOffset.UtcNow;
+
+        await _drawingFiles.UpsertAsync(new DrawingFile(Guid.NewGuid().ToString("N"), projectA.Id, "A1.dwg", @"C:\a\A1.dwg", null, now, now), connection);
+        await _drawingFiles.UpsertAsync(new DrawingFile(Guid.NewGuid().ToString("N"), projectA.Id, "A2.dwg", @"C:\a\A2.dwg", null, now, now), connection);
+        await _drawingFiles.UpsertAsync(new DrawingFile(Guid.NewGuid().ToString("N"), projectB.Id, "B1.dwg", @"C:\b\B1.dwg", null, now, now), connection);
+
+        var counts = await _drawingFiles.GetCountsByProjectAsync(connection);
+
+        Assert.Equal(2, counts[projectA.Id]);
+        Assert.Equal(1, counts[projectB.Id]);
+    }
+
     private async Task<Project> InsertProjectAsync(SqliteConnection connection)
     {
         var now = DateTimeOffset.UtcNow;

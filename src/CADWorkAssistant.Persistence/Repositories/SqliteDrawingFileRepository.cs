@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using CADWorkAssistant.Core.Models;
@@ -54,5 +55,38 @@ public sealed class SqliteDrawingFileRepository : IDrawingFileRepository
         }
 
         return results;
+    }
+
+    public async Task<IReadOnlyDictionary<string, int>> GetCountsByProjectAsync(SqliteConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT ProjectId, COUNT(*) AS Cnt FROM DrawingFile GROUP BY ProjectId;";
+
+        var results = new Dictionary<string, int>();
+        using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            results[reader.GetString(0)] = reader.GetInt32(1);
+        }
+
+        return results;
+    }
+
+    public async Task RelinkAsync(string id, string newFullPath, string newFileName, string? newDrawingUnit, DateTimeOffset relinkedAt, SqliteConnection connection, SqliteTransaction? transaction = null)
+    {
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            UPDATE DrawingFile
+            SET FullPath = $fullPath, FileName = $fileName, DrawingUnit = $drawingUnit,
+                LastSeenAt = $lastSeenAt, IsMissing = 0
+            WHERE Id = $id;
+            """;
+        command.Parameters.AddWithValue("$id", id);
+        command.Parameters.AddWithValue("$fullPath", newFullPath);
+        command.Parameters.AddWithValue("$fileName", newFileName);
+        command.Parameters.AddWithValue("$drawingUnit", (object?)newDrawingUnit ?? System.DBNull.Value);
+        command.Parameters.AddWithValue("$lastSeenAt", SqliteValueConverters.ToDbText(relinkedAt));
+        await command.ExecuteNonQueryAsync();
     }
 }
