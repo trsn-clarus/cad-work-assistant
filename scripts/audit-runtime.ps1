@@ -34,6 +34,15 @@ Test-NoFilesMatch $PublishDir "python.exe" "Python runtime"
 Test-NoFilesMatch $PublishDir "*.cs" "source file (.cs)"
 Test-NoFilesMatch $PublishDir "*.xaml" "source file (.xaml - publish output should only have compiled resources)"
 
+# --- User Manual (Milestone 13 Part B section 133) - only the built PDF ships, never the dev-only
+#     ManualBuilder tool or its Markdown/screenshot sources. ---
+Test-NoFilesMatch $PublishDir "CADWorkAssistant.ManualBuilder.exe" "ManualBuilder executable"
+Test-NoFilesMatch $PublishDir "*.md" "Markdown source file"
+$manualPdfPath = Join-Path $PublishDir "Documentation\CAD_Work_Assistant_User_Guide_ko-KR.pdf"
+if (-not (Test-Path $manualPdfPath)) {
+    $failures += "User manual PDF missing at $manualPdfPath"
+}
+
 if (Test-Path (Join-Path $PublishDir ".claude")) { $failures += ".claude folder present in publish output" }
 if (Test-Path (Join-Path $PublishDir ".21st")) { $failures += ".21st folder present in publish output" }
 if (Test-Path (Join-Path $PublishDir "node_modules")) { $failures += "node_modules present in publish output" }

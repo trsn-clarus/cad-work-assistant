@@ -76,7 +76,10 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Files]
 ; Full self-contained Desktop publish output - scripts/build-release.ps1 populates SourceDir via
-; `dotnet publish -r win-x64 --self-contained true` before calling ISCC.exe.
+; `dotnet publish -r win-x64 --self-contained true` before calling ISCC.exe. This also stages the
+; built user manual PDF at SourceDir\Documentation\CAD_Work_Assistant_User_Guide_ko-KR.pdf
+; (Milestone 13 Part B section 115) - recursesubdirs already copies it to {app}\Documentation\
+; alongside the exe, so no separate [Files] line is needed for it.
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs
 
 ; AutoCAD Bundle - placed in the per-user ApplicationPlugins folder and autoloaded when AutoCAD

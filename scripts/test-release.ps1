@@ -4,8 +4,9 @@
 
 .DESCRIPTION
   Against a real silent install of the built Setup exe, checks:
-  installer exists -> silent install -> files exist -> Desktop launches -> plugin bundle exists ->
-  process alive -> uninstall -> binary removed -> user DB retained.
+  installer exists -> silent install -> files exist -> user manual PDF installed -> plugin bundle
+  exists -> Desktop launches -> process alive -> user data file created -> uninstall ->
+  binary removed -> user DB retained.
   Simulation Mode (FakeAutoCad) only - this script never launches the real AutoCAD GUI (see
   CLAUDE.md: launching the real AutoCAD 2024 GUI on this dev machine destabilizes the graphics
   driver, so real-GUI verification always needs an explicit human decision first).
@@ -51,13 +52,23 @@ Step "3. Files exist"
 $exePath = Join-Path $InstallDir "CADWorkAssistant.Desktop.exe"
 if (Test-Path $exePath) { Ok "$exePath" } else { Fail "$exePath not found" }
 
-Step "4. Plugin bundle exists"
+Step "4. User manual PDF installed"
+$manualPath = Join-Path $InstallDir "Documentation\CAD_Work_Assistant_User_Guide_ko-KR.pdf"
+if (Test-Path $manualPath) {
+    $manualSize = (Get-Item $manualPath).Length
+    if ($manualSize -gt 0) { Ok "$manualPath ($([Math]::Round($manualSize / 1KB, 0)) KB)" } else { Fail "$manualPath is empty" }
+}
+else {
+    Fail "$manualPath not found"
+}
+
+Step "5. Plugin bundle exists"
 $bundlePath = "$env:APPDATA\Autodesk\ApplicationPlugins\CADWorkAssistant.bundle\PackageContents.xml"
 $bundleDll = "$env:APPDATA\Autodesk\ApplicationPlugins\CADWorkAssistant.bundle\Contents\Windows\CADWorkAssistant.AutoCAD.dll"
 if (Test-Path $bundlePath) { Ok "$bundlePath" } else { Fail "$bundlePath not found" }
 if (Test-Path $bundleDll) { Ok "$bundleDll" } else { Fail "$bundleDll not found" }
 
-Step "5. Desktop launches (Simulation Mode)"
+Step "6. Desktop launches (Simulation Mode)"
 $env:CWA_USE_FAKE_AUTOCAD = "1"
 $testDbPath = "$env:LOCALAPPDATA\CADWorkAssistant\data\cadworkassistant.simulation.db"
 if (Test-Path $exePath) {
@@ -66,7 +77,7 @@ if (Test-Path $exePath) {
     $alive = Get-Process -Id $desktopProc.Id -ErrorAction SilentlyContinue
     if ($alive) { Ok "process alive (PID $($desktopProc.Id))" } else { Fail "process exited immediately" }
 
-    Step "6. User data file created"
+    Step "7. User data file created"
     if (Test-Path $testDbPath) { Ok "$testDbPath" } else { Fail "$testDbPath not found after launch" }
 
     if ($alive) {
@@ -78,7 +89,7 @@ else {
 }
 Remove-Item Env:\CWA_USE_FAKE_AUTOCAD -ErrorAction SilentlyContinue
 
-Step "7. Uninstall"
+Step "8. Uninstall"
 $uninstaller = Get-ChildItem $InstallDir -Filter "unins*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
 if ($uninstaller) {
     $uninstProc = Start-Process -FilePath $uninstaller.FullName -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -PassThru -Wait
@@ -88,11 +99,11 @@ else {
     Fail "uninstaller (unins*.exe) not found in $InstallDir"
 }
 
-Step "8. Binary removed"
+Step "9. Binary removed"
 Start-Sleep -Seconds 1
 if (-not (Test-Path $exePath)) { Ok "$exePath removed" } else { Fail "$exePath still present after uninstall" }
 
-Step "9. User DB retained (uninstall must not delete project data)"
+Step "10. User DB retained (uninstall must not delete project data)"
 if (Test-Path $testDbPath) { Ok "$testDbPath retained" } else { Fail "$testDbPath was deleted by uninstall - THIS IS A DATA LOSS BUG" }
 
 Write-Host ""

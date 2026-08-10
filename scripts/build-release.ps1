@@ -52,6 +52,8 @@ $PublishDir = Join-Path $RepoRoot "publish\desktop"
 $BundleDir = Join-Path $RepoRoot "installer\CADWorkAssistant.bundle"
 $BundleWindowsDir = Join-Path $BundleDir "Contents\Windows"
 $InstallerOutputDir = Join-Path $ArtifactsDir "installer"
+$ManualOutputDir = Join-Path $ArtifactsDir "manual"
+$ManualPdfName = "CAD_Work_Assistant_User_Guide_ko-KR.pdf"
 
 # --- Clean ---
 Write-Step "Clean"
@@ -86,6 +88,28 @@ dotnet publish "$RepoRoot\src\CADWorkAssistant.Desktop\CADWorkAssistant.Desktop.
     -c $Configuration -r win-x64 --self-contained true -o $PublishDir `
     /p:PublishSingleFile=false /p:PublishTrimmed=false
 Assert-LastExitCode "publish desktop"
+
+# --- Build User Manual PDF (Milestone 13 Part B, sections 115-116) ---
+# tools/CADWorkAssistant.ManualBuilder는 개발 전용 도구다 - Desktop 게시 결과물에는 포함하지 않고,
+# 여기서 만든 PDF만 Documentation 폴더로 따로 옮겨 Installer에 포함시킨다. 실패하면 전체 릴리스를
+# 실패시킨다(Assert-LastExitCode) - 사용설명서 없는 설치 프로그램을 만들지 않는다.
+Write-Step "Build User Manual PDF"
+$manualBuilderExe = Join-Path $RepoRoot "tools\CADWorkAssistant.ManualBuilder\bin\$Configuration\net8.0\CADWorkAssistant.ManualBuilder.exe"
+if (-not (Test-Path $manualBuilderExe)) {
+    Write-Host "FAILED: ManualBuilder not found at $manualBuilderExe (did the Build step run?)" -ForegroundColor Red
+    exit 1
+}
+
+New-Item -ItemType Directory -Force -Path $ManualOutputDir | Out-Null
+$manualSourceMd = Join-Path $RepoRoot "docs\user-guide\ko-KR\USER_GUIDE.md"
+$manualPdfPath = Join-Path $ManualOutputDir $ManualPdfName
+& $manualBuilderExe $manualSourceMd $manualPdfPath
+Assert-LastExitCode "user manual build"
+
+$manualDestDir = Join-Path $PublishDir "Documentation"
+New-Item -ItemType Directory -Force -Path $manualDestDir | Out-Null
+Copy-Item $manualPdfPath (Join-Path $manualDestDir $ManualPdfName) -Force
+Write-Host "User manual staged: $(Join-Path $manualDestDir $ManualPdfName)"
 
 # --- Build Plugin + Stage Bundle ---
 if (-not $SkipPlugin) {
