@@ -31,6 +31,12 @@ Test-NoFilesMatch $PublishDir "CADWorkAssistant.FakeAutoCad.exe" "FakeAutoCad ex
 Test-NoFilesMatch $PublishDir "*.Tests.dll" "test assembly"
 Test-NoFilesMatch $PublishDir "node.exe" "Node.js runtime"
 Test-NoFilesMatch $PublishDir "python.exe" "Python runtime"
+Test-NoFilesMatch $PublishDir "npm.cmd" "npm command"
+Test-NoFilesMatch $PublishDir "playwright*" "Playwright runtime"
+Test-NoFilesMatch $PublishDir "chrome.exe" "Chromium runtime"
+Test-NoFilesMatch $PublishDir "chromium*" "Chromium runtime"
+Test-NoFilesMatch $PublishDir "gswin*.exe" "Ghostscript runtime"
+Test-NoFilesMatch $PublishDir "*.pdb" "debug symbols"
 Test-NoFilesMatch $PublishDir "*.cs" "source file (.cs)"
 Test-NoFilesMatch $PublishDir "*.xaml" "source file (.xaml - publish output should only have compiled resources)"
 
@@ -46,6 +52,7 @@ if (-not (Test-Path $manualPdfPath)) {
 if (Test-Path (Join-Path $PublishDir ".claude")) { $failures += ".claude folder present in publish output" }
 if (Test-Path (Join-Path $PublishDir ".21st")) { $failures += ".21st folder present in publish output" }
 if (Test-Path (Join-Path $PublishDir "node_modules")) { $failures += "node_modules present in publish output" }
+if (Test-Path (Join-Path $PublishDir "tests")) { $failures += "tests folder present in publish output" }
 
 # --- The AutoCAD bundle must never carry Autodesk's own host DLLs (Milestone 8 section 113) ---
 Test-NoFilesMatch $BundleDir "acdbmgd.dll" "Autodesk host DLL (acdbmgd.dll)"
@@ -54,9 +61,10 @@ Test-NoFilesMatch $BundleDir "accoremgd.dll" "Autodesk host DLL (accoremgd.dll)"
 
 # --- Filename-level check for AI/LLM tooling traces (source-level grep is the stronger signal;
 #     this just double-checks nothing with a telltale name got copied into the package) ---
-$suspiciousNamePatterns = @("*claude*", "*anthropic*", "*openai*", "*ollama*")
+$suspiciousNamePatterns = @("*claude*", "*anthropic*", "*openai*", "*ollama*", "*mcp*", "*llm*", "*telemetry*", "*analytics*")
 foreach ($pattern in $suspiciousNamePatterns) {
     Test-NoFilesMatch $PublishDir $pattern "suspicious filename ($pattern)"
+    Test-NoFilesMatch $BundleDir $pattern "suspicious bundle filename ($pattern)"
 }
 
 if ($failures.Count -gt 0) {

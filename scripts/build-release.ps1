@@ -1,24 +1,22 @@
 <#
 .SYNOPSIS
-  CAD Work Assistant - one-command production release build (Milestone 8 sections 120-122).
+  CAD Work Assistant distribution release-candidate build.
 
 .DESCRIPTION
-  Clean -> Restore -> Build -> Test -> Publish Desktop -> Build Plugin -> Stage Bundle ->
-  Audit Runtime -> Build Installer -> Smoke Test -> Hash.
-  A test failure stops the script immediately (section 123) - the Installer is only produced from
-  a build that passed the full test suite.
+  Repository preflight -> clean -> restore -> release build -> full tests -> manual PDF ->
+  desktop publish -> AutoCAD plugin bundle -> runtime audit -> installer -> installer smoke ->
+  SHA256 -> distribution folder -> release manifest -> ZIP.
 
-.PARAMETER SkipPlugin
-  Use on a machine without AutoCAD installed to release Desktop-only (see docs/AUTOCAD_INTEGRATION.md).
-
-.PARAMETER SkipInstaller
-  Stop after the publish output, without requiring Inno Setup to be installed.
+  Formal distribution mode fails when tracked source is dirty. Use -AllowDirty only for local
+  validation before committing release changes.
 #>
 param(
     [string]$Configuration = "Release",
     [switch]$SkipTests,
     [switch]$SkipPlugin,
-    [switch]$SkipInstaller
+    [switch]$SkipInstaller,
+    [switch]$SkipInstallerSmoke,
+    [switch]$AllowDirty
 )
 
 $ErrorActionPreference = "Stop"
@@ -37,44 +35,89 @@ function Assert-LastExitCode($step) {
     }
 }
 
-# --- Version Source of Truth (Directory.Build.props) ---
-Write-Step "Resolving version from Directory.Build.props"
-[xml]$buildProps = Get-Content "$RepoRoot\Directory.Build.props"
-$version = ($buildProps.Project.PropertyGroup | Where-Object { $_.CwaVersion } | Select-Object -First 1).CwaVersion
+function Get-BuildProperty([string]$name) {
+    [xml]$buildProps = Get-Content "$RepoRoot\Directory.Build.props"
+    $node = $buildProps.Project.PropertyGroup | Where-Object { $_.$name } | Select-Object -First 1
+    if (-not $node) { return $null }
+    return $node.$name
+}
+
+function Get-CommitHash {
+    git rev-parse --short=12 HEAD
+    Assert-LastExitCode "git rev-parse"
+}
+
+Write-Step "Repository preflight"
+$gitStatus = git status --porcelain
+Assert-LastExitCode "git status"
+$trackedDirty = @($gitStatus | Where-Object { $_ -notmatch '^\?\? ' })
+$untracked = @($gitStatus | Where-Object { $_ -match '^\?\? ' })
+$releaseUntracked = @()
+if ($trackedDirty.Count -gt 0 -and -not $AllowDirty) {
+    Write-Host "FAILED: tracked source is dirty. Commit or stash changes before a formal release." -ForegroundColor Red
+    $trackedDirty | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
+    exit 1
+}
+if ($trackedDirty.Count -gt 0) {
+    Write-Host "WARNING: tracked source is dirty because -AllowDirty was used." -ForegroundColor Yellow
+    $trackedDirty | ForEach-Object { Write-Host "  $_" -ForegroundColor Yellow }
+}
+foreach ($item in $untracked) {
+    if ($item -eq "?? .claude/scheduled_tasks.lock") {
+        Write-Host "Ignoring development lock file: .claude/scheduled_tasks.lock" -ForegroundColor Yellow
+    }
+    else {
+        $releaseUntracked += $item
+        Write-Host "WARNING: untracked file is not release content: $item" -ForegroundColor Yellow
+    }
+}
+
+$commit = Get-CommitHash
+$version = Get-BuildProperty "CwaVersion"
+$releaseChannel = Get-BuildProperty "ReleaseChannel"
 if (-not $version) {
-    Write-Host "FAILED: could not read CwaVersion from Directory.Build.props" -ForegroundColor Red
+    Write-Host "FAILED: CwaVersion missing from Directory.Build.props" -ForegroundColor Red
+    exit 1
+}
+if (-not $releaseChannel) {
+    Write-Host "FAILED: ReleaseChannel missing from Directory.Build.props" -ForegroundColor Red
     exit 1
 }
 Write-Host "Version: $version"
+Write-Host "Channel: $releaseChannel"
+Write-Host "Commit: $commit"
 
 $ArtifactsDir = Join-Path $RepoRoot "artifacts"
-$PublishDir = Join-Path $RepoRoot "publish\desktop"
+$PublishRoot = Join-Path $RepoRoot "publish"
+$PublishDir = Join-Path $PublishRoot "desktop"
 $BundleDir = Join-Path $RepoRoot "installer\CADWorkAssistant.bundle"
 $BundleWindowsDir = Join-Path $BundleDir "Contents\Windows"
 $InstallerOutputDir = Join-Path $ArtifactsDir "installer"
 $ManualOutputDir = Join-Path $ArtifactsDir "manual"
+$ReleaseFolderName = "CADWorkAssistant-$version-$releaseChannel"
+$ReleaseDir = Join-Path $ArtifactsDir "release\$ReleaseFolderName"
+$ZipPath = Join-Path $ArtifactsDir "release\CADWorkAssistant-$version-$releaseChannel-x64.zip"
 $ManualPdfName = "CAD_Work_Assistant_User_Guide_ko-KR.pdf"
+$SetupFileName = "CADWorkAssistant-Setup-$version-$releaseChannel-x64.exe"
+$ReleaseNotesName = "RELEASE_NOTES_$version-$releaseChannel.md"
 
-# --- Clean ---
 Write-Step "Clean"
 Remove-Item -Recurse -Force $ArtifactsDir -ErrorAction SilentlyContinue
-Remove-Item -Recurse -Force (Join-Path $RepoRoot "publish") -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force $PublishRoot -ErrorAction SilentlyContinue
 Remove-Item -Recurse -Force $BundleWindowsDir -ErrorAction SilentlyContinue
 dotnet clean "$RepoRoot\CADWorkAssistant.CI.slnf" -v q | Out-Null
+Assert-LastExitCode "clean"
 
-# --- Restore ---
 Write-Step "Restore"
 dotnet restore "$RepoRoot\CADWorkAssistant.CI.slnf"
 Assert-LastExitCode "restore"
 
-# --- Build (CI slnf - projects that build without AutoCAD installed) ---
 Write-Step "Build (CADWorkAssistant.CI.slnf, $Configuration)"
 dotnet build "$RepoRoot\CADWorkAssistant.CI.slnf" -c $Configuration --no-restore
 Assert-LastExitCode "build"
 
-# --- Test ---
 if (-not $SkipTests) {
-    Write-Step "Test (all tests must pass before an Installer is built)"
+    Write-Step "Full tests"
     dotnet test "$RepoRoot\CADWorkAssistant.CI.slnf" -c $Configuration --no-build
     Assert-LastExitCode "test"
 }
@@ -82,36 +125,27 @@ else {
     Write-Host "Tests skipped (-SkipTests)" -ForegroundColor Yellow
 }
 
-# --- Publish Desktop (self-contained win-x64) ---
 Write-Step "Publish Desktop (self-contained win-x64)"
 dotnet publish "$RepoRoot\src\CADWorkAssistant.Desktop\CADWorkAssistant.Desktop.csproj" `
     -c $Configuration -r win-x64 --self-contained true -o $PublishDir `
-    /p:PublishSingleFile=false /p:PublishTrimmed=false
+    /p:PublishSingleFile=false /p:PublishTrimmed=false /p:DebugType=None /p:DebugSymbols=false
 Assert-LastExitCode "publish desktop"
 
-# --- Build User Manual PDF (Milestone 13 Part B, sections 115-116) ---
-# tools/CADWorkAssistant.ManualBuilder는 개발 전용 도구다 - Desktop 게시 결과물에는 포함하지 않고,
-# 여기서 만든 PDF만 Documentation 폴더로 따로 옮겨 Installer에 포함시킨다. 실패하면 전체 릴리스를
-# 실패시킨다(Assert-LastExitCode) - 사용설명서 없는 설치 프로그램을 만들지 않는다.
 Write-Step "Build User Manual PDF"
 $manualBuilderExe = Join-Path $RepoRoot "tools\CADWorkAssistant.ManualBuilder\bin\$Configuration\net8.0\CADWorkAssistant.ManualBuilder.exe"
 if (-not (Test-Path $manualBuilderExe)) {
-    Write-Host "FAILED: ManualBuilder not found at $manualBuilderExe (did the Build step run?)" -ForegroundColor Red
+    Write-Host "FAILED: ManualBuilder not found at $manualBuilderExe" -ForegroundColor Red
     exit 1
 }
-
 New-Item -ItemType Directory -Force -Path $ManualOutputDir | Out-Null
 $manualSourceMd = Join-Path $RepoRoot "docs\user-guide\ko-KR\USER_GUIDE.md"
 $manualPdfPath = Join-Path $ManualOutputDir $ManualPdfName
 & $manualBuilderExe $manualSourceMd $manualPdfPath
 Assert-LastExitCode "user manual build"
-
 $manualDestDir = Join-Path $PublishDir "Documentation"
 New-Item -ItemType Directory -Force -Path $manualDestDir | Out-Null
 Copy-Item $manualPdfPath (Join-Path $manualDestDir $ManualPdfName) -Force
-Write-Host "User manual staged: $(Join-Path $manualDestDir $ManualPdfName)"
 
-# --- Build Plugin + Stage Bundle ---
 if (-not $SkipPlugin) {
     Write-Step "Build AutoCAD Plugin (net48)"
     dotnet build "$RepoRoot\src\CADWorkAssistant.AutoCAD\CADWorkAssistant.AutoCAD.csproj" -c $Configuration
@@ -120,34 +154,24 @@ if (-not $SkipPlugin) {
     Write-Step "Stage AutoCAD Bundle"
     $pluginBinDir = Join-Path $RepoRoot "src\CADWorkAssistant.AutoCAD\bin\$Configuration\net48"
     New-Item -ItemType Directory -Force -Path $BundleWindowsDir | Out-Null
-    # Entry DLL + its own project-reference dependencies (Core/Infrastructure). Autodesk's host DLLs
-    # (acdbmgd.dll etc.) are never here in the first place - the csproj references them Private=false
-    # (verified: section 113).
     Copy-Item "$pluginBinDir\CADWorkAssistant.AutoCAD.dll" $BundleWindowsDir -Force
     Copy-Item "$pluginBinDir\CADWorkAssistant.Core.dll" $BundleWindowsDir -Force -ErrorAction SilentlyContinue
     Copy-Item "$pluginBinDir\CADWorkAssistant.Infrastructure.dll" $BundleWindowsDir -Force -ErrorAction SilentlyContinue
     Copy-Item "$pluginBinDir\Serilog*.dll" $BundleWindowsDir -Force -ErrorAction SilentlyContinue
 
-    # Keep PackageContents.xml's AppVersion in sync with Directory.Build.props (sections 124-125) -
-    # the version is not hand-maintained separately in this file.
     $manifestPath = Join-Path $BundleDir "PackageContents.xml"
     $manifest = Get-Content $manifestPath -Raw -Encoding UTF8
     $manifest = [regex]::Replace($manifest, 'AppVersion="[^"]*"', "AppVersion=`"$version`"")
     Set-Content -Path $manifestPath -Value $manifest -NoNewline -Encoding UTF8
-
-    $dllCount = (Get-ChildItem $BundleWindowsDir -Filter "*.dll").Count
-    Write-Host "Bundle staged: $dllCount dll(s) in $BundleWindowsDir"
 }
 else {
-    Write-Host "Plugin build skipped (-SkipPlugin) - AutoCAD not available on this machine" -ForegroundColor Yellow
+    Write-Host "Plugin build skipped (-SkipPlugin)" -ForegroundColor Yellow
 }
 
-# --- Runtime/Network/LLM Audit ---
 Write-Step "Runtime Dependency Audit"
 & "$PSScriptRoot\audit-runtime.ps1" -PublishDir $PublishDir -BundleDir $BundleDir
 Assert-LastExitCode "runtime audit"
 
-# --- Build Installer ---
 if (-not $SkipInstaller) {
     Write-Step "Build Installer (Inno Setup)"
     $isccCandidates = @(
@@ -160,35 +184,96 @@ if (-not $SkipInstaller) {
         Write-Host "FAILED: ISCC.exe (Inno Setup) not found. Install with: winget install --id JRSoftware.InnoSetup -e" -ForegroundColor Red
         exit 1
     }
-    Write-Host "Using $iscc"
 
     New-Item -ItemType Directory -Force -Path $InstallerOutputDir | Out-Null
-    # ISCC re-parses the text after each /D itself and splits on unescaped spaces, so a value
-    # containing spaces (this repo's own path does, via the Korean "Desktop" folder name) needs its
-    # OWN embedded quotes, not just the outer PowerShell argv quoting - discovered the hard way when
-    # /DSourceDir=<path with a space> silently truncated the value and broke downstream [Files] parsing.
-    & $iscc "/DAppVersion=$version" "/DSourceDir=`"$PublishDir`"" "/DBundleDir=`"$BundleDir`"" "/DOutputDir=`"$InstallerOutputDir`"" `
+    & $iscc "/DAppVersion=$version" "/DReleaseChannel=$releaseChannel" "/DSourceDir=`"$PublishDir`"" "/DBundleDir=`"$BundleDir`"" "/DOutputDir=`"$InstallerOutputDir`"" `
         "$RepoRoot\installer\CADWorkAssistant.iss"
     Assert-LastExitCode "ISCC"
 
-    # --- Installer Smoke Test ---
-    Write-Step "Installer Smoke Test"
-    $installerExe = Get-ChildItem $InstallerOutputDir -Filter "CADWorkAssistant-Setup-*.exe" | Select-Object -First 1
-    if (-not $installerExe) {
-        Write-Host "FAILED: installer exe not found in $InstallerOutputDir" -ForegroundColor Red
+    $installerExePath = Join-Path $InstallerOutputDir $SetupFileName
+    if (-not (Test-Path $installerExePath)) {
+        Write-Host "FAILED: expected installer missing: $installerExePath" -ForegroundColor Red
         exit 1
     }
-    if ($installerExe.Length -eq 0) {
-        Write-Host "FAILED: installer exe is empty" -ForegroundColor Red
-        exit 1
-    }
-    Write-Host "Installer: $($installerExe.FullName) ($([Math]::Round($installerExe.Length / 1MB, 1)) MB)"
 
-    # --- Hash ---
+    if (-not $SkipInstallerSmoke) {
+        Write-Step "Installer smoke test"
+        & "$PSScriptRoot\test-release.ps1" -InstallerPath $installerExePath
+        Assert-LastExitCode "installer smoke"
+    }
+    else {
+        Write-Host "Installer smoke skipped (-SkipInstallerSmoke)" -ForegroundColor Yellow
+    }
+
     Write-Step "SHA256"
-    $hash = Get-FileHash $installerExe.FullName -Algorithm SHA256
-    "$($hash.Hash)  $($installerExe.Name)" | Set-Content "$($installerExe.FullName).sha256"
-    Write-Host "$($hash.Hash)"
+    $installerHash = Get-FileHash $installerExePath -Algorithm SHA256
+    "$($installerHash.Hash)  $SetupFileName" | Set-Content "$installerExePath.sha256" -Encoding UTF8
+
+    Write-Step "Distribution folder"
+    New-Item -ItemType Directory -Force -Path $ReleaseDir | Out-Null
+    Copy-Item $installerExePath (Join-Path $ReleaseDir $SetupFileName) -Force
+    Copy-Item "$installerExePath.sha256" (Join-Path $ReleaseDir "$SetupFileName.sha256") -Force
+    Copy-Item $manualPdfPath (Join-Path $ReleaseDir $ManualPdfName) -Force
+
+    $releaseNotesPath = Join-Path $RepoRoot "docs\releases\$ReleaseNotesName"
+    if (-not (Test-Path $releaseNotesPath)) {
+        Write-Host "FAILED: release notes missing at $releaseNotesPath" -ForegroundColor Red
+        exit 1
+    }
+    Copy-Item $releaseNotesPath (Join-Path $ReleaseDir $ReleaseNotesName) -Force
+
+    $readmeFirstSource = Join-Path $RepoRoot "docs\releases\README_FIRST.txt"
+    if (-not (Test-Path $readmeFirstSource)) {
+        Write-Host "FAILED: README_FIRST missing at $readmeFirstSource" -ForegroundColor Red
+        exit 1
+    }
+    Copy-Item $readmeFirstSource (Join-Path $ReleaseDir "README_FIRST.txt") -Force
+
+    $thirdParty = Join-Path $RepoRoot "THIRD_PARTY_NOTICES.txt"
+    if (Test-Path $thirdParty) {
+        Copy-Item $thirdParty (Join-Path $ReleaseDir "THIRD_PARTY_NOTICES.txt") -Force
+    }
+
+    $manifestObject = [ordered]@{
+        product = "CAD Work Assistant"
+        version = $version
+        channel = $releaseChannel
+        commit = $commit
+        source = @{
+            commit = $commit
+            allowDirty = [bool]$AllowDirty
+            trackedDirty = @($trackedDirty)
+            untracked = @($releaseUntracked)
+        }
+        builtAt = (Get-Date).ToUniversalTime().ToString("o")
+        configuration = $Configuration
+        installer = @{
+            file = $SetupFileName
+            sha256 = $installerHash.Hash
+            sizeBytes = (Get-Item $installerExePath).Length
+        }
+        manual = $ManualPdfName
+        releaseNotes = $ReleaseNotesName
+        unsigned = $true
+        autoCadValidation = @{
+            realAutoCadIntegration = "pending"
+            realDrawingPlot = "pending"
+            realTextTools = "pending"
+        }
+    }
+    $manifestObject | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $ReleaseDir "release-manifest.json") -Encoding UTF8
+
+    Write-Step "Verify distribution"
+    & "$PSScriptRoot\verify-distribution.ps1" -DistributionDir $ReleaseDir -Version $version -ReleaseChannel $releaseChannel
+    Assert-LastExitCode "verify distribution"
+
+    Write-Step "ZIP"
+    Remove-Item $ZipPath -Force -ErrorAction SilentlyContinue
+    Compress-Archive -Path $ReleaseDir -DestinationPath $ZipPath -Force
+    $zipHash = Get-FileHash $ZipPath -Algorithm SHA256
+    "$($zipHash.Hash)  $(Split-Path $ZipPath -Leaf)" | Set-Content "$ZipPath.sha256" -Encoding UTF8
+    Write-Host "Distribution: $ReleaseDir"
+    Write-Host "ZIP: $ZipPath"
 }
 else {
     Write-Host "Installer build skipped (-SkipInstaller)" -ForegroundColor Yellow

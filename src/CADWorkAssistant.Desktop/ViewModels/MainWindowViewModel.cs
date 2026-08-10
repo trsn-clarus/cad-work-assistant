@@ -38,7 +38,8 @@ public sealed class MainWindowViewModel : ObservableObject
         IPlotCapabilityCoordinator plotCapabilityCoordinator,
         IDrawingPdfExportCoordinator drawingPdfExportCoordinator,
         string dataFolderPath,
-        string manualPdfPath)
+        string manualPdfPath,
+        string logFolderPath)
     {
         _connectionManager = connectionManager;
         _projectContext = projectContext;
@@ -56,7 +57,7 @@ public sealed class MainWindowViewModel : ObservableObject
         ExcelExport = new ExcelExportViewModel(projectContext, excelExportCoordinator);
         PdfExport = new PdfExportViewModel(projectContext, pdfExportCoordinator);
         DrawingPdfExport = new DrawingPdfExportViewModel(connectionManager, plotCapabilityCoordinator, drawingPdfExportCoordinator);
-        Settings = new SettingsViewModel(dataFolderPath, manualPdfPath);
+        Settings = new SettingsViewModel(dataFolderPath, manualPdfPath, logFolderPath);
 
         // 실제로 화면이 있는 항목만 Navigation에 올린다(Milestone 8 §29) - 이전에는 미구현 항목도
         // 자리만 예약해 비활성 표시했지만(Milestone 4.5 §23), 상용 제품 첫인상에서는 클릭할 수 없는
@@ -617,8 +618,9 @@ public sealed class MainWindowViewModel : ObservableObject
                 break;
 
             case "Settings":
-                InspectorRows.Add(new InspectorRow("버전", Settings.VersionText));
-                InspectorRows.Add(new InspectorRow("데이터 위치", Settings.DataFolderPath));
+                InspectorRows.Add(new InspectorRow("Version", Settings.VersionText));
+                InspectorRows.Add(new InspectorRow("Channel", Settings.ReleaseChannelText));
+                InspectorRows.Add(new InspectorRow("Data Location", Settings.DataFolderPath));
                 break;
 
             default:

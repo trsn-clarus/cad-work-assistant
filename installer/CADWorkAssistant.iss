@@ -11,7 +11,10 @@
 ; so the version is never hand-maintained in two places (sections 124-125). The defaults below are
 ; only a fallback for compiling this file directly with ISCC.exe during manual testing.
 #ifndef AppVersion
-  #define AppVersion "0.8.0"
+  #define AppVersion "0.9.0"
+#endif
+#ifndef ReleaseChannel
+  #define ReleaseChannel "RC"
 #endif
 #ifndef SourceDir
   #define SourceDir "..\publish\desktop"
@@ -58,7 +61,7 @@ UsePreviousAppDir=yes
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
 OutputDir={#OutputDir}
-OutputBaseFilename=CADWorkAssistant-Setup-{#AppVersion}-x64
+OutputBaseFilename=CADWorkAssistant-Setup-{#AppVersion}-{#ReleaseChannel}-x64
 Compression=lzma2/ultra
 SolidCompression=yes
 ArchitecturesAllowed=x64compatible

@@ -18,7 +18,7 @@
 
     <StackPanel Grid.Row="0" Margin="0,0,0,12">
       <TextBlock Text="Settings" FontSize="22" FontWeight="SemiBold" />
-      <TextBlock Text="프로그램 정보와 데이터 위치" Style="{StaticResource CaptionText}" Margin="0,2,0,0" />
+      <TextBlock Text="Program information, data location, and support links" Style="{StaticResource CaptionText}" Margin="0,2,0,0" />
     </StackPanel>
 
     <Border Grid.Row="1" Style="{StaticResource PanelBorder}" Padding="20" VerticalAlignment="Top" MaxWidth="520" HorizontalAlignment="Left">
@@ -28,6 +28,7 @@
           <StackPanel VerticalAlignment="Center">
             <TextBlock Text="{Binding AppName}" FontSize="17" FontWeight="SemiBold" />
             <TextBlock Text="{Binding VersionText}" Style="{StaticResource CaptionText}" Margin="0,2,0,0" />
+            <TextBlock Text="{Binding ReleaseChannelText}" Style="{StaticResource CaptionText}" Margin="0,2,0,0" />
           </StackPanel>
         </StackPanel>
 
@@ -35,27 +36,33 @@
 
         <TextBlock Text="DATA" Style="{StaticResource SectionTitle}" Margin="0,0,0,6" />
         <TextBlock Text="{Binding DataFolderPath}" Style="{StaticResource InspectorValue}" TextWrapping="Wrap" ToolTip="{Binding DataFolderPath}" />
-        <TextBlock Text="프로젝트/수량/검산 기록은 이 폴더의 SQLite 파일에 저장됩니다. 프로그램을 제거해도 이 폴더는 남습니다."
+        <TextBlock Text="Projects, quantities, verification records, settings, and logs are stored outside the install folder. Uninstall keeps this data."
                    Style="{StaticResource CaptionText}"
                    TextWrapping="Wrap"
                    Margin="0,4,0,10" />
         <Button Style="{StaticResource SecondaryButton}"
                 Command="{Binding OpenDataFolderCommand}"
-                AutomationProperties.Name="데이터 폴더 열기"
-                Content="데이터 폴더 열기"
+                AutomationProperties.Name="Open data folder"
+                Content="Open data folder"
+                HorizontalAlignment="Left" />
+        <Button Style="{StaticResource SecondaryButton}"
+                Command="{Binding OpenLogFolderCommand}"
+                AutomationProperties.Name="Open log folder"
+                Content="Open log folder"
+                Margin="0,8,0,0"
                 HorizontalAlignment="Left" />
 
         <Border BorderBrush="{StaticResource BrushDivider}" BorderThickness="0,1,0,0" Margin="0,16,0,16" />
 
         <TextBlock Text="HELP" Style="{StaticResource SectionTitle}" Margin="0,0,0,6" />
-        <TextBlock Text="설치된 사용설명서 PDF를 기본 프로그램으로 엽니다."
+        <TextBlock Text="Open the installed user manual PDF with the default PDF application."
                    Style="{StaticResource CaptionText}"
                    TextWrapping="Wrap"
                    Margin="0,0,0,10" />
         <Button Style="{StaticResource SecondaryButton}"
                 Command="{Binding OpenUserManualCommand}"
-                AutomationProperties.Name="사용설명서 열기"
-                Content="사용설명서 열기"
+                AutomationProperties.Name="Open user manual"
+                Content="Open user manual"
                 HorizontalAlignment="Left" />
         <Border Style="{StaticResource InlineMessageBorder}"
                 Margin="0,10,0,0"

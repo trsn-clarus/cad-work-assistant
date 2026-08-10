@@ -65,6 +65,7 @@ public partial class App : Application
         // Settings 화면의 "데이터 폴더 열기"용 - DB 파일이 아니라 그 상위(data/의 부모) 폴더를 보여준다.
         // Simulation/Real이 서로 다른 db 파일을 쓰지만(CadWorkAssistantDatabase) 상위 폴더는 같다.
         var dataFolderPath = Path.GetDirectoryName(Path.GetDirectoryName(database.DatabasePath)) ?? database.DatabasePath;
+        var logFolderPath = AppLog.GetLogDirectory();
 
         // installer/CADWorkAssistant.iss가 Desktop.exe를 {app}에 바로 두고 사용설명서 PDF는
         // {app}\Documentation\에 둔다(Milestone 13 §115) - AppContext.BaseDirectory가 곧 {app}이다.
@@ -79,7 +80,8 @@ public partial class App : Application
             plotCapabilityCoordinator,
             drawingPdfExportCoordinator,
             dataFolderPath,
-            manualPdfPath);
+            manualPdfPath,
+            logFolderPath);
         var mainWindow = new MainWindow(mainWindowViewModel, projectContext);
         mainWindow.Show();
     }

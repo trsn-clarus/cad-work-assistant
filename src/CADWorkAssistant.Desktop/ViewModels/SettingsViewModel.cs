@@ -17,20 +17,31 @@ public sealed class SettingsViewModel : ObservableObject
 {
     private string? _manualErrorMessage;
 
-    public SettingsViewModel(string dataFolderPath, string manualPdfPath)
+    public SettingsViewModel(string dataFolderPath, string manualPdfPath, string logFolderPath)
     {
         DataFolderPath = dataFolderPath;
         ManualPdfPath = manualPdfPath;
+        LogFolderPath = logFolderPath;
         OpenDataFolderCommand = new RelayCommand(OpenDataFolder);
         OpenUserManualCommand = new RelayCommand(OpenUserManual);
+        OpenLogFolderCommand = new RelayCommand(OpenLogFolder);
     }
 
     public string AppName => "CAD Work Assistant";
 
     public string VersionText =>
         Assembly.GetExecutingAssembly().GetName().Version is { } version
-            ? $"버전 {version.Major}.{version.Minor}.{version.Build}"
-            : "버전 정보 없음";
+            ? $"Version {version.Major}.{version.Minor}.{version.Build}"
+            : "Version unavailable";
+
+    public string ReleaseChannelText => ReleaseChannel() switch
+    {
+        "RC" => "Release Candidate",
+        "Beta" => "Public Beta",
+        "Stable" => "Stable",
+        { Length: > 0 } channel => channel,
+        _ => "Release Candidate"
+    };
 
     public string CompanyText => "Developed by TRSN CLARUS";
 
@@ -38,9 +49,13 @@ public sealed class SettingsViewModel : ObservableObject
 
     public string ManualPdfPath { get; }
 
+    public string LogFolderPath { get; }
+
     public ICommand OpenDataFolderCommand { get; }
 
     public ICommand OpenUserManualCommand { get; }
+
+    public ICommand OpenLogFolderCommand { get; }
 
     /// <summary>사용설명서 PDF를 찾지 못했거나 열지 못했을 때만 채워진다(§60) - 원시 Exception을
     /// 그대로 보여주지 않는다(CLAUDE.md 절대 원칙 4).</summary>
@@ -63,6 +78,19 @@ public sealed class SettingsViewModel : ObservableObject
         }
     }
 
+    private void OpenLogFolder()
+    {
+        try
+        {
+            Directory.CreateDirectory(LogFolderPath);
+            Process.Start(new ProcessStartInfo(LogFolderPath) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to open log folder {Path}", LogFolderPath);
+        }
+    }
+
     private void OpenUserManual()
     {
         if (!File.Exists(ManualPdfPath))
@@ -82,5 +110,13 @@ public sealed class SettingsViewModel : ObservableObject
             ManualErrorMessage = "사용설명서를 여는 중 문제가 발생했습니다. PDF를 열 수 있는 프로그램이 설치되어 있는지 확인해주세요.";
             Log.Error(ex, "Failed to open user manual PDF at {Path}", ManualPdfPath);
         }
+    }
+
+    private static string ReleaseChannel()
+    {
+        var metadata = Assembly.GetExecutingAssembly()
+            .GetCustomAttributes<AssemblyMetadataAttribute>()
+            .FirstOrDefault(attribute => attribute.Key == "ReleaseChannel");
+        return metadata?.Value ?? string.Empty;
     }
 }

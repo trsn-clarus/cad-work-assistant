@@ -16,10 +16,10 @@ public static class AppLog
     {
         if (_initialized)
         {
-            return LogDirectory(appName);
+            return GetLogDirectory(appName);
         }
 
-        var logDirectory = LogDirectory(appName);
+        var logDirectory = GetLogDirectory(appName);
         Directory.CreateDirectory(logDirectory);
 
         Log.Logger = new LoggerConfiguration()
@@ -41,7 +41,7 @@ public static class AppLog
         _initialized = false;
     }
 
-    private static string LogDirectory(string appName) => Path.Combine(
+    public static string GetLogDirectory(string appName = "CADWorkAssistant") => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         appName,
         "logs");

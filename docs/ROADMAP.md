@@ -804,3 +804,7 @@ AutoCAD 하드웨어가 필요한 하위 범위가 없어 BLOCKED 항목 없음.
 - [ ] AI Assistant (자연어 명령)
 
 이 단계들은 정확성/안정성이 검증된 이후에만 착수한다 (§33).
+
+## Milestone 14 - Distribution Release Candidate
+
+Formal 0.9.0 RC packaging is complete. See `docs/MILESTONE_14_DISTRIBUTION_RC.md` for the distribution script, known limitations, and 1.0 release criteria.

@@ -10,7 +10,7 @@
 -->
 <ApplicationPackage SchemaVersion="1.0"
                      Name="CAD Work Assistant"
-                     AppVersion="0.8.0"
+                     AppVersion="0.9.0"
                      Description="AutoCAD quantity takeoff and verification automation tool"
                      Author="TRSN CLARUS"
                      ProductCode="{DF475DF2-1225-4303-A6CB-94FFB224A0AE}"

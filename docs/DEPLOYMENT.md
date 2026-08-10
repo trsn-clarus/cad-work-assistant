@@ -32,12 +32,12 @@ Desktop과 Plugin은 별도 프로세스다(`docs/ARCHITECTURE.md` §5). Runtime
 `Directory.Build.props`의 `CwaVersion` 프로퍼티 하나가 모든 버전 값의 근원이다.
 
 ```text
-Directory.Build.props (CwaVersion="0.8.0")
+Directory.Build.props (CwaVersion="0.9.0", ReleaseChannel="RC")
         │
         ├─ 모든 프로젝트의 AssemblyVersion/FileVersion/Product/Company (MSBuild가 자동 상속)
         ├─ scripts/build-release.ps1 -> Directory.Build.props를 파싱해 $version 결정
         │     ├─ installer/CADWorkAssistant.bundle/PackageContents.xml의 AppVersion을 정규식으로 교체
-        │     └─ ISCC.exe /DAppVersion=$version -> Setup 파일명(CADWorkAssistant-Setup-$version-x64.exe)
+        │     └─ ISCC.exe /DAppVersion=$version /DReleaseChannel=$releaseChannel -> Setup 파일명(CADWorkAssistant-Setup-$version-$releaseChannel-x64.exe)
         └─ src/CADWorkAssistant.Desktop/ViewModels/SettingsViewModel.cs
               -> Assembly.GetExecutingAssembly().GetName().Version (런타임에 리플렉션으로 읽음, Settings 화면에 표시)
 ```
@@ -123,9 +123,10 @@ installer/CADWorkAssistant.bundle/
 ```
 
 ```text
-Clean -> Restore -> Build (CADWorkAssistant.CI.slnf) -> Test (실패 시 즉시 중단) ->
-Publish Desktop (self-contained win-x64) -> Build AutoCAD Plugin -> Stage Bundle ->
-Runtime Dependency Audit -> Build Installer (ISCC.exe) -> Smoke Test -> SHA256
+Repository preflight -> Clean -> Restore -> Build (CADWorkAssistant.CI.slnf) -> Test (실패 시 즉시 중단) ->
+Publish Desktop (self-contained win-x64) -> Build User Manual PDF -> Build AutoCAD Plugin -> Stage Bundle ->
+Runtime Dependency Audit -> Build Installer (ISCC.exe) -> Installer Smoke Test -> SHA256 ->
+Distribution folder -> release-manifest.json -> ZIP
 ```
 
 옵션:
@@ -134,8 +135,23 @@ Runtime Dependency Audit -> Build Installer (ISCC.exe) -> Smoke Test -> SHA256
 - `-SkipInstaller` - Inno Setup 없이 publish 산출물까지만 확인.
 - `-SkipTests` - 테스트를 이미 별도로 돌렸을 때만(기본은 항상 테스트를 돈다).
 
-결과물: `artifacts/installer/CADWorkAssistant-Setup-<version>-x64.exe` + 같은 이름의
-`.sha256` 파일.
+결과물:
+
+```text
+artifacts/release/CADWorkAssistant-0.9.0-RC/
+  CADWorkAssistant-Setup-0.9.0-RC-x64.exe
+  CADWorkAssistant-Setup-0.9.0-RC-x64.exe.sha256
+  CAD_Work_Assistant_User_Guide_ko-KR.pdf
+  RELEASE_NOTES_0.9.0-RC.md
+  README_FIRST.txt
+  THIRD_PARTY_NOTICES.txt
+  release-manifest.json
+
+artifacts/release/CADWorkAssistant-0.9.0-RC-x64.zip
+artifacts/release/CADWorkAssistant-0.9.0-RC-x64.zip.sha256
+```
+
+`scripts/verify-distribution.ps1`이 최종 배포 폴더의 필수 파일, 버전, SHA256, 금지 파일을 확인한다.
 
 ## 7. Runtime Dependency Audit
 
