@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+    <PackageReference Include="xunit" Version="2.5.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.3" />
+    <!-- 실제 USER_GUIDE.md -> 실제 PDF까지 전체 파이프라인을 열어서 검증하는 회귀 테스트 전용
+         (QuantityPdfBuilderTests와 같은 이유, Milestone 13 §118-127). -->
+    <PackageReference Include="PdfPig" Version="0.1.15" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\CADWorkAssistant.Documents\CADWorkAssistant.Documents.csproj" />
+    <ProjectReference Include="..\..\tools\CADWorkAssistant.ManualBuilder\CADWorkAssistant.ManualBuilder.csproj" />
+  </ItemGroup>
+
+</Project>

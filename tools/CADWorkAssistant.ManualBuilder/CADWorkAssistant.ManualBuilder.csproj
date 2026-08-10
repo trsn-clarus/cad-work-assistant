@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>CADWorkAssistant.ManualBuilder</RootNamespace>
+    <AssemblyName>CADWorkAssistant.ManualBuilder</AssemblyName>
+    <!--
+      Milestone 13 Part B §110-112, §133 - docs/user-guide의 Markdown 소스 + 스크린샷을 공식 사용설명서
+      PDF로 만드는 개발 전용 도구다. 런타임 제품 기능이 아니다 - 설치 프로그램/publish 결과물에
+      포함하지 않는다(scripts/build-release.ps1과 scripts/audit-runtime.ps1이 이를 강제한다).
+      실제 PDF 렌더링은 CADWorkAssistant.Documents.Pdf.UserManual.UserManualPdfBuilder가 전담한다 -
+      여기서는 Markdown 파싱과 CLI 조립만 한다.
+    -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\CADWorkAssistant.Documents\CADWorkAssistant.Documents.csproj" />
+  </ItemGroup>
+
+</Project>

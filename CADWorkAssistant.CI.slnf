@@ -8,10 +8,12 @@
       "src\\CADWorkAssistant.Persistence\\CADWorkAssistant.Persistence.csproj",
       "src\\CADWorkAssistant.Desktop\\CADWorkAssistant.Desktop.csproj",
       "tools\\CADWorkAssistant.FakeAutoCad\\CADWorkAssistant.FakeAutoCad.csproj",
+      "tools\\CADWorkAssistant.ManualBuilder\\CADWorkAssistant.ManualBuilder.csproj",
       "tests\\CADWorkAssistant.Core.Tests\\CADWorkAssistant.Core.Tests.csproj",
       "tests\\CADWorkAssistant.Persistence.Tests\\CADWorkAssistant.Persistence.Tests.csproj",
       "tests\\CADWorkAssistant.Integration.Tests\\CADWorkAssistant.Integration.Tests.csproj",
-      "tests\\CADWorkAssistant.Documents.Tests\\CADWorkAssistant.Documents.Tests.csproj"
+      "tests\\CADWorkAssistant.Documents.Tests\\CADWorkAssistant.Documents.Tests.csproj",
+      "tests\\CADWorkAssistant.ManualBuilder.Tests\\CADWorkAssistant.ManualBuilder.Tests.csproj"
     ]
   }
 }
