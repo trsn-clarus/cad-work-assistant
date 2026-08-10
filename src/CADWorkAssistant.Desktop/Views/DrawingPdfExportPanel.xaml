@@ -82,14 +82,22 @@
                          AutomationProperties.Name="현재 Layout 출력"
                          Margin="0,0,0,6" />
             <ComboBox ItemsSource="{Binding Layouts}"
-                      DisplayMemberPath="Name"
                       SelectedValuePath="Name"
                       SelectedValue="{Binding SelectedLayoutName}"
                       IsEnabled="{Binding IsCurrentLayoutScope}"
                       AutomationProperties.Name="출력할 Layout 선택"
                       Width="220"
                       HorizontalAlignment="Left"
-                      Margin="20,0,0,10" />
+                      Margin="20,0,0,10">
+              <!-- DisplayMemberPath만으로는 이 앱의 커스텀 ComboBox 템플릿에서 닫힌 상태(선택된
+                   값) 표시에 반영되지 않는다(Milestone 12 Text Tools 색상 ComboBox와 같은 원인,
+                   design-system/pages/text-tools.md 참고) - 명시적 ItemTemplate으로 고정한다. -->
+              <ComboBox.ItemTemplate>
+                <DataTemplate>
+                  <TextBlock Text="{Binding Name}" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
 
             <RadioButton GroupName="DrawingPdfScope"
                          Content="Model 영역 지정"
