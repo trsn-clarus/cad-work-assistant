@@ -4,8 +4,12 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="clr-namespace:CADWorkAssistant.Desktop.ViewModels"
+             xmlns:conv="clr-namespace:CADWorkAssistant.Desktop.Converters"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=vm:SettingsViewModel}">
+  <UserControl.Resources>
+    <conv:StringNotEmptyToVisibilityConverter x:Key="StringToVisibility" />
+  </UserControl.Resources>
   <Grid>
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto" />
@@ -40,6 +44,24 @@
                 AutomationProperties.Name="데이터 폴더 열기"
                 Content="데이터 폴더 열기"
                 HorizontalAlignment="Left" />
+
+        <Border BorderBrush="{StaticResource BrushDivider}" BorderThickness="0,1,0,0" Margin="0,16,0,16" />
+
+        <TextBlock Text="HELP" Style="{StaticResource SectionTitle}" Margin="0,0,0,6" />
+        <TextBlock Text="설치된 사용설명서 PDF를 기본 프로그램으로 엽니다."
+                   Style="{StaticResource CaptionText}"
+                   TextWrapping="Wrap"
+                   Margin="0,0,0,10" />
+        <Button Style="{StaticResource SecondaryButton}"
+                Command="{Binding OpenUserManualCommand}"
+                AutomationProperties.Name="사용설명서 열기"
+                Content="사용설명서 열기"
+                HorizontalAlignment="Left" />
+        <Border Style="{StaticResource InlineMessageBorder}"
+                Margin="0,10,0,0"
+                Visibility="{Binding ManualErrorMessage, Converter={StaticResource StringToVisibility}, FallbackValue=Collapsed}">
+          <TextBlock Text="{Binding ManualErrorMessage}" Style="{StaticResource InlineMessageText}" Foreground="{StaticResource BrushError}" TextWrapping="Wrap" />
+        </Border>
 
         <Border BorderBrush="{StaticResource BrushDivider}" BorderThickness="0,1,0,0" Margin="0,16,0,16" />
 

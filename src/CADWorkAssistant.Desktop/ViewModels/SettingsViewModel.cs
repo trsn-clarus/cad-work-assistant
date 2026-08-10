@@ -15,10 +15,14 @@ namespace CADWorkAssistant.Desktop.ViewModels;
 /// </summary>
 public sealed class SettingsViewModel : ObservableObject
 {
-    public SettingsViewModel(string dataFolderPath)
+    private string? _manualErrorMessage;
+
+    public SettingsViewModel(string dataFolderPath, string manualPdfPath)
     {
         DataFolderPath = dataFolderPath;
+        ManualPdfPath = manualPdfPath;
         OpenDataFolderCommand = new RelayCommand(OpenDataFolder);
+        OpenUserManualCommand = new RelayCommand(OpenUserManual);
     }
 
     public string AppName => "CAD Work Assistant";
@@ -32,7 +36,19 @@ public sealed class SettingsViewModel : ObservableObject
 
     public string DataFolderPath { get; }
 
+    public string ManualPdfPath { get; }
+
     public ICommand OpenDataFolderCommand { get; }
+
+    public ICommand OpenUserManualCommand { get; }
+
+    /// <summary>사용설명서 PDF를 찾지 못했거나 열지 못했을 때만 채워진다(§60) - 원시 Exception을
+    /// 그대로 보여주지 않는다(CLAUDE.md 절대 원칙 4).</summary>
+    public string? ManualErrorMessage
+    {
+        get => _manualErrorMessage;
+        private set => SetProperty(ref _manualErrorMessage, value);
+    }
 
     private void OpenDataFolder()
     {
@@ -44,6 +60,27 @@ public sealed class SettingsViewModel : ObservableObject
         catch (Exception ex)
         {
             Log.Error(ex, "Failed to open data folder {Path}", DataFolderPath);
+        }
+    }
+
+    private void OpenUserManual()
+    {
+        if (!File.Exists(ManualPdfPath))
+        {
+            ManualErrorMessage = "사용설명서 파일을 찾을 수 없습니다. 프로그램을 다시 설치하면 해결될 수 있습니다.";
+            Log.Warning("User manual PDF not found at {Path}", ManualPdfPath);
+            return;
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo(ManualPdfPath) { UseShellExecute = true });
+            ManualErrorMessage = null;
+        }
+        catch (Exception ex)
+        {
+            ManualErrorMessage = "사용설명서를 여는 중 문제가 발생했습니다. PDF를 열 수 있는 프로그램이 설치되어 있는지 확인해주세요.";
+            Log.Error(ex, "Failed to open user manual PDF at {Path}", ManualPdfPath);
         }
     }
 }
