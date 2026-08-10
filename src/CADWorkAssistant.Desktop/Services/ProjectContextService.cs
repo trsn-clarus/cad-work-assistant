@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Threading.Tasks;
 using CADWorkAssistant.Core.Models;
+using CADWorkAssistant.Core.Verification;
 using CADWorkAssistant.Desktop.Common;
 using CADWorkAssistant.Persistence;
 
@@ -94,11 +96,26 @@ public sealed class ProjectContextService : ObservableObject, IProjectContextSer
         await SwitchToAsync(project);
     }
 
-    public async Task UpdateProjectAsync(string name, string? client, string? site, string? description)
+    public async Task UpdateProjectAsync(string projectId, string name, string? client, string? site, string? description)
     {
-        if (_currentProject is not { } project)
+        // CurrentProject면 이미 들고 있는 인스턴스를 그대로 갱신 - 다른 프로젝트면(Projects
+        // Workspace에서 지금 열려 있지 않은 프로젝트를 바로 편집) DB에서 다시 읽어와 갱신한다.
+        Project project;
+        var isCurrentProject = _currentProject?.Id == projectId;
+        if (isCurrentProject)
         {
-            return;
+            project = _currentProject!;
+        }
+        else
+        {
+            using var lookupConnection = _dataService.Database.OpenConnection();
+            var found = await _dataService.Projects.FindByIdAsync(projectId, lookupConnection);
+            if (found is null)
+            {
+                throw new InvalidOperationException($"Project '{projectId}' not found.");
+            }
+
+            project = found;
         }
 
         project.Name = name;
@@ -110,12 +127,98 @@ public sealed class ProjectContextService : ObservableObject, IProjectContextSer
         using var connection = _dataService.Database.OpenConnection();
         await _dataService.Projects.UpdateAsync(project, connection);
 
-        OnPropertyChanged(nameof(CurrentProject));
+        if (isCurrentProject)
+        {
+            OnPropertyChanged(nameof(CurrentProject));
+        }
+
         var existing = FindRecentProject(project.Id);
         if (existing is not null)
         {
             var index = RecentProjects.IndexOf(existing);
             RecentProjects[index] = project;
+        }
+    }
+
+    public async Task<IReadOnlyList<Project>> GetAllProjectsAsync()
+    {
+        using var connection = _dataService.Database.OpenConnection();
+        return await _dataService.Projects.GetAllAsync(connection);
+    }
+
+    public async Task<IReadOnlyList<DrawingFile>> GetDrawingFilesAsync(string projectId)
+    {
+        using var connection = _dataService.Database.OpenConnection();
+        return await _dataService.DrawingFiles.GetByProjectAsync(projectId, connection);
+    }
+
+    public async Task<IReadOnlyDictionary<string, int>> GetDrawingFileCountsAsync()
+    {
+        using var connection = _dataService.Database.OpenConnection();
+        return await _dataService.DrawingFiles.GetCountsByProjectAsync(connection);
+    }
+
+    public async Task<IReadOnlyList<ExportRecord>> GetExportRecordsAsync(string projectId, int limit)
+    {
+        using var connection = _dataService.Database.OpenConnection();
+        return await _dataService.ExportRecords.GetByProjectAsync(projectId, limit, connection);
+    }
+
+    public async Task<IReadOnlyList<ActivityRecord>> GetActivityForProjectAsync(string projectId, int limit)
+    {
+        using var connection = _dataService.Database.OpenConnection();
+        return await _dataService.Activity.GetByProjectAsync(projectId, limit, connection);
+    }
+
+    public async Task<ProjectQuantitySummary> GetQuantitySummaryAsync(string projectId)
+    {
+        using var connection = _dataService.Database.OpenConnection();
+        var records = await _dataService.QuantityRecords.GetByProjectAsync(projectId, connection);
+        var reviews = await _dataService.QuantityReviews.GetByProjectAsync(projectId, connection);
+        var verifications = await _dataService.QuantityVerifications.GetByProjectAsync(projectId, connection);
+
+        var verifiedCount = 0;
+        var needsReviewCount = 0;
+        foreach (var review in reviews)
+        {
+            if (review.Status == QuantityReviewStatus.Verified)
+            {
+                verifiedCount++;
+            }
+            else if (review.Status == QuantityReviewStatus.NeedsReview)
+            {
+                needsReviewCount++;
+            }
+        }
+
+        var errorCount = 0;
+        foreach (var snapshot in verifications)
+        {
+            if (snapshot.OverallSeverity == VerificationSeverity.Error)
+            {
+                errorCount++;
+            }
+        }
+
+        return new ProjectQuantitySummary(records.Count, verifiedCount, needsReviewCount, errorCount);
+    }
+
+    public async Task RelinkDrawingFileAsync(string projectId, string drawingFileId, string newFullPath, string newFileName, string? newDrawingUnit)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var activity = new ActivityRecord(
+            id: Guid.NewGuid().ToString("N"),
+            projectId: projectId,
+            activityType: "DrawingFileRelinked",
+            title: "도면 파일 다시 연결",
+            description: newFileName,
+            createdAt: now);
+
+        await _dataService.RelinkDrawingFileAsync(drawingFileId, newFullPath, newFileName, newDrawingUnit, now, activity);
+
+        if (_currentProject?.Id == projectId)
+        {
+            Activity.Insert(0, activity);
         }
     }
 

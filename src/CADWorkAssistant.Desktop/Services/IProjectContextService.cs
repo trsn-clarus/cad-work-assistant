@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Threading.Tasks;
 using CADWorkAssistant.Core.Models;
@@ -34,7 +35,35 @@ public interface IProjectContextService
     /// <summary>기존 프로젝트를 열거나(최근 목록에서 선택) 전환한다 - LastOpenedAt이 갱신된다.</summary>
     Task OpenProjectAsync(string projectId);
 
-    Task UpdateProjectAsync(string name, string? client, string? site, string? description);
+    /// <summary>Milestone 13 §11-12 - Id/CreatedAt은 바뀌지 않는다. projectId가 CurrentProject와
+    /// 다를 수도 있다(Projects 목록에서 지금 열려 있지 않은 프로젝트를 바로 편집하는 경우).</summary>
+    Task UpdateProjectAsync(string projectId, string name, string? client, string? site, string? description);
+
+    /// <summary>Milestone 13 §7-9 - RecentProjects(최근 20개)보다 많은 전체 목록. Projects Workspace의
+    /// 검색/정렬은 이 결과를 메모리에서 처리한다(이 규모에서 SQL 쿼리 빌더는 과함, §145).</summary>
+    Task<IReadOnlyList<Project>> GetAllProjectsAsync();
+
+    /// <summary>Milestone 13 §17-19 - CurrentProject 여부와 무관하게 특정 프로젝트의 등록 도면
+    /// 목록을 조회한다(목록에서 미리보기만 하고 아직 열지 않은 프로젝트도 조회 가능해야 한다).</summary>
+    Task<IReadOnlyList<DrawingFile>> GetDrawingFilesAsync(string projectId);
+
+    /// <summary>Milestone 13 §7 - Projects 목록 전체의 프로젝트별 등록 도면 개수(ProjectId → count).</summary>
+    Task<IReadOnlyDictionary<string, int>> GetDrawingFileCountsAsync();
+
+    /// <summary>Milestone 13 §32-37 - Excel/PDF 보고서/도면 PDF/DWG Export 이력을 전부 합쳐 보여주는
+    /// Output History. limit로 한 번에 전부 불러오지 않는다(§143).</summary>
+    Task<IReadOnlyList<ExportRecord>> GetExportRecordsAsync(string projectId, int limit);
+
+    /// <summary>Milestone 13 §38-40 - Dashboard의 실시간 Activity(현재 프로젝트, 최대 100개)와
+    /// 별개로, Projects Workspace에서 임의 프로젝트의 최근 활동을 조회한다.</summary>
+    Task<IReadOnlyList<ActivityRecord>> GetActivityForProjectAsync(string projectId, int limit);
+
+    /// <summary>Milestone 13 §41 - Project Overview용 수량 요약(전체/검토 완료/확인 필요/오류).</summary>
+    Task<ProjectQuantitySummary> GetQuantitySummaryAsync(string projectId);
+
+    /// <summary>Milestone 13 §23-25 - 등록된 DWG 참조가 이동/삭제됐을 때 새 경로로 다시 연결한다.
+    /// 과거 QuantityRecord의 SourceDrawing snapshot은 건드리지 않는다.</summary>
+    Task RelinkDrawingFileAsync(string projectId, string drawingFileId, string newFullPath, string newFileName, string? newDrawingUnit);
 
     /// <summary>QuantityRecord 저장 + 그에 대응하는 ActivityRecord 기록을 하나의 단위로 처리한다
     /// (§45-46). Project가 열려 있으면 DB에 트랜잭션으로 남고, 아니면 메모리에만 반영된다.</summary>

@@ -66,6 +66,10 @@ public partial class App : Application
         // Simulation/Real이 서로 다른 db 파일을 쓰지만(CadWorkAssistantDatabase) 상위 폴더는 같다.
         var dataFolderPath = Path.GetDirectoryName(Path.GetDirectoryName(database.DatabasePath)) ?? database.DatabasePath;
 
+        // installer/CADWorkAssistant.iss가 Desktop.exe를 {app}에 바로 두고 사용설명서 PDF는
+        // {app}\Documentation\에 둔다(Milestone 13 §115) - AppContext.BaseDirectory가 곧 {app}이다.
+        var manualPdfPath = Path.Combine(AppContext.BaseDirectory, "Documentation", "CAD_Work_Assistant_User_Guide_ko-KR.pdf");
+
         var mainWindowViewModel = new MainWindowViewModel(
             _connectionManager,
             projectContext,
@@ -74,7 +78,8 @@ public partial class App : Application
             pdfExportCoordinator,
             plotCapabilityCoordinator,
             drawingPdfExportCoordinator,
-            dataFolderPath);
+            dataFolderPath,
+            manualPdfPath);
         var mainWindow = new MainWindow(mainWindowViewModel, projectContext);
         mainWindow.Show();
     }

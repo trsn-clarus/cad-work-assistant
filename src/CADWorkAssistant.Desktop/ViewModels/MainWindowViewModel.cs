@@ -37,7 +37,8 @@ public sealed class MainWindowViewModel : ObservableObject
         IQuantityPdfExportCoordinator pdfExportCoordinator,
         IPlotCapabilityCoordinator plotCapabilityCoordinator,
         IDrawingPdfExportCoordinator drawingPdfExportCoordinator,
-        string dataFolderPath)
+        string dataFolderPath,
+        string manualPdfPath)
     {
         _connectionManager = connectionManager;
         _projectContext = projectContext;
@@ -50,11 +51,12 @@ public sealed class MainWindowViewModel : ObservableObject
         Parapet = new ParapetWorkflowViewModel(connectionManager, Length);
         Drawing = new DrawingWorkflowViewModel(connectionManager);
         Text = new TextWorkflowViewModel(connectionManager);
+        Projects = new ProjectsWorkspaceViewModel(projectContext);
         History = new QuantityHistoryViewModel(projectContext, verificationCoordinator);
         ExcelExport = new ExcelExportViewModel(projectContext, excelExportCoordinator);
         PdfExport = new PdfExportViewModel(projectContext, pdfExportCoordinator);
         DrawingPdfExport = new DrawingPdfExportViewModel(connectionManager, plotCapabilityCoordinator, drawingPdfExportCoordinator);
-        Settings = new SettingsViewModel(dataFolderPath);
+        Settings = new SettingsViewModel(dataFolderPath, manualPdfPath);
 
         // 실제로 화면이 있는 항목만 Navigation에 올린다(Milestone 8 §29) - 이전에는 미구현 항목도
         // 자리만 예약해 비활성 표시했지만(Milestone 4.5 §23), 상용 제품 첫인상에서는 클릭할 수 없는
@@ -64,6 +66,9 @@ public sealed class MainWindowViewModel : ObservableObject
         Navigation = new ObservableCollection<NavItem>
         {
             new("PROJECT", "Dashboard", "Alt+1", true) { IsSelected = true },
+            // Milestone 13 - 프로젝트가 많아지면 찾기/도면-출력물-활동 확인이 필요해져 별도 화면으로
+            // 뺐다(§7, Card Grid 대신 dense list). 빠른 생성/전환은 여전히 ProjectDialog가 맡는다.
+            new("PROJECT", "Projects", "Alt+2"),
             // Selection/Layers/Export는 별도 화면으로 쪼개지 않고 Drawing 워크스페이스 하나에 통합했다
             // (§18 "초기 구현에서 너무 많은 페이지로 쪼개지 않아도 된다") - 그래서 각각의 자리를 따로
             // 예약해두지 않는다.
@@ -100,6 +105,14 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             OnPropertyChanged(nameof(CurrentProjectName));
             OnPropertyChanged(nameof(HasCurrentProject));
+
+            // §19 - 프로젝트를 만들거나 전환하기 전에 AutoCAD가 이미 도면을 열어둔 상태였다면(가장
+            // 흔한 실사용 순서), 그 경로는 이미 "등록 시도함"으로 표시되어 있어 TryRegisterActiveDrawing이
+            // 다시 호출돼도 조용히 건너뛴다 - 이 프로젝트에는 도면이 영영 등록되지 않는다. 프로젝트가
+            // 바뀔 때마다 마지막 등록 경로를 초기화해 지금 열려 있는 도면을 새 프로젝트 기준으로
+            // 다시 등록 시도한다.
+            _lastRegisteredDrawingPath = null;
+            TryRegisterActiveDrawing();
         };
 
         InspectorRows = new ObservableCollection<InspectorRow>();
@@ -167,6 +180,7 @@ public sealed class MainWindowViewModel : ObservableObject
         Drawing.Rows.CollectionChanged += (_, _) => RefreshInspector();
         Text.PropertyChanged += (_, _) => RefreshInspector();
         Text.Rows.CollectionChanged += (_, _) => RefreshInspector();
+        Projects.PropertyChanged += (_, _) => RefreshInspector();
         History.PropertyChanged += (_, _) => RefreshInspector();
         ExcelExport.PropertyChanged += (_, _) => RefreshInspector();
         PdfExport.PropertyChanged += (_, _) => RefreshInspector();
@@ -177,6 +191,13 @@ public sealed class MainWindowViewModel : ObservableObject
         ToggleInspectorCommand = new RelayCommand(() => IsInspectorOpen = !IsInspectorOpen);
         SelectNavigationCommand = new RelayCommand(SelectNavigation);
         OpenProjectDialogCommand = new RelayCommand(OpenProjectDialog);
+
+        // Milestone 13 §42 - Projects Workspace의 "새 프로젝트"는 별도 폼을 새로 만들지 않고 기존
+        // ProjectDialog를 그대로 연다(§5). "[수량 보기]"/"[도면 보기]"는 실제 해당 Workspace로
+        // Navigation을 전환한다(가짜 버튼 금지).
+        Projects.RequestOpenProjectDialog += (_, _) => OpenProjectDialog();
+        Projects.RequestShowHistory += (_, _) => SelectNavigation(Navigation.First(n => n.Label == "History"));
+        Projects.RequestShowDrawing += (_, _) => SelectNavigation(Navigation.First(n => n.Label == "Drawing"));
 
         RefreshInspector();
         _connectionManager.Start();
@@ -209,6 +230,7 @@ public sealed class MainWindowViewModel : ObservableObject
     public ParapetWorkflowViewModel Parapet { get; }
     public DrawingWorkflowViewModel Drawing { get; }
     public TextWorkflowViewModel Text { get; }
+    public ProjectsWorkspaceViewModel Projects { get; }
     public QuantityHistoryViewModel History { get; }
     public ExcelExportViewModel ExcelExport { get; }
     public PdfExportViewModel PdfExport { get; }
@@ -256,6 +278,7 @@ public sealed class MainWindowViewModel : ObservableObject
                 OnPropertyChanged(nameof(IsParapetToolSelected));
                 OnPropertyChanged(nameof(IsDrawingToolSelected));
                 OnPropertyChanged(nameof(IsTextToolSelected));
+                OnPropertyChanged(nameof(IsProjectsToolSelected));
                 OnPropertyChanged(nameof(IsHistoryToolSelected));
                 OnPropertyChanged(nameof(IsExcelExportToolSelected));
                 OnPropertyChanged(nameof(IsPdfExportToolSelected));
@@ -281,6 +304,8 @@ public sealed class MainWindowViewModel : ObservableObject
 
     public bool IsTextToolSelected => _selectedTool == "Text";
 
+    public bool IsProjectsToolSelected => _selectedTool == "Projects";
+
     public bool IsHistoryToolSelected => _selectedTool == "History";
 
     public bool IsExcelExportToolSelected => _selectedTool == "Excel";
@@ -293,7 +318,7 @@ public sealed class MainWindowViewModel : ObservableObject
 
     public bool IsDashboardContentVisible =>
         !IsLengthToolSelected && !IsAreaToolSelected && !IsVerticalAreaToolSelected && !IsParapetToolSelected
-        && !IsDrawingToolSelected && !IsTextToolSelected && !IsHistoryToolSelected && !IsExcelExportToolSelected && !IsPdfExportToolSelected
+        && !IsDrawingToolSelected && !IsTextToolSelected && !IsProjectsToolSelected && !IsHistoryToolSelected && !IsExcelExportToolSelected && !IsPdfExportToolSelected
         && !IsDrawingPdfExportToolSelected && !IsSettingsToolSelected;
 
     public string InspectorTitle => _selectedTool switch
@@ -304,6 +329,7 @@ public sealed class MainWindowViewModel : ObservableObject
         "Parapet" => "Parapet",
         "Drawing" => "Drawing Navigation",
         "Text" => "Text Tools",
+        "Projects" => "Project Manager",
         "History" => "Quantity History",
         "Excel" => "Excel Export",
         "PDF" => "PDF Export",
@@ -406,6 +432,13 @@ public sealed class MainWindowViewModel : ObservableObject
                 fullPath,
                 System.IO.Path.GetFileName(fullPath),
                 DrawingUnitDisplay.Abbreviation(_connectionManager.Drawing.Units));
+
+            // Projects Workspace가 이 순간 같은 프로젝트의 DRAWINGS를 보여주고 있었다면 방금 등록된
+            // 도면이 반영되게 다시 불러온다 - CurrentProjectChanged 하나에 여러 비동기 구독자가 각자
+            // 반응하는 구조라(RefreshAsync와 이 메서드), 등록이 실제로 끝나는 시점을 이벤트 순서만으로는
+            // 보장할 수 없었다(Simulation Mode에서 실제로 재현됨 - Projects의 새로고침이 먼저 끝나
+            // "등록된 도면이 없습니다"로 남는 것을 확인).
+            await Projects.RefreshCurrentDetailAsync();
         }
         catch (Exception ex)
         {
@@ -453,6 +486,10 @@ public sealed class MainWindowViewModel : ObservableObject
         else if (selected.Label == "Text")
         {
             Text.OnActivated();
+        }
+        else if (selected.Label == "Projects")
+        {
+            Projects.OnActivated();
         }
         else if (selected.Label == "History")
         {
@@ -532,6 +569,22 @@ public sealed class MainWindowViewModel : ObservableObject
                 {
                     InspectorRows.Add(new InspectorRow("상태", Text.StatusText));
                     InspectorRows.Add(new InspectorRow("선택", Text.SelectionSummaryText));
+                }
+
+                break;
+
+            case "Projects":
+                if (Projects.SelectedRow is { } projectRow)
+                {
+                    InspectorRows.Add(new InspectorRow("프로젝트", projectRow.Name));
+                    InspectorRows.Add(new InspectorRow("발주처", string.IsNullOrEmpty(projectRow.Client) ? "—" : projectRow.Client));
+                    InspectorRows.Add(new InspectorRow("현장", string.IsNullOrEmpty(projectRow.Site) ? "—" : projectRow.Site));
+                    InspectorRows.Add(new InspectorRow("등록 도면", $"{projectRow.DrawingCount}개"));
+                    InspectorRows.Add(new InspectorRow("수량 요약", Projects.QuantitySummaryText));
+                }
+                else
+                {
+                    InspectorRows.Add(new InspectorRow("상태", Projects.SummaryText));
                 }
 
                 break;

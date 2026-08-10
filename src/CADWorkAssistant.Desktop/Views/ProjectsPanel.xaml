@@ -1,0 +1,267 @@
+<UserControl x:Class="CADWorkAssistant.Desktop.Views.ProjectsPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="clr-namespace:CADWorkAssistant.Desktop.ViewModels"
+             xmlns:conv="clr-namespace:CADWorkAssistant.Desktop.Converters"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:ProjectsWorkspaceViewModel}">
+  <UserControl.Resources>
+    <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+    <conv:InverseBooleanToVisibilityConverter x:Key="InverseBoolToVisibility" />
+    <conv:StringNotEmptyToVisibilityConverter x:Key="StringToVisibility" />
+  </UserControl.Resources>
+  <Grid>
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+    </Grid.RowDefinitions>
+
+    <!-- Header -->
+    <Grid Grid.Row="0" Margin="0,0,0,10">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="Auto" />
+      </Grid.ColumnDefinitions>
+      <StackPanel>
+        <TextBlock Text="Projects" FontSize="22" FontWeight="SemiBold" />
+        <TextBlock Text="{Binding SummaryText}" Style="{StaticResource CaptionText}" Margin="0,2,0,0" />
+      </StackPanel>
+      <Button Grid.Column="1"
+              Style="{StaticResource PrimaryButton}"
+              Command="{Binding CreateProjectCommand}"
+              AutomationProperties.Name="새 프로젝트"
+              Content="새 프로젝트"
+              VerticalAlignment="Center" />
+    </Grid>
+
+    <!-- Search + Sort -->
+    <Grid Grid.Row="1" Margin="0,0,0,10">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*" MinWidth="180" />
+        <ColumnDefinition Width="Auto" />
+      </Grid.ColumnDefinitions>
+      <TextBox Grid.Column="0"
+                Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                AutomationProperties.Name="프로젝트 검색"
+                ToolTip="프로젝트명 · 발주처 · 현장으로 검색"
+                Margin="0,0,8,0" />
+      <ComboBox Grid.Column="1"
+                ItemsSource="{Binding SortOptions}"
+                SelectedItem="{Binding SortOption}"
+                AutomationProperties.Name="정렬 기준"
+                Width="130" />
+    </Grid>
+
+    <!-- Body: Project list | Detail -->
+    <Grid Grid.Row="2">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*" MinWidth="380" />
+        <ColumnDefinition Width="6" />
+        <ColumnDefinition Width="380" MinWidth="320" />
+      </Grid.ColumnDefinitions>
+
+      <Border Grid.Column="0" Style="{StaticResource PanelBorder}" Padding="12">
+        <Grid>
+          <DataGrid ItemsSource="{Binding FilteredRows}"
+                    SelectedItem="{Binding SelectedRow}"
+                    AutoGenerateColumns="False"
+                    AutomationProperties.Name="프로젝트 목록"
+                    Visibility="{Binding HasRows, Converter={StaticResource BoolToVisibility}}">
+            <DataGrid.Columns>
+              <DataGridTextColumn Header="" Binding="{Binding CurrentGlyph}" Width="22" />
+              <DataGridTextColumn Header="프로젝트" Binding="{Binding Name}" Width="*" MinWidth="120" />
+              <DataGridTextColumn Header="발주처" Binding="{Binding Client}" Width="110" />
+              <DataGridTextColumn Header="현장" Binding="{Binding Site}" Width="110" />
+              <DataGridTextColumn Header="도면" Binding="{Binding DrawingCount}" Width="48" />
+              <DataGridTextColumn Header="최근 작업" Binding="{Binding LastOpenedAt, StringFormat=yyyy-MM-dd}" Width="86" />
+            </DataGrid.Columns>
+          </DataGrid>
+
+          <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center"
+                      Visibility="{Binding HasRows, Converter={StaticResource InverseBoolToVisibility}}">
+            <TextBlock Text="아직 프로젝트가 없습니다." Style="{StaticResource CaptionText}" HorizontalAlignment="Center" />
+            <TextBlock Text="위의 [새 프로젝트]를 눌러 시작하세요." Style="{StaticResource CaptionText}" HorizontalAlignment="Center" Margin="0,2,0,0" />
+          </StackPanel>
+        </Grid>
+      </Border>
+
+      <GridSplitter Grid.Column="1" HorizontalAlignment="Stretch" Background="{StaticResource BrushDivider}" />
+
+      <Border Grid.Column="2" Style="{StaticResource PanelBorder}" Padding="12">
+        <Grid>
+          <ScrollViewer VerticalScrollBarVisibility="Auto" Visibility="{Binding HasSelection, Converter={StaticResource BoolToVisibility}}">
+            <StackPanel>
+
+              <!-- PROJECT -->
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                  <TextBlock Text="PROJECT" Style="{StaticResource SectionTitle}" />
+                  <TextBlock Text="● 현재 프로젝트" Style="{StaticResource CaptionText}" Margin="0,2,0,0"
+                             Visibility="{Binding IsSelectedCurrent, Converter={StaticResource BoolToVisibility}}" />
+                </StackPanel>
+                <Button Grid.Column="1"
+                        Style="{StaticResource SecondaryButton}"
+                        Command="{Binding OpenProjectCommand}"
+                        AutomationProperties.Name="프로젝트 열기"
+                        Content="프로젝트 열기"
+                        Visibility="{Binding IsSelectedCurrent, Converter={StaticResource InverseBoolToVisibility}}" />
+              </Grid>
+
+              <TextBlock Text="프로젝트 이름" Style="{StaticResource CaptionText}" Margin="0,10,0,4" />
+              <TextBox Text="{Binding EditName, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="프로젝트 이름 편집" />
+
+              <TextBlock Text="발주처" Style="{StaticResource CaptionText}" Margin="0,10,0,4" />
+              <TextBox Text="{Binding EditClient, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="발주처 편집" />
+
+              <TextBlock Text="현장" Style="{StaticResource CaptionText}" Margin="0,10,0,4" />
+              <TextBox Text="{Binding EditSite, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="현장 편집" />
+
+              <TextBlock Text="설명" Style="{StaticResource CaptionText}" Margin="0,10,0,4" />
+              <TextBox Text="{Binding EditDescription, UpdateSourceTrigger=PropertyChanged}"
+                       AutomationProperties.Name="설명 편집"
+                       AcceptsReturn="True" TextWrapping="Wrap" Height="48" />
+
+              <Button Content="저장"
+                      Style="{StaticResource PrimaryButton}"
+                      Command="{Binding SaveMetadataCommand}"
+                      AutomationProperties.Name="프로젝트 정보 저장"
+                      HorizontalAlignment="Right"
+                      Margin="0,8,0,0" />
+
+              <Border Style="{StaticResource InlineMessageBorder}"
+                      Margin="0,8,0,0"
+                      Visibility="{Binding StatusText, Converter={StaticResource StringToVisibility}}">
+                <TextBlock Text="{Binding StatusText}" Style="{StaticResource InlineMessageText}" TextWrapping="Wrap" />
+              </Border>
+
+              <Border BorderBrush="{StaticResource BrushDivider}" BorderThickness="0,1,0,0" Margin="0,16,0,16" />
+
+              <!-- DRAWINGS -->
+              <TextBlock Text="DRAWINGS" Style="{StaticResource SectionTitle}" Margin="0,0,0,6" />
+              <ItemsControl ItemsSource="{Binding DrawingFiles}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Border Style="{StaticResource PanelBorder}" Padding="8" Margin="0,0,0,6">
+                      <StackPanel>
+                        <TextBlock Text="{Binding FileName}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                        <TextBlock Style="{StaticResource CaptionText}">
+                          <Run Text="{Binding StatusLabel, Mode=OneWay}" />
+                        </TextBlock>
+                        <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                          <Button Style="{StaticResource QuietButton}"
+                                  Command="{Binding DataContext.OpenDrawingFolderCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                  CommandParameter="{Binding}"
+                                  AutomationProperties.Name="{Binding FileName, StringFormat='폴더 열기: {0}'}"
+                                  Content="폴더 열기"
+                                  Margin="0,0,6,0"
+                                  Visibility="{Binding FileExists, Converter={StaticResource BoolToVisibility}}" />
+                          <Button Style="{StaticResource SecondaryButton}"
+                                  Command="{Binding DataContext.RelinkDrawingCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                  CommandParameter="{Binding}"
+                                  AutomationProperties.Name="{Binding FileName, StringFormat='파일 다시 연결: {0}'}"
+                                  Content="파일 다시 연결"
+                                  Visibility="{Binding FileExists, Converter={StaticResource InverseBoolToVisibility}}" />
+                        </StackPanel>
+                      </StackPanel>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <TextBlock Text="등록된 도면이 없습니다." Style="{StaticResource CaptionText}"
+                         Visibility="{Binding HasDrawingFiles, Converter={StaticResource InverseBoolToVisibility}}" />
+
+              <Border BorderBrush="{StaticResource BrushDivider}" BorderThickness="0,1,0,0" Margin="0,16,0,16" />
+
+              <!-- QUANTITY -->
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="QUANTITY" Style="{StaticResource SectionTitle}" VerticalAlignment="Center" />
+                <Button Grid.Column="1"
+                        Style="{StaticResource QuietButton}"
+                        Command="{Binding ViewQuantityCommand}"
+                        AutomationProperties.Name="수량 보기"
+                        Content="수량 보기" />
+              </Grid>
+              <TextBlock Text="{Binding QuantitySummaryText}" Style="{StaticResource InspectorValue}" TextWrapping="Wrap" Margin="0,4,0,0" />
+
+              <Border BorderBrush="{StaticResource BrushDivider}" BorderThickness="0,1,0,0" Margin="0,16,0,16" />
+
+              <!-- OUTPUTS -->
+              <TextBlock Text="OUTPUTS" Style="{StaticResource SectionTitle}" Margin="0,0,0,6" />
+              <ItemsControl ItemsSource="{Binding Outputs}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Border Style="{StaticResource PanelBorder}" Padding="8" Margin="0,0,0,6">
+                      <StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                          <TextBlock Text="{Binding TypeLabel}" FontWeight="SemiBold" Margin="0,0,6,0" />
+                          <TextBlock Text="{Binding Source.CreatedAt, StringFormat=yyyy-MM-dd}" Style="{StaticResource CaptionText}" />
+                        </StackPanel>
+                        <TextBlock Text="{Binding FileName}" TextWrapping="Wrap" />
+                        <TextBlock Text="{Binding StatusLabel}" Style="{StaticResource CaptionText}" />
+                        <StackPanel Orientation="Horizontal" Margin="0,4,0,0"
+                                    Visibility="{Binding FileExists, Converter={StaticResource BoolToVisibility}}">
+                          <Button Style="{StaticResource QuietButton}"
+                                  Command="{Binding DataContext.OpenOutputFileCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                  CommandParameter="{Binding}"
+                                  AutomationProperties.Name="{Binding FileName, StringFormat='파일 열기: {0}'}"
+                                  Content="파일 열기"
+                                  Margin="0,0,6,0" />
+                          <Button Style="{StaticResource QuietButton}"
+                                  Command="{Binding DataContext.OpenOutputFolderCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                  CommandParameter="{Binding}"
+                                  AutomationProperties.Name="{Binding FileName, StringFormat='폴더 열기: {0}'}"
+                                  Content="폴더 열기" />
+                        </StackPanel>
+                      </StackPanel>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <TextBlock Text="출력 이력이 없습니다." Style="{StaticResource CaptionText}"
+                         Visibility="{Binding HasOutputs, Converter={StaticResource InverseBoolToVisibility}}" />
+
+              <Border BorderBrush="{StaticResource BrushDivider}" BorderThickness="0,1,0,0" Margin="0,16,0,16" />
+
+              <!-- ACTIVITY -->
+              <TextBlock Text="ACTIVITY" Style="{StaticResource SectionTitle}" Margin="0,0,0,6" />
+              <ItemsControl ItemsSource="{Binding RecentActivity}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <StackPanel Margin="0,0,0,8">
+                      <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="{Binding CreatedAt, StringFormat=yyyy-MM-dd HH:mm}" Style="{StaticResource CaptionText}" Margin="0,0,6,0" />
+                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                      </StackPanel>
+                      <TextBlock Text="{Binding Description}" Style="{StaticResource CaptionText}" TextWrapping="Wrap"
+                                 Visibility="{Binding Description, Converter={StaticResource StringToVisibility}, FallbackValue=Collapsed}" />
+                    </StackPanel>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <TextBlock Text="최근 활동이 없습니다." Style="{StaticResource CaptionText}"
+                         Visibility="{Binding HasRecentActivity, Converter={StaticResource InverseBoolToVisibility}}" />
+
+            </StackPanel>
+          </ScrollViewer>
+
+          <TextBlock Text="왼쪽 목록에서 프로젝트를 선택하세요."
+                     Style="{StaticResource CaptionText}"
+                     HorizontalAlignment="Center"
+                     VerticalAlignment="Center"
+                     Visibility="{Binding HasSelection, Converter={StaticResource InverseBoolToVisibility}}" />
+        </Grid>
+      </Border>
+    </Grid>
+  </Grid>
+</UserControl>
