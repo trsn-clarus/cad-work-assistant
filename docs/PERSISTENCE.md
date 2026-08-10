@@ -191,3 +191,24 @@ Simulation Mode(FakeAutoCad `NormalSelection` Scenario + 실제 파일 SQLite DB
 이 Milestone은 AutoCAD Managed API를 전혀 새로 쓰지 않는다 - `DrawingFile` 등록에 쓰는
 `FullPath`/`Units`는 Milestone 1의 기존 `GetDrawingContext` 응답을 그대로 재사용한다. 따라서
 Real AutoCAD 전용 검증 대상이 없다.
+
+## 11. Milestone 13 추가사항 (Project Manager 고도화)
+
+새 테이블은 없다 - 기존 8개 테이블에 조회/갱신 메서드만 추가했다. Desktop 쪽 전체 그림은
+`docs/ARCHITECTURE.md` §8.12 참고.
+
+- `IDrawingFileRepository.RelinkAsync` — `FullPath`/`FileName`/`DrawingUnit`/`IsMissing`만
+  갱신한다. **과거 `QuantityRecord.SourceDrawing` 스냅샷은 절대 건드리지 않는다** — 산출근거서는
+  측정 당시의 원본 파일명을 그대로 보여줘야 하므로(마스터 §25), Relink는 "현재 위치를 다시
+  찾는 것"이지 과거 기록을 소급 수정하는 것이 아니다. `ProjectManagerE2ETests`가 Relink 이후
+  재시작까지 시뮬레이션해 이 스냅샷이 실제로 변하지 않는지 검증한다.
+- `IDrawingFileRepository.GetCountsByProjectAsync` — `GROUP BY ProjectId` 집계 쿼리 하나로
+  Projects 목록의 "도면 수" 컬럼을 채운다. 프로젝트마다 개별 COUNT 쿼리를 날리는 N+1 패턴을
+  피하기 위한 것으로, 굳이 캐싱 계층을 새로 만들지 않고 쿼리 하나로 해결했다(§0).
+  `IExportRecordRepository.GetByProjectAsync(projectId, limit)`도 같은 이유로 추가했다(프로젝트
+  상세 화면의 Output History 섹션이 프로젝트 전체가 아니라 그 프로젝트 것만, 개수 제한을 두고
+  가져온다).
+- 검색/정렬은 SQL이 아니라 Desktop `ProjectsWorkspaceViewModel`이 전체 목록을 한 번 불러와
+  메모리에서 처리한다(§8.12) — 새 Repository 메서드에는 검색/정렬 파라미터가 없다.
+- Project 삭제는 여전히 구현하지 않았다(§7과 동일한 판단 유지, 마스터 §43이 명시적으로
+  선택사항으로 남겼다) — 스키마의 `ON DELETE CASCADE` 대비는 그대로 유효하다.

@@ -730,16 +730,69 @@ DBText/MText를 선택/조회/편집(배치 포함)/생성한다. `TEXT`/`MTEXT`
 드라이버가 불안정해지는 문제가 해소되지 않았다. 세부 체크리스트는
 `docs/AUTOCAD_REAL_MACHINE_CHECKLIST.md` "Milestone 12" 참고.
 
-## Milestone 13 — Project Manager 고도화
+## Milestone 13 — Project Manager + File Workspace + Official User Manual PDF
 
-프로젝트 생성/열기/전환/최근 목록은 Milestone 6에서 이미 구현됐다(`ProjectDialog`). 여기 남는
-범위는 그 이후 고도화뿐이다.
+**상태: Part A(Project Manager) + Part B(공식 사용설명서 PDF) 모두 완료 (2026-08-10). 실제
+AutoCAD 하드웨어가 필요한 하위 범위가 없어 BLOCKED 항목 없음.**
 
-- [ ] 프로젝트 검색/필터(개수가 많아지는 시점에), Project 삭제(Milestone 6에서 스키마만 대비)
-- [ ] "Projects" 전용 목록 페이지(Milestone 8에서 보류 - Card Grid 대신 Name/Client/Site/Last
-      Opened dense list, `IProjectContextService.RecentProjects` 재사용)
-- [ ] Excel/PDF/DWG Export가 모두 쌓이는 통합 Output History 화면(Milestone 9-10에서 각자
-      ExportRecord로 남기기만 하고 화면은 만들지 않았다)
+**Part A — Project Manager**: 프로젝트 생성/열기/전환/최근 목록은 Milestone 6에서 이미
+구현됐다(`ProjectDialog`). 여기서는 그 이후 고도화(전체 목록/검색/도면 파일 상태/출력 이력/
+활동/수량 요약)를 완료했다. 자세한 구조는 `docs/ARCHITECTURE.md` §8.12 참고.
+
+- [x] `IProjectContextService`에 읽기 전용 조회 6종(`GetAllProjectsAsync`/`GetDrawingFilesAsync`/
+      `GetDrawingFileCountsAsync`/`GetExportRecordsAsync`/`GetActivityForProjectAsync`/
+      `GetQuantitySummaryAsync`) + `RelinkDrawingFileAsync` 추가, Persistence에 대응하는 Repository
+      메서드(`RelinkAsync`, `GetCountsByProjectAsync`, `GetByProjectAsync` limit 오버로드) 추가
+- [x] "Projects" 전용 목록+상세 2-pane 화면(PROJECT 그룹, Alt+2) - Name/Client/Site/도면수/최근
+      작업 dense list, 검색(이름/발주처/현장, 대소문자 무관)+정렬(최근 열기/이름/생성일, 클라이언트
+      사이드), 현재 프로젝트 표시(● 글리프)
+- [x] 프로젝트 상세: 이름/발주처/현장/설명 편집+저장, "프로젝트 열기" 버튼(실제 전환), 등록된
+      도면 목록(파일 없음 감지는 비동기 `File.Exists`, DB의 `IsMissing` 컬럼을 그대로 믿지 않음)
+      + **파일 다시 연결**(OS `OpenFileDialog`, 경로/파일명만 갱신 - 과거 `QuantityRecord.
+      SourceDrawing` 스냅샷은 보존), Output History(Excel/PDF/DWG, `ExportTypeDisplay`로 표시명
+      매핑), 최근 활동, 수량 요약 + "[수량 보기]"/"[도면 보기]" 실제 화면 이동(가짜 버튼 아님)
+- [x] Project 삭제는 넣지 않음(§43, 필수 아님으로 명시 - 범위/복잡도상 이번 Milestone에서 제외)
+- [x] Persistence.Tests 신규 6개 + `ProjectManagerE2ETests`(프로젝트 생성→도면/수량/출력/활동
+      추가→재시작→검증→Relink→재시작→검증까지 한 흐름), 전체 420개 통과
+- [x] Simulation Mode 실제 UI 조작으로 종단간 검증(0/1/30개 프로젝트, 검색, 전환, 도면 누락/
+      재연결, 출력물 누락, 긴 이름 등) - 이 과정에서 실제 버그 3건 발견/수정: **(1)** 프로젝트
+      전환 전에 AutoCAD가 이미 도면을 열어둔 경우 그 도면이 새 프로젝트에 자동 등록되지 않던 문제,
+      **(2)** (1)의 수정이 만든 재진입 경쟁 상태로 도면 목록에 중복 행이 생기던 문제(모노토닉
+      버전 카운터로 해결), **(3)** 도면 PDF 출력 화면의 Layout 선택 ComboBox가 닫힌 상태에서 원시
+      타입명을 노출하던 문제(Milestone 12 Text Tools 색상 선택기와 같은 원인 - `ItemTemplate` 명시)
+
+**Part B — 공식 사용설명서 PDF**: 첫 설치자가 실제로 업무를 시작할 수 있게 하는 것이 목적이다 -
+개발 문서가 아니다(§160). 문서를 쓰는 과정 자체가 제품 QA였다(§138). 자세한 구조는
+`docs/ARCHITECTURE.md` §8.13, 소스는 `docs/user-guide/ko-KR/USER_GUIDE.md`(24장, 다국어 확장을
+염두에 둔 `ko-KR/` 하위 구조) 참고.
+
+- [x] `docs/user-guide/ko-KR/USER_GUIDE.md` 24장 전부 작성 - 실제 구현된 기능만 설명(§139,
+      Project 삭제/자동 백업/정밀 Plot 배율/Multi-sheet PDF/찾기-바꾸기 등 없는 기능 언급 안 함),
+      개발자 용어(DTO/IPC/Named Pipe/MVVM/ViewModel/SQLite migration/Handler 등) 없음(§67),
+      인터넷/AI/LLM 불필요 명시(§73), 자동 검산 vs 사용자 검토를 별개 축으로 설명(§91)
+  - [x] 실제 앱 스크린샷 10장(`assets/`) - 전부 Simulation Mode 실행 화면에서 직접 촬영, DPI
+        인식 캡처 도구를 새로 만들어 사용. **개인정보/내부 상태 유출 3건을 촬영 도중 자체 발견해
+        수정**: Windows 사용자명이 보이는 데이터 폴더 경로, 사이드바 카드의 "[SIMULATION]" 배지,
+        상태 표시줄에 같은 배지가 새는 별도 위치(Property Inspector 행과는 다른 자리) - 셋 다
+        박스 리댁션으로 가림. 화면 캡처 창이 작업 표시줄과 겹쳐 상태 표시줄 일부가 가려지는
+        문제도 창 크기를 작업 영역 안으로 재조정해 근본 해결
+- [x] `CADWorkAssistant.Documents.Pdf.UserManual.UserManualPdfBuilder` - `QuantityPdfBuilder`와
+      같은 원칙(`WindowsKoreanFontResolver`/원자적 저장 재사용), 장 제목에 MigraDoc Bookmark를
+      심고 목차에서 `PageRefField`로 실제 페이지 번호 참조(고정값 하드코딩 아님, §120)
+- [x] `tools/CADWorkAssistant.ManualBuilder` 콘솔 도구 - 이 문서 전용 Markdown 하위집합 파서
+      (범용 CommonMark 아님), 설치본/publish 결과물에서 제외(§110-112, §133, audit-runtime.ps1이
+      실제로 부재를 검증)
+- [x] PDF 검증 테스트 26개(Documents.Tests 14 + ManualBuilder.Tests 12, PdfPig로 실제 텍스트
+      추출/한글 왕복/버전 문자열/목차 페이지번호 해석/필수 장 제목 검증, 실제 `USER_GUIDE.md`를
+      파싱해 24장 전부+스크린샷 파일 전부 존재를 회귀 검증하는 테스트 포함)
+- [x] Settings에 "사용설명서 열기" 버튼(HELP 섹션 신설) - Simulation Mode에서 파일 없음/있음
+      양쪽 경로 실제 클릭으로 검증(없으면 안내 문구만, 원시 예외 노출 없음 - §60)
+- [x] `scripts/build-release.ps1`에 Manual 빌드 단계 추가(Publish와 Plugin 빌드 사이, 실패 시
+      전체 릴리스 실패 - §115-116), `CADWorkAssistant.CI.slnf`에 ManualBuilder/ManualBuilder.Tests
+      추가, `scripts/audit-runtime.ps1`에 ManualBuilder.exe/Markdown 파일 부재 + 사용설명서 PDF
+      존재 검증 추가(§133)
+- [x] 전체 Release 빌드로 종단간 재확인(Clean→Test→Publish→Manual PDF→Plugin→Bundle→Audit→
+      Installer→Smoke Test 전부 통과)
 
 ## Milestone 14+ — Advanced Drawing Analysis (장기)
 

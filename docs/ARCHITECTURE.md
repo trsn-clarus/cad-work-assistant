@@ -54,12 +54,13 @@
 |---|---|---|---|
 | `CADWorkAssistant.Core` | netstandard2.0 | 단위 변환, 길이 계산(`Core/Length`), 면적 계산(`Core/Area`), 수직면적/파라펫 수량 조합(`Core/VerticalArea`, `Core/Parapet`), **수량 검산(`Core/Verification`, Milestone 7)**, **AutoCAD Plot 도메인 모델/순수 로직(`Core/Plot` — Milestone 11, `PlotPaperMatcher`/`PlotOrientationResolver`/`PlotStyleResolver`/`PlotPdfDeviceSelector`/`PlotOutputFileNameService`)**, 도메인 모델, 표시명 정책(`Core/Models/QuantityTypeDisplay`, `QuantityReviewStatusDisplay`, `Core/Verification/VerificationSeverityDisplay` — Milestone 9, UI와 Excel이 같은 문구를 공유), IPC 프로토콜(`Core/Ipc`)과 상태머신(`Core/Cad`). **AutoCAD 타입을 절대 참조하지 않는다** → AutoCAD 없이 유닛 테스트 가능 (§32) | 없음 |
 | `CADWorkAssistant.Infrastructure` | **net48;net8.0** (멀티타겟) | 구조화 로깅(Serilog), 설정 저장(JSON), Named Pipe 전송 계층 전체(`Ipc/PipeMessageFramer`, `AutoCadPipeClient`, `AutoCadPipeServer`) | 없음 |
-| `CADWorkAssistant.Documents` | **net8.0** (Milestone 9에서 netstandard2.0 → net8.0 전환, `Persistence`와 같은 이유 — §8.8) | 공유 문서 모델(`Reports/QuantityReportModel`+`QuantityReportModelBuilder`+`IQuantityReportOptions`+`QuantityExportScope` — Milestone 10에서 Excel 전용이던 `QuantityWorkbookModel`을 일반화), 수량산출서 Excel Export(`Excel/QuantityWorkbookBuilder`, ClosedXML), 수량 산출근거 PDF Export(`Pdf/QuantityPdfBuilder`+`WindowsKoreanFontResolver`, PDFsharp-MigraDoc — Milestone 10, §8.9). CSV는 여전히 미착수 | 없음 (ClosedXML+PDFsharp-MigraDoc만, AutoCAD/WPF 없음) |
+| `CADWorkAssistant.Documents` | **net8.0** (Milestone 9에서 netstandard2.0 → net8.0 전환, `Persistence`와 같은 이유 — §8.8) | 공유 문서 모델(`Reports/QuantityReportModel`+`QuantityReportModelBuilder`+`IQuantityReportOptions`+`QuantityExportScope` — Milestone 10에서 Excel 전용이던 `QuantityWorkbookModel`을 일반화), 수량산출서 Excel Export(`Excel/QuantityWorkbookBuilder`, ClosedXML), 수량 산출근거 PDF Export(`Pdf/QuantityPdfBuilder`+`WindowsKoreanFontResolver`, PDFsharp-MigraDoc — Milestone 10, §8.9), **공식 사용설명서 PDF 렌더링(`Pdf/UserManual/UserManualPdfBuilder`, `WindowsKoreanFontResolver` 재사용 — Milestone 13 §8.13)**. CSV는 여전히 미착수 | 없음 (ClosedXML+PDFsharp-MigraDoc만, AutoCAD/WPF 없음) |
 | `CADWorkAssistant.Persistence` | **net8.0만** (Infrastructure와 달리 net48 없음) | Project/QuantityRecord/ActivityRecord/DrawingFile/ExportRecord(**ExportType: DwgSelection/ExcelQuantity(M9)/PdfQuantityReport(M10)/DrawingPdf(M11)**)/RecentMeasurement/**QuantityVerificationSnapshot/QuantityReview(Milestone 7)** SQLite 영속화 (`Microsoft.Data.Sqlite`, raw ADO.NET). Migrations/(스키마 버전 관리), Repositories/(8쌍), `ProjectDataService`(교차 테이블 트랜잭션) | 없음 (Desktop만 참조, AutoCAD Plugin은 참조하지 않음 — §8.6) |
 | `CADWorkAssistant.Desktop` | net8.0-windows | WPF UI, MVVM, `Services/`(Discovery/ConnectionManager/LengthSelectionCoordinator/ProjectContextService/**QuantityExcelExportCoordinator(M9)/QuantityPdfExportCoordinator(M10)/IQuantityReportSnapshotService(M10)/PlotCapabilityCoordinator/PlotWindowSelector/DrawingPdfExportCoordinator(M11, §8.10)**), `ViewModels/`(LengthWorkflowViewModel, AreaWorkflowViewModel, VerticalAreaWorkflowViewModel, ParapetWorkflowViewModel, LengthSourceSelector, ProjectDialogViewModel, ExcelExportViewModel, PdfExportViewModel, **DrawingPdfExportViewModel(M11)** 등) | WPF |
 | `CADWorkAssistant.AutoCAD` | net48 | AutoCAD Managed API 연동, IPC Handler(Ping/GetApplicationInfo/GetDrawingContext/SelectLengthObjects/SelectAreaObjects/.../**GetPlotCapabilities/AcquirePlotWindow/PlotDrawingPdf(M11, `Autodesk.AutoCAD.PlottingServices` 실제 Plot 엔진)**), 원본 DWG 보호/Undo 그룹 처리 | AutoCAD 2024 Managed API |
 | `CADWorkAssistant.FakeAutoCad` (`tools/`) | net8.0 | AutoCAD 없이 개발/테스트하기 위한 Headless Simulation Host. `AutoCAD.Ipc.Handlers`와 **똑같은 IPC 프로토콜/서버 코드**를 재사용, Handler만 Scenario 기반 canned data로 교체. 설치 프로그램에 포함 안 함 (§73) | 없음 |
-| `*.Tests` (`Core`/`Persistence`/`Documents`/`Integration`) | net8.0 | Core/Infrastructure/Documents 로직 단위 테스트 + Integration.Tests는 FakeAutoCad를 실제 프로세스로 띄워 실제 Named Pipe로 검증. Persistence.Tests는 실제 파일 SQLite, `ExcelExportE2ETests`(M9)/`PdfExportE2ETests`(M10)가 여기에 `CADWorkAssistant.Documents` 참조를 추가해 Project→Quantity→Verification→Review→Excel/PDF 전체 흐름을 검증한다. Documents.Tests/Persistence.Tests는 PDF 텍스트 검증 전용으로 PdfPig(테스트 전용, Apache-2.0)도 참조한다 | 없음 (AutoCAD 미설치 환경에서도 실행 가능) |
+| `CADWorkAssistant.ManualBuilder` (`tools/`) | net8.0, `OutputType=Exe` | **Milestone 13 §8.13** - `docs/user-guide/`의 Markdown 사용설명서를 파싱(`ManualMarkdownParser`, 이 문서가 실제로 쓰는 하위집합만: 제목/구분선/코드펜스/이미지/글머리·번호 목록/파이프 표/`**bold**`+`` `code` ``)해 `CADWorkAssistant.Documents.Pdf.UserManual.UserManualDocument`로 만들고 `UserManualPdfBuilder`를 호출한다. 개발 전용 빌드 도구 - 설치 프로그램/publish 결과물에 포함하지 않는다(`scripts/audit-runtime.ps1`이 강제) | 없음 |
+| `*.Tests` (`Core`/`Persistence`/`Documents`/`Integration`/`ManualBuilder`) | net8.0 | Core/Infrastructure/Documents 로직 단위 테스트 + Integration.Tests는 FakeAutoCad를 실제 프로세스로 띄워 실제 Named Pipe로 검증. Persistence.Tests는 실제 파일 SQLite, `ExcelExportE2ETests`(M9)/`PdfExportE2ETests`(M10)가 여기에 `CADWorkAssistant.Documents` 참조를 추가해 Project→Quantity→Verification→Review→Excel/PDF 전체 흐름을 검증한다. Documents.Tests/Persistence.Tests는 PDF 텍스트 검증 전용으로 PdfPig(테스트 전용, Apache-2.0)도 참조한다. **ManualBuilder.Tests(M13)는 실제 `docs/user-guide/ko-KR/USER_GUIDE.md`를 파싱해 24개 장 전부/모든 스크린샷 파일 존재를 회귀 검증한다** | 없음 (AutoCAD 미설치 환경에서도 실행 가능) |
 
 Core가 `netstandard2.0`인 이유: net48(Plugin)과 net8.0(Desktop/FakeAutoCad) 양쪽에서 참조 가능한 가장 단순한 공통분모이기 때문이다. **Infrastructure는 `net48;net8.0` 멀티타겟, Documents/Persistence는 net8.0 전용이다** - Documents/Persistence는 AutoCAD Plugin(net48)이 참조하지 않으므로 멀티타겟이 필요 없고, 오히려 net8.0 전용 NuGet 패키지(ClosedXML, Microsoft.Data.Sqlite)를 그대로 쓸 수 있다(§11 의사결정 로그 참고). netstandard2.0을 기본값으로 유지하고, 실제로 막힌 경우에만 net8.0 전용으로 전환한다 (§0 "불필요하게 복잡한 구조 지양").
 
@@ -466,6 +467,78 @@ DBText/MText(하나의 Transaction, 한 번만 Commit = 하나의 Undo 단계 �
 FakeAutoCad/Desktop UI/Headless E2E까지 실제 AutoCAD 없이 구현했다. 실제 DBText/MText 렌더링,
 폰트/TextStyle 동작, 실제 Undo/Redo, 잠긴 Layer 실제 동작 등은 실제 AutoCAD 2024 하드웨어가 필요해
 12B로 분리하고 BLOCKED로 남긴다 — Milestone 8.5/11B와 같은 판단이다.
+
+## 8.12 Project Manager Architecture (Milestone 13 Part A)
+
+프로젝트 목록/도면 파일 상태/출력 이력/활동/수량 요약을 한 화면에서 보고 과거 작업을 다시 찾아
+이어가기 위한 화면이다 — "예쁘게 나열"이 목적이 아니라 실제로 다음 작업을 이어갈 수 있게 하는
+것이 목적이다(§160).
+
+```text
+Desktop.Views.ProjectsPanel (List | Detail 2-pane, HistoryPanel과 같은 골격)
+  ▼
+Desktop.ViewModels.ProjectsWorkspaceViewModel
+  ▼ (Desktop ViewModel은 이 인터페이스만 안다 - ProjectDataService를 직접 참조하지 않는다)
+Desktop.Services.IProjectContextService
+  GetAllProjectsAsync / GetDrawingFilesAsync / GetDrawingFileCountsAsync(N+1 방지 집계 쿼리) /
+  GetExportRecordsAsync / GetActivityForProjectAsync / GetQuantitySummaryAsync / RelinkDrawingFileAsync
+  ▼
+Persistence.ProjectDataService → SqliteProjectRepository / SqliteDrawingFileRepository /
+                                  SqliteExportRecordRepository / ...
+```
+
+- **검색/정렬은 클라이언트 사이드**: `QuantityHistoryViewModel.ApplyFilter()`(Milestone 7)와 같은
+  패턴 — 전체 프로젝트를 한 번 불러와 메모리에서 LINQ로 필터/정렬한다. 프로젝트 수가 SQL 페이징이
+  필요할 규모(수만 건)가 되기 전까지는 이 편이 더 단순하다(§0).
+- **DrawingFile 자동 등록**: `MainWindowViewModel.TryRegisterActiveDrawing()`(Milestone 6)이
+  AutoCAD 연결 상태 변화마다 현재 활성 도면을 현재 프로젝트에 등록한다. Milestone 13에서 실제로
+  발견한 버그: AutoCAD가 이미 도면을 연 상태에서 프로젝트를 나중에 만들거나 전환하면, 세션 범위의
+  "이미 등록했음" 가드가 재등록을 막아 그 도면이 새 프로젝트에는 영영 등록되지 않았다 —
+  `CurrentProjectChanged` 핸들러에서 가드를 초기화하고 재시도하도록 수정했다.
+- **Relink는 파일 위치만 바꾼다**: `RelinkDrawingFileAsync`는 `DrawingFile.FullPath`/`FileName`만
+  갱신하고, 과거에 저장된 `QuantityRecord.SourceDrawing` 스냅샷은 그대로 둔다 — 산출근거서는
+  "그 당시 어떤 파일에서 쟀는지"를 보여줘야 하므로(§25) 소급 변경하지 않는다. 파일 선택은 OS 기본
+  `OpenFileDialog`만 쓰고, 프로그램이 셸 연결로 DWG를 직접 열지는 않는다(§29) — "폴더 열기"만
+  제공한다.
+- **경로 정규화는 없다**: `DrawingFile.FullPath`가 대소문자/구분자를 정규화한다는 문서 주석이
+  있었지만 실제로 그런 코드는 어디에도 없었다(Milestone 13에서 확인) — 새 정규화 모듈을 만들지
+  않고 필요한 곳(Relink의 파일명 변경 감지)에서만 `StringComparison.OrdinalIgnoreCase`를 쓴다.
+
+## 8.13 User Manual PDF Generation (Milestone 13 Part B)
+
+공식 한국어 사용설명서(`docs/user-guide/ko-KR/USER_GUIDE.md`)를 설치본에 포함되는 PDF로 만드는
+빌드 파이프라인이다. 런타임 제품 기능이 아니라 릴리스 빌드 시점에만 실행되는 개발 도구다.
+
+```text
+docs/user-guide/ko-KR/USER_GUIDE.md (+ assets/*.png, 실제 앱 스크린샷)
+  ▼ ManualMarkdownParser.Parse (tools/CADWorkAssistant.ManualBuilder, 이 문서 전용 하위집합 파서)
+Documents.Pdf.UserManual.UserManualDocument (Heading1/2, Paragraph, BulletItem, NumberedItem,
+                                              Image, CodeBlock, Table, Rule 블록의 평면 목록)
+  ▼ UserManualPdfBuilder.BuildAndSave(document, version, generatedAt, targetPath)
+    (CADWorkAssistant.Documents, QuantityPdfBuilder와 같은 원칙 - WindowsKoreanFontResolver 재사용,
+     원자적 저장)
+artifacts/manual/CAD_Work_Assistant_User_Guide_ko-KR.pdf
+  ▼ scripts/build-release.ps1이 publish\desktop\Documentation\로 복사
+{app}\Documentation\CAD_Work_Assistant_User_Guide_ko-KR.pdf (installer.iss [Files]의 기존
+  recursesubdirs 와일드카드가 그대로 포함 - 별도 규칙 불필요)
+```
+
+- **버전은 Markdown에 없다**: "대상 버전: X.Y.Z"는 소스에 하드코딩하지 않고
+  `UserManualPdfBuilder.BuildAndSave`가 표지에서 직접 조립한다 — `ManualBuilder`도 다른 곳과 같은
+  `Assembly.GetExecutingAssembly().GetName().Version`(→ `Directory.Build.props`의 `CwaVersion`)을
+  읽는다(§115, CLAUDE.md 절대 원칙 5).
+- **목차는 실제 페이지 번호를 참조한다(§120)**: 각 장 제목 문단에 MigraDoc `Bookmark`(이름
+  `chapter-{N}`, 장 제목이 `^\d+\.\s` 패턴과 일치할 때만)를 심고, "목차" 장에서는 원문의 번호
+  목록을 그대로 찍는 대신 수집해 둔 장 목록을 `PageRefField`로 참조해 렌더링한다 — 고정된 페이지
+  번호를 하드코딩하지 않는다. `UserManualPdfBuilderTests`가 실제로 여러 페이지 분량을 채운 뒤
+  목차에 적힌 숫자와 실제 헤딩이 나타나는 페이지 번호가 같은지 검증한다.
+- **스크린샷 누락은 빌드 실패다**: `ManualImageBlock`이 가리키는 파일이 없으면
+  `UserManualPdfBuilder`가 `FileNotFoundException`을 던진다(§116) — 조용히 건너뛰지 않는다.
+- **Settings의 "사용설명서 열기"**(`SettingsViewModel.OpenUserManualCommand`)는
+  `{app}\Documentation\...pdf`를 OS 기본 뷰어로 연다(offline-first, §61). 파일이 없으면
+  `ManualErrorMessage`에 안내 문구만 채운다 — 원시 예외를 보여주지 않는다(CLAUDE.md 절대 원칙 4).
+- **범용 CommonMark 구현이 아니다**: `ManualMarkdownParser`는 `USER_GUIDE.md`가 실제로 쓰는
+  구문만 다룬다(§0, 필요한 만큼만 구현). 새 구문이 필요해지면 그때 추가한다.
 
 ## 9. Desktop App 구조 (MVVM)
 
